@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 import { allTools, urlOf } from "../data/tools";
+import { arTools, arUrlOf } from "../data/arTools";
 
+/** English pages that are not tools. */
 const staticPages = [
   "/",
   "/all-tools/",
@@ -10,6 +12,9 @@ const staticPages = [
   "/7b3c2-blog-archive/",
 ];
 
+/** Arabic pages that are not tools. The Arabic edition is a separate site, not a mirror. */
+const staticPagesAr = ["/ar/", "/ar/كل-الأدوات/", "/ar/عن-الموقع/", "/ar/اتصل-بنا/"];
+
 const escapeXml = (value: string) =>
   value.replace(/[<>&'"]/g, (c) =>
     ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c] as string
@@ -17,6 +22,7 @@ const escapeXml = (value: string) =>
 
 export const GET: APIRoute = ({ site }) => {
   const base = (site ?? new URL("https://tools.ly")).href.replace(/\/$/, "");
+  const today = new Date().toISOString().slice(0, 10);
 
   const entries = [
     ...staticPages.map((path) => ({
@@ -30,7 +36,20 @@ export const GET: APIRoute = ({ site }) => {
         loc: `${base}${urlOf(tool)}`,
         // Existing, already-indexed URLs get the higher priority.
         priority: tool.updated ? "0.8" : "0.7",
-        lastmod: tool.updated,
+        lastmod: tool.updated ?? tool.published,
+      })),
+
+    ...staticPagesAr.map((path) => ({
+      loc: `${base}${path}`,
+      priority: path === "/ar/" ? "0.9" : "0.6",
+      lastmod: path === "/ar/" ? today : undefined,
+    })),
+    ...arTools
+      .filter((tool) => tool.status === "live")
+      .map((tool) => ({
+        loc: `${base}${arUrlOf(tool)}`,
+        priority: "0.8",
+        lastmod: tool.updated ?? tool.published,
       })),
   ];
 

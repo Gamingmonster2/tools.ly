@@ -1,0 +1,1013 @@
+---
+import ArToolLayout from "../../layouts/ArToolLayout.astro";
+import { arTools } from "../../data/arTools";
+
+const tool = arTools.find((t) => t.slug === "التقويم-الهجري")!;
+
+const faqs = [
+  {
+    q: "هل تعطي الأداة التاريخ الهجري الرسمي المعتمد في بلدي؟",
+    a: "لا تدّعي ذلك. الأداة تعرض ما يحسبه تقويم أم القرى كما هو مضمَّن في متصفحك، وهو تقويم حسابي تعتمده السعودية رسمياً، لكن دولاً كثيرة تُعلن بداية الشهر الهجري بناءً على الرؤية أو على قرار جهتها الشرعية أو الفلكية، وقد يختلف إعلانها عن الحساب بيوم أو يومين. فإذا كان التاريخ يخص معاملة رسمية أو موعداً لعبادة، فاعتمد إعلان الجهة المختصة في بلدك، وخذ رقم هذه الأداة كمرجع تقريبي لا أكثر.",
+  },
+  {
+    q: "لماذا تختلف النتيجة أحياناً بيوم عن تقويم آخر أو عن تطبيق في هاتفي؟",
+    a: "لثلاثة أسباب متراكمة. الأول أن التقاويم الهجرية ليست تقويماً واحداً: منها الحسابي، ومنها القائم على الرؤية، ومنها ما يعتمد قاعدة مختلفة في تحديد بداية الشهر. والثاني أن نسخة بيانات أم القرى داخل المتصفح قد تختلف من إصدار إلى آخر ومن نظام إلى آخر. والثالث أن التحويل يعتمد على المنطقة الزمنية لجهازك، فالتاريخ القريب من منتصف الليل قد يقع في يوم هجري مختلف. لذلك قد ترى فرق يوم واحد بين هذه الصفحة وتطبيق آخر، وهذا أمر طبيعي ومتوقَّع.",
+  },
+  {
+    q: "ما نطاق التواريخ الذي يدعمه المحوّل؟",
+    a: "نقتصر على ما بين 1356 و1500 هجرية تقريباً، أي ما يوافق 1937 و2077 ميلادياً، لأن بيانات أم القرى في المتصفحات لا تغطي ما قبل ذلك بثقة، وقد يعيد المتصفح تواريخ قديمة بحساب هجري مختلف من دون أن ينبّهك. إن أدخلت تاريخاً خارج هذا النطاق فستظهر لك رسالة صريحة بدل نتيجة مضلِّلة. أما حساب العمر الميلادي وإجمالي الأيام فيبقيان صحيحين مع أي تاريخ يقبله المتصفح.",
+  },
+  {
+    q: "هل تُرسل التواريخ التي أكتبها إلى أي مكان؟ وهل تعمل الأداة بلا إنترنت؟",
+    a: "لا يُرسل شيء على الإطلاق: الصفحة لا تجري أي طلب شبكة، ولا تحتفظ بتواريخك بعد إغلاقها، بل تحسب كل شيء داخل متصفحك اعتماداً على بيانات التقويم المدمجة فيه. ولهذا تعمل الأداة كاملة بلا إنترنت، وتعمل أيضاً عند فتح الملف محلياً. الشرط الوحيد أن يدعم متصفحك تقويم islamic-umalqura؛ وإن كان قديماً جداً فقد تظهر رسالة بدل النتيجة.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Intl.DateTimeFormat",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat",
+    note: "المرجع الذي يوضح تنسيق التواريخ بحسب تقويم المتصفح، ومنه تقويم islamic-umalqura، وكذلك الدالة formatToParts التي نقرأ بها اليوم والشهر والسنة.",
+  },
+  {
+    label: "CLDR — بيانات التقويم في مشروع يونيكود",
+    href: "https://github.com/unicode-org/cldr/blob/main/common/supplemental/supplementalData.xml",
+    note: "ملف بيانات CLDR الذي يجعل islamic-umalqura تقويم أم القرى المفضَّل للسعودية، وعليه تبني المتصفحات أسماء الأشهر الهجرية وترتيبها.",
+  },
+  {
+    label: "تقويم أم القرى الرسمي",
+    href: "https://www.ummulqura.org.sa/",
+    note: "الموقع الرسمي لتقويم أم القرى الصادر عن مدينة الملك عبدالعزيز للعلوم والتقنية، وفيه التقويم المعتمد رسمياً في السعودية؛ وهو المرجع الذي تُقابَل به أرقام هذه الأداة عند أي اختلاف.",
+  },
+];
+---
+
+<ArToolLayout
+  tool={tool}
+  intro="حوّل بين التقويم الهجري والميلادي ببيانات أم القرى المحسوبة داخل متصفحك، مع حساب العمر بالسنوات الهجرية، والفروق بين التواريخ، وجدول شهري كامل — وبلا أي اتصال بالشبكة."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="callout callout--warn hij-flag" id="hij-warn" role="status" aria-live="polite" hidden>
+          <p id="hij-warn-text"></p>
+        </div>
+
+        <section class="hij-sec" aria-labelledby="hij-conv-h">
+          <h2 class="hij-h" id="hij-conv-h">محوّل التاريخ</h2>
+          <p class="hij-lead">
+            اختر اتجاه التحويل، ثم اكتب التاريخ في الجهة المُظلَّلة. الجهة الأخرى تُملأ تلقائياً بعد التحويل.
+          </p>
+
+          <div class="hij-seg" role="group" aria-label="اتجاه التحويل">
+            <button type="button" class="btn btn--sm" id="hij-dir-g" aria-pressed="true">ميلادي ← هجري</button>
+            <button type="button" class="btn btn--sm" id="hij-dir-h" aria-pressed="false">هجري ← ميلادي</button>
+          </div>
+
+          <div class="hij-cols">
+            <div class="hij-side" id="hij-side-g" data-active="true">
+              <div class="field">
+                <label for="hij-g">التاريخ الميلادي</label>
+                <input type="date" id="hij-g" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="hij-side" id="hij-side-h" data-active="false">
+              <div class="hij-hgrid">
+                <div class="field">
+                  <label for="hij-hd">اليوم الهجري</label>
+                  <input type="number" id="hij-hd" min="1" max="30" step="1" inputmode="numeric" autocomplete="off" />
+                </div>
+                <div class="field">
+                  <label for="hij-hm">الشهر الهجري</label>
+                  <select id="hij-hm"></select>
+                </div>
+                <div class="field">
+                  <label for="hij-hy">السنة الهجرية</label>
+                  <input type="number" id="hij-hy" min="1356" max="1500" step="1" inputmode="numeric" autocomplete="off" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hij-row">
+            <button type="button" class="btn btn--primary" id="hij-today">اليوم</button>
+            <span class="badge badge--ok hij-flag" id="hij-verified" hidden>تم التحقق من التحويل</span>
+          </div>
+
+          <p class="hij-out" id="hij-out" data-state="muted" aria-live="polite"></p>
+          <p class="hij-note" id="hij-out-alt" aria-live="polite"></p>
+        </section>
+
+        <section class="hij-sec" aria-labelledby="hij-age-h">
+          <h2 class="hij-h" id="hij-age-h">حاسبة العمر بالهجري</h2>
+          <p class="hij-lead">
+            اكتب تاريخ ميلادك، واترك «حتى تاريخ» على اليوم إن أردت معرفة عمرك حتى الآن.
+          </p>
+
+          <div class="hij-cols">
+            <div class="field">
+              <label for="hij-born">تاريخ الميلاد (ميلادي)</label>
+              <input type="date" id="hij-born" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="hij-until">حتى تاريخ</label>
+              <input type="date" id="hij-until" autocomplete="off" />
+            </div>
+          </div>
+
+          <p class="hij-note" id="hij-born-hijri" aria-live="polite"></p>
+
+          <div class="stat-grid hij-stats">
+            <div class="stat">
+              <div class="stat__label">العمر بالهجري</div>
+              <div class="stat__value" id="hij-age-hij">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">العمر بالميلادي</div>
+              <div class="stat__value" id="hij-age-greg">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">إجمالي الأيام</div>
+              <div class="stat__value" id="hij-age-days">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">حتى عيد ميلادك الهجري القادم</div>
+              <div class="stat__value" id="hij-age-next">—</div>
+            </div>
+          </div>
+
+          <div class="callout callout--warn hij-flag" id="hij-age-warn" role="status" aria-live="polite" hidden>
+            <p id="hij-age-warn-text"></p>
+          </div>
+        </section>
+
+        <section class="hij-sec" aria-labelledby="hij-diff-h">
+          <h2 class="hij-h" id="hij-diff-h">الفرق بين تاريخين</h2>
+          <p class="hij-lead">اختر تاريخين، والناتج يشمل الأيام والأسابيع والفرق بالتقويم الهجري.</p>
+
+          <div class="hij-cols">
+            <div class="field">
+              <label for="hij-from">من تاريخ</label>
+              <input type="date" id="hij-from" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="hij-to">إلى تاريخ</label>
+              <input type="date" id="hij-to" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="stat-grid hij-stats">
+            <div class="stat">
+              <div class="stat__label">إجمالي الأيام</div>
+              <div class="stat__value" id="hij-diff-days">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">الأسابيع والأيام</div>
+              <div class="stat__value" id="hij-diff-weeks">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">الفرق الهجري</div>
+              <div class="stat__value" id="hij-diff-hijri">—</div>
+            </div>
+          </div>
+
+          <p class="hij-note" id="hij-diff-note" aria-live="polite"></p>
+        </section>
+
+        <section class="hij-sec" aria-labelledby="hij-grid-h">
+          <h2 class="hij-h" id="hij-grid-h">جدول الشهر</h2>
+          <p class="hij-lead" id="hij-grid-cap"></p>
+
+          <div class="table-wrap hij-grid-wrap">
+            <table class="data hij-grid">
+              <caption class="sr-only">أيام الشهر الهجري المختار وما يوافقها من التاريخ الميلادي</caption>
+              <thead>
+                <tr>
+                  <th scope="col">الأحد</th>
+                  <th scope="col">الاثنين</th>
+                  <th scope="col">الثلاثاء</th>
+                  <th scope="col">الأربعاء</th>
+                  <th scope="col">الخميس</th>
+                  <th scope="col">الجمعة</th>
+                  <th scope="col">السبت</th>
+                </tr>
+              </thead>
+              <tbody id="hij-grid-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        كل الحسابات تجري داخل متصفحك اعتماداً على بيانات تقويم أم القرى المدمجة فيه؛ لا يُرسل أي تاريخ ولا يُخزَّن بعد إغلاق الصفحة.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>كيف يعمل التحويل</h2>
+  <p>
+    لا تحمل هذه الصفحة أي جداول تواريخ هجرية ولا أي بيانات عن الأشهر، بل تسأل المتصفح نفسه. فعند التحويل من الميلادي إلى الهجري
+    نُنشئ كائن <code>Intl.DateTimeFormat</code> بالمعرّف <code>ar-SA-u-ca-islamic-umalqura</code>، ثم نُنسّق اليوم المطلوب ونقرأ
+    أجزاءه (اليوم، الشهر، السنة) عبر <code>formatToParts</code>، فيكون الناتج هو التاريخ الهجري الذي يعتمده متصفحك وفق تقويم
+    أم القرى. أما الاتجاه المعاكس فأصعب، لأن <code>Intl</code> يُنسّق ولا يُحلّل: لا توجد دالة تقبل «٣ ربيع الأول ١٤٤٧» وتُعيد
+    التاريخ الميلادي المقابل. لذلك نستعمل بحثاً ثنائياً: نحدّد نطاقاً ميلادياً واسعاً، ثم نختبر اليوم الأوسط فيه، وننسّقه هجرياً،
+    ونقارن الثلاثية (سنة، شهر، يوم) بالتاريخ المطلوب، ثم نضيّق النطاق من الجهة الصحيحة ونُعيد الاختبار حتى تتقارب النتيجتان في
+    نحو ست عشرة خطوة. وبعد كل تحويل نُعيد التحويل في الاتجاه المعاكس ونتأكد من العودة إلى اليوم نفسه، فإن تطابق الناتج ظهرت
+    إشارة «تم التحقق من التحويل».
+  </p>
+
+  <h2>دقة التقويم الهجري وحدوده</h2>
+  <p>
+    تقويم أم القرى تقويم <strong>حسابي</strong> لا تقويم رؤية: تُحسب بداية الشهر فلكياً وفق شروط محدّدة، ثم تُعلن الجهة الرسمية في
+    كل بلد بداية الشهر بناءً على الرؤية أو على إعلانها الخاص. لذلك قد يختلف اليوم الذي تعرضه هذه الأداة عن التقويم المُعلن في
+    بلدك بيوم أو يومين، وقد يختلف كذلك عن تقاويم إسلامية أخرى تعتمد قواعد مختلفة. وهذه الأداة ليست حكماً شرعياً ولا فتوى، ولا
+    تُبنى عليها مواعيد العبادات؛ فالمُعتمد شرعاً هو إعلان الجهة المختصة في بلدك. وثمة حدود تقنية ينبغي معرفتها: بيانات أم القرى
+    داخل المتصفحات تغطي نطاقاً محدوداً حول 1356–1500 هجرية (1937–2077 ميلادياً)، وما قبل ذلك قد يُنسَّق بحساب هجري آخر من دون
+    تنبيه، ولذلك يقتصر البحث هنا على هذا النطاق ويُنبّهك صراحةً عند تجاوزه. كما أن الناتج يتبع المنطقة الزمنية لجهازك، فقد يقع
+    التاريخ على يوم هجري مختلف إذا حلّلته قرب منتصف الليل أو كنت في منطقة بعيدة عن مكة المكرمة.
+  </p>
+
+  <h2>كيف تستخدمه عملياً</h2>
+  <p>
+    ابدأ من المحوّل: اختر الاتجاه، واكتب التاريخ في الجهة المُظلَّلة، أو اضغط «اليوم» لتُملأ الجهتان بتاريخ اليوم، ثم اقرأ السطر
+    الكبير مثل «الخميس ٣ ربيع الأول ١٤٤٨ هـ» وتحته ما يوافقه ميلادياً. إن لم تظهر إشارة التحقق فذلك يعني أن التاريخ خارج نطاق
+    بيانات متصفحك، وستجد التنبيه واضحاً أعلى الأداة. وبعد ذلك:
+  </p>
+  <ul>
+    <li>حاسبة العمر: اكتب تاريخ ميلادك، وسيُحسب العمر بالسنوات والأشهر والأيام الهجرية بمقارنة الثلاثيات واستعارة أيام الشهر الفعلي، لا بقسمة مجموع الأيام، مع العمر الميلادي وإجمالي الأيام والعدّ التنازلي إلى عيد ميلادك الهجري القادم.</li>
+    <li>الفرق بين تاريخين: يمنحك عدد الأيام الكامل، وما يعادله بالأسابيع والأيام، والفرق بالتقويم الهجري.</li>
+    <li>جدول الشهر: يعرض الشهر الهجري المختار شبكةً من الأحد إلى السبت، وتحت كل يوم هجري رقمه الميلادي، ويُظلَّل يومك الحالي بلون مميّز.</li>
+  </ul>
+  <p>
+    كل الحقول تُعبَّأ بلوحة المفاتيح، وكل النتائج تُعلَن لقارئات الشاشة، والصفحة تعمل بلا إنترنت وبلا حساب. وإن كان التاريخ حساساً
+    — عقد، أو سفر، أو موعد عبادة — فقابله مع التقويم الرسمي في بلدك قبل الاعتماد عليه.
+  </p>
+</ArToolLayout>
+
+<style>
+  .hij-sec + .hij-sec {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .hij-h {
+    margin: 0 0 0.35rem;
+    font-size: 1.15rem;
+  }
+
+  .hij-lead {
+    margin: 0 0 0.9rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .hij-seg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .hij-seg .btn[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+
+  .hij-seg .btn[aria-pressed="false"] {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+  }
+
+  .hij-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+  }
+
+  @media (min-width: 720px) {
+    .hij-cols {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .hij-side {
+    padding: 0.85rem 0.95rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .hij-side[data-active="true"] {
+    background: var(--surface);
+    border-color: var(--accent-border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .hij-hgrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+
+  @media (min-width: 430px) {
+    .hij-hgrid {
+      grid-template-columns: 5.5rem minmax(0, 1fr) 6.5rem;
+    }
+  }
+
+  .hij-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+  }
+
+  .hij-flag[hidden] {
+    display: none;
+  }
+
+  .hij-out {
+    margin: 0.9rem 0 0.25rem;
+    padding: 0.85rem 1rem;
+    min-height: 3.4rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font-arabic);
+    font-size: clamp(1.1rem, 3.4vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.6;
+    text-align: center;
+    color: var(--text);
+  }
+
+  .hij-out[data-state="muted"] {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .hij-note {
+    margin: 0.3rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .hij-stats {
+    margin-top: 0.9rem;
+  }
+
+  .hij-stats .stat__value {
+    font-size: 1.15rem;
+  }
+
+  .hij-grid-wrap {
+    margin-top: 0.75rem;
+  }
+
+  .hij-grid :global(th) {
+    text-align: center;
+    font-size: 0.72rem;
+  }
+
+  .hij-grid :global(td) {
+    text-align: center;
+    padding: 0.35rem 0.25rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hij-grid :global(.hij-cell-day) {
+    display: block;
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    color: var(--text);
+  }
+
+  .hij-grid :global(.hij-cell-sub) {
+    display: block;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: var(--text-faint);
+  }
+
+  .hij-grid :global(td.hij-cell-empty) {
+    background: var(--bg-sunken);
+  }
+
+  .hij-grid :global(td.is-today) {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 2px var(--accent-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .hij-grid :global(td.is-today .hij-cell-day),
+  .hij-grid :global(td.is-today .hij-cell-sub) {
+    color: var(--accent);
+  }
+</style>
+
+<script>
+  /* ================================================================
+     محوّل التقويم الهجري والميلادي — كل الحساب داخل المتصفح وحده.
+     البيانات تأتي من تقويم islamic-umalqura المدمج في المتصفح.
+     ================================================================ */
+
+  var ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+  var DAY_MS = 86400000;
+  var CALENDAR = "islamic-umalqura";
+
+  var arabicDigits = function (value) {
+    return String(value).replace(/[0-9]/g, function (digit) {
+      return ARABIC_DIGITS[Number(digit)];
+    });
+  };
+  var latinDigits = function (value) {
+    return String(value);
+  };
+
+  var hijriParts = new Intl.DateTimeFormat("en-US-u-ca-" + CALENDAR, {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric"
+  });
+  var hijriMonthName = new Intl.DateTimeFormat("ar-SA-u-ca-" + CALENDAR, { month: "long" });
+  var weekdayName = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { weekday: "long" });
+  var gregorianDisplay = new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+
+  /* ---------- أدوات التاريخ: أرقام أيام ثابتة لا تتأثر بالتوقيت الصيفي ---------- */
+
+  var dayNumberOf = function (date) {
+    return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
+  };
+  var dateOfDayNumber = function (number) {
+    var utc = new Date(number * DAY_MS);
+    return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+  };
+  var todayDate = function () {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+  var pad2 = function (value) {
+    return String(value).padStart(2, "0");
+  };
+  var isoOf = function (date) {
+    return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate());
+  };
+  var dateFromIso = function (value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+    if (!match) return null;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+  };
+
+  /* ---------- تقويم أم القرى: الثلاثية الهجرية <-> رقم اليوم الميلادي ---------- */
+
+  var hijriOnDayNumber = function (number) {
+    var parts = hijriParts.formatToParts(dateOfDayNumber(number));
+    var year = 0;
+    var month = 0;
+    var day = 0;
+    for (var i = 0; i < parts.length; i += 1) {
+      if (parts[i].type === "year") year = Number(parts[i].value);
+      else if (parts[i].type === "month") month = Number(parts[i].value);
+      else if (parts[i].type === "day") day = Number(parts[i].value);
+    }
+    return { year: year, month: month, day: day };
+  };
+
+  /* نافذة البحث الميلادية أوسع قليلاً من النطاق المعلن، ثم نضبط حدّي النطاق بالتقويم الهجري نفسه. */
+  var SEARCH_START = dayNumberOf(new Date(1937, 0, 1));
+  var SEARCH_END = dayNumberOf(new Date(2077, 11, 31));
+  var SEARCH_FIRST = hijriOnDayNumber(SEARCH_START);
+  var SEARCH_LAST = hijriOnDayNumber(SEARCH_END);
+
+  var compare = function (a, b) {
+    return a.year - b.year || a.month - b.month || a.day - b.day;
+  };
+
+  /* Intl ينسّق ولا يحلّل: نبحث ثنائياً عن أول يوم ميلادي لا يسبق التاريخ الهجري المطلوب. */
+  var searchDay = function (year, month, day) {
+    var target = { year: year, month: month, day: day };
+    if (compare(SEARCH_FIRST, target) > 0 || compare(SEARCH_LAST, target) < 0) return null;
+    var low = SEARCH_START;
+    var high = SEARCH_END;
+    while (low < high) {
+      var mid = low + Math.floor((high - low) / 2);
+      if (compare(hijriOnDayNumber(mid), target) < 0) low = mid + 1;
+      else high = mid;
+    }
+    return compare(hijriOnDayNumber(low), target) === 0 ? low : null;
+  };
+
+  /* النطاق المعلن: من ١ محرم ١٣٥٦ هـ إلى آخر يوم من ذي الحجة ١٥٠٠ هـ (١٩٣٧–٢٠٧٧ م). */
+  var RANGE_FIRST = { year: 1356, month: 1, day: 1 };
+  var AFTER_RANGE = searchDay(1501, 1, 1);
+  var RANGE_LAST = hijriOnDayNumber(AFTER_RANGE === null ? SEARCH_END : AFTER_RANGE - 1);
+
+  var inRange = function (triple) {
+    return compare(triple, RANGE_FIRST) >= 0 && compare(triple, RANGE_LAST) <= 0;
+  };
+
+  var hijriToDayNumber = function (year, month, day) {
+    var target = { year: year, month: month, day: day };
+    if (!inRange(target)) return null;
+    return searchDay(year, month, day);
+  };
+
+  var FALLBACK_MONTHS = [
+    "محرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة",
+    "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
+  ];
+
+  /* أسماء الأشهر تُقرأ من بيانات المتصفح نفسه، ولها قائمة احتياطية إن فشل ذلك. */
+  var readMonthNames = function () {
+    var names = [];
+    for (var month = 1; month <= 12; month += 1) {
+      var day = hijriToDayNumber(1446, month, 1);
+      if (day === null) return FALLBACK_MONTHS.slice();
+      var name = hijriMonthName.format(dateOfDayNumber(day)).replace(/[٠-٩0-9]/g, "").trim();
+      if (!name) return FALLBACK_MONTHS.slice();
+      names.push(name);
+    }
+    return names;
+  };
+  var MONTHS = readMonthNames();
+
+  var monthLength = function (year, month) {
+    var first = searchDay(year, month, 1);
+    if (first === null) return 30;
+    var nextYear = month === 12 ? year + 1 : year;
+    var nextMonth = month === 12 ? 1 : month + 1;
+    var next = searchDay(nextYear, nextMonth, 1);
+    return next === null ? 30 : next - first;
+  };
+
+  /* ---------- صياغة العبارات العربية ---------- */
+
+  var hijriSentence = function (triple, date) {
+    return weekdayName.format(date) + " " + arabicDigits(triple.day) + " " +
+      MONTHS[triple.month - 1] + " " + arabicDigits(triple.year) + " هـ";
+  };
+
+  var unitPhrase = function (count, one, two, many, format) {
+    if (count === 1) return one;
+    if (count === 2) return two;
+    if (count >= 3 && count <= 10) return format(count) + " " + many;
+    return format(count) + " " + one.replace(/ واحد$/, "");
+  };
+
+  var joinParts = function (parts) {
+    var kept = [];
+    for (var i = 0; i < parts.length; i += 1) {
+      if (parts[i].count > 0) kept.push(parts[i]);
+    }
+    if (!kept.length) return "أقل من يوم";
+    var words = [];
+    for (var j = 0; j < kept.length; j += 1) {
+      var part = kept[j];
+      words.push(unitPhrase(part.count, part.one, part.two, part.many, part.format));
+    }
+    return words.join(" و");
+  };
+
+  var hijriAgeParts = function (age, format) {
+    return [
+      { count: age.years, one: "سنة واحدة", two: "سنتان", many: "سنوات", format: format },
+      { count: age.months, one: "شهر واحد", two: "شهران", many: "أشهر", format: format },
+      { count: age.days, one: "يوم واحد", two: "يومان", many: "أيام", format: format }
+    ];
+  };
+
+  /* ---------- الحساب بالاستعارة، لا بقسمة مجموع الأيام ---------- */
+
+  var hijriAgeBetween = function (from, to) {
+    var years = to.year - from.year;
+    var months = to.month - from.month;
+    var days = to.day - from.day;
+    if (days < 0) {
+      months -= 1;
+      var prevMonth = to.month === 1 ? 12 : to.month - 1;
+      var prevYear = to.month === 1 ? to.year - 1 : to.year;
+      days += monthLength(prevYear, prevMonth);
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    return { years: years, months: months, days: days };
+  };
+
+  var gregorianAgeBetween = function (from, to) {
+    var years = to.getFullYear() - from.getFullYear();
+    var months = to.getMonth() - from.getMonth();
+    var days = to.getDate() - from.getDate();
+    if (days < 0) {
+      months -= 1;
+      var prevMonth = to.getMonth() === 0 ? 11 : to.getMonth() - 1;
+      var prevYear = to.getMonth() === 0 ? to.getFullYear() - 1 : to.getFullYear();
+      days += new Date(prevYear, prevMonth + 1, 0).getDate();
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    return { years: years, months: months, days: days };
+  };
+
+  var nextHijriBirthday = function (birth, todayTriple, todayNumber) {
+    for (var step = 0; step <= 2; step += 1) {
+      var year = todayTriple.year + step;
+      var length = monthLength(year, birth.month);
+      var day = Math.min(birth.day, length);
+      var number = hijriToDayNumber(year, birth.month, day);
+      if (number === null) continue;
+      if (number >= todayNumber) return { dayNumber: number, days: number - todayNumber };
+    }
+    return null;
+  };
+
+  /* ---------- عناصر الصفحة ---------- */
+
+  var byId = function (id) {
+    return document.getElementById(id);
+  };
+  var el = {
+    dirG: byId("hij-dir-g"),
+    dirH: byId("hij-dir-h"),
+    sideG: byId("hij-side-g"),
+    sideH: byId("hij-side-h"),
+    g: byId("hij-g"),
+    hd: byId("hij-hd"),
+    hm: byId("hij-hm"),
+    hy: byId("hij-hy"),
+    todayButton: byId("hij-today"),
+    out: byId("hij-out"),
+    outAlt: byId("hij-out-alt"),
+    verified: byId("hij-verified"),
+    warn: byId("hij-warn"),
+    warnText: byId("hij-warn-text"),
+    born: byId("hij-born"),
+    until: byId("hij-until"),
+    bornNote: byId("hij-born-hijri"),
+    ageHij: byId("hij-age-hij"),
+    ageGreg: byId("hij-age-greg"),
+    ageDays: byId("hij-age-days"),
+    ageNext: byId("hij-age-next"),
+    ageWarn: byId("hij-age-warn"),
+    ageWarnText: byId("hij-age-warn-text"),
+    from: byId("hij-from"),
+    to: byId("hij-to"),
+    diffDays: byId("hij-diff-days"),
+    diffWeeks: byId("hij-diff-weeks"),
+    diffHijri: byId("hij-diff-hijri"),
+    diffNote: byId("hij-diff-note"),
+    gridCaption: byId("hij-grid-cap"),
+    gridBody: byId("hij-grid-body")
+  };
+
+  var direction = "g2h";
+
+  var showWarn = function (box, textNode, message) {
+    if (!box || !textNode) return;
+    textNode.textContent = message;
+    box.hidden = false;
+  };
+  var hideWarn = function (box) {
+    if (box) box.hidden = true;
+  };
+  var setOut = function (text, state) {
+    el.out.textContent = text;
+    el.out.dataset.state = state;
+  };
+  var blankAge = function () {
+    el.ageHij.textContent = "—";
+    el.ageGreg.textContent = "—";
+    el.ageDays.textContent = "—";
+    el.ageNext.textContent = "—";
+  };
+
+  var fillHijriFields = function (triple) {
+    el.hd.value = String(triple.day);
+    el.hm.value = String(triple.month);
+    el.hy.value = String(triple.year);
+  };
+
+  /* ---------- جدول الشهر ---------- */
+
+  var renderGrid = function (year, month) {
+    var first = hijriToDayNumber(year, month, 1);
+    el.gridBody.replaceChildren();
+    if (first === null) {
+      el.gridCaption.textContent = "لا تتوفر بيانات أم القرى لهذا الشهر داخل متصفحك.";
+      return;
+    }
+    var length = monthLength(year, month);
+    var last = first + length - 1;
+    el.gridCaption.textContent = "شهر " + MONTHS[month - 1] + " " + arabicDigits(year) +
+      " هـ — الموافق " + gregorianDisplay.format(dateOfDayNumber(first)) + " إلى " +
+      gregorianDisplay.format(dateOfDayNumber(last)) + " م. الرقم الأعلى هو اليوم الهجري، والأسفل هو يوم الشهر الميلادي.";
+
+    var lead = dateOfDayNumber(first).getDay();
+    var todayNumber = dayNumberOf(todayDate());
+    var row = document.createElement("tr");
+    var cells = 0;
+
+    for (var i = 0; i < lead; i += 1) {
+      var empty = document.createElement("td");
+      empty.className = "hij-cell-empty";
+      row.append(empty);
+      cells += 1;
+    }
+
+    for (var day = 1; day <= length; day += 1) {
+      if (cells === 7) {
+        el.gridBody.append(row);
+        row = document.createElement("tr");
+        cells = 0;
+      }
+      var number = first + day - 1;
+      var date = dateOfDayNumber(number);
+      var cell = document.createElement("td");
+      var main = document.createElement("span");
+      main.className = "hij-cell-day";
+      main.textContent = arabicDigits(day);
+      var sub = document.createElement("span");
+      sub.className = "hij-cell-sub";
+      sub.textContent = latinDigits(date.getDate());
+      cell.append(main, sub);
+      if (number === todayNumber) {
+        cell.classList.add("is-today");
+        cell.setAttribute("aria-current", "date");
+      }
+      cell.setAttribute("aria-label", hijriSentence({ year: year, month: month, day: day }, date) +
+        " — الموافق " + gregorianDisplay.format(date) + " م" + (number === todayNumber ? "، وهو اليوم" : ""));
+      row.append(cell);
+      cells += 1;
+    }
+    if (cells > 0) el.gridBody.append(row);
+  };
+
+  /* ---------- المحوّل ---------- */
+
+  var runConvert = function () {
+    hideWarn(el.warn);
+    el.verified.hidden = true;
+
+    if (direction === "g2h") {
+      var date = dateFromIso(el.g.value);
+      if (!date) {
+        setOut("اختر تاريخاً ميلادياً صحيحاً.", "muted");
+        el.outAlt.textContent = "";
+        return;
+      }
+      var number = dayNumberOf(date);
+      var triple = hijriOnDayNumber(number);
+      fillHijriFields(triple);
+      setOut(hijriSentence(triple, date), "ok");
+      el.outAlt.textContent = "الموافق " + gregorianDisplay.format(date) + " م";
+      if (inRange(triple)) {
+        var back = hijriToDayNumber(triple.year, triple.month, triple.day);
+        if (back === number) el.verified.hidden = false;
+      } else {
+        showWarn(el.warn, el.warnText,
+          "هذا التاريخ خارج نطاق بيانات تقويم أم القرى في متصفحك، وهي تغطي نحو 1356–1500 هـ (1937–2077 م). النتيجة المعروضة تقديرية ولا يُعتمد عليها.");
+      }
+      renderGrid(triple.year, triple.month);
+      return;
+    }
+
+    var day = Number(el.hd.value);
+    var month = Number(el.hm.value);
+    var year = Number(el.hy.value);
+    if (!el.hd.value || !el.hy.value || !Number.isInteger(day) || !Number.isInteger(month) ||
+        !Number.isInteger(year) || month < 1 || month > 12) {
+      setOut("أكمل اليوم والشهر والسنة الهجرية.", "muted");
+      el.outAlt.textContent = "";
+      return;
+    }
+
+    var target = { year: year, month: month, day: day };
+    var found = hijriToDayNumber(year, month, day);
+    if (found === null) {
+      setOut("تعذّر التحويل.", "muted");
+      el.outAlt.textContent = "";
+      if (!inRange(target)) {
+        showWarn(el.warn, el.warnText,
+          "هذا التاريخ خارج النطاق المدعوم: بيانات أم القرى في المتصفح تغطي نحو 1356–1500 هـ، أي ما يوافق 1937–2077 م.");
+      } else {
+        showWarn(el.warn, el.warnText,
+          "اليوم " + arabicDigits(day) + " غير موجود في " + MONTHS[month - 1] + " " + arabicDigits(year) +
+          " هـ؛ أقصى هذا الشهر " + arabicDigits(monthLength(year, month)) + " يوماً.");
+      }
+      return;
+    }
+
+    var gregorian = dateOfDayNumber(found);
+    el.g.value = isoOf(gregorian);
+    setOut(hijriSentence(target, gregorian), "ok");
+    el.outAlt.textContent = "الموافق " + gregorianDisplay.format(gregorian) + " م";
+    if (compare(hijriOnDayNumber(dayNumberOf(gregorian)), target) === 0) el.verified.hidden = false;
+    renderGrid(year, month);
+  };
+
+  var setDirection = function (next) {
+    direction = next;
+    var gregorianFirst = next === "g2h";
+    el.dirG.setAttribute("aria-pressed", gregorianFirst ? "true" : "false");
+    el.dirH.setAttribute("aria-pressed", gregorianFirst ? "false" : "true");
+    el.sideG.dataset.active = gregorianFirst ? "true" : "false";
+    el.sideH.dataset.active = gregorianFirst ? "false" : "true";
+    runConvert();
+  };
+
+  /* ---------- حاسبة العمر ---------- */
+
+  var updateAge = function () {
+    hideWarn(el.ageWarn);
+    var bornDate = dateFromIso(el.born.value);
+    var untilDate = dateFromIso(el.until.value) || todayDate();
+
+    if (!bornDate) {
+      el.bornNote.textContent = "اكتب تاريخ ميلادك لعرض العمر بالتقويمين.";
+      blankAge();
+      return;
+    }
+    if (untilDate.getTime() < bornDate.getTime()) {
+      showWarn(el.ageWarn, el.ageWarnText, "تاريخ «حتى تاريخ» يسبق تاريخ الميلاد، فلا يوجد عمر يُحسب.");
+      el.bornNote.textContent = "";
+      blankAge();
+      return;
+    }
+
+    var bornNumber = dayNumberOf(bornDate);
+    var untilNumber = dayNumberOf(untilDate);
+    var bornHijri = hijriOnDayNumber(bornNumber);
+    var untilHijri = hijriOnDayNumber(untilNumber);
+
+    el.bornNote.textContent = "تاريخ ميلادك هجرياً: " + arabicDigits(bornHijri.day) + " " +
+      MONTHS[bornHijri.month - 1] + " " + arabicDigits(bornHijri.year) + " هـ";
+
+    var totalDays = untilNumber - bornNumber;
+    el.ageDays.textContent = latinDigits(totalDays);
+
+    var gregorianAge = gregorianAgeBetween(bornDate, untilDate);
+    el.ageGreg.textContent = joinParts([
+      { count: gregorianAge.years, one: "سنة واحدة", two: "سنتان", many: "سنوات", format: latinDigits },
+      { count: gregorianAge.months, one: "شهر واحد", two: "شهران", many: "أشهر", format: latinDigits },
+      { count: gregorianAge.days, one: "يوم واحد", two: "يومان", many: "أيام", format: latinDigits }
+    ]);
+
+    if (inRange(bornHijri) && inRange(untilHijri)) {
+      var hijriAge = hijriAgeBetween(bornHijri, untilHijri);
+      el.ageHij.textContent = joinParts(hijriAgeParts(hijriAge, arabicDigits));
+      var next = nextHijriBirthday(bornHijri, untilHijri, untilNumber);
+      if (next === null) el.ageNext.textContent = "غير متاح";
+      else if (next.days === 0) el.ageNext.textContent = "اليوم";
+      else el.ageNext.textContent = joinParts([
+        { count: next.days, one: "يوم واحد", two: "يومان", many: "أيام", format: arabicDigits }
+      ]);
+    } else {
+      el.ageHij.textContent = "خارج النطاق";
+      el.ageNext.textContent = "خارج النطاق";
+      showWarn(el.ageWarn, el.ageWarnText,
+        "بيانات تقويم أم القرى في متصفحك لا تغطي هذا التاريخ؛ فما قبل 1356 هـ (نحو 1937 م) قد يُحسب بحساب هجري مختلف من دون تنبيه. حسبنا لك العمر الميلادي وإجمالي الأيام فقط.");
+    }
+  };
+
+  /* ---------- الفرق بين تاريخين ---------- */
+
+  var updateDiff = function () {
+    var first = dateFromIso(el.from.value);
+    var second = dateFromIso(el.to.value);
+    if (!first || !second) {
+      el.diffDays.textContent = "—";
+      el.diffWeeks.textContent = "—";
+      el.diffHijri.textContent = "—";
+      el.diffNote.textContent = "اختر تاريخين لعرض الفرق بينهما.";
+      return;
+    }
+    var swapped = first.getTime() > second.getTime();
+    var start = swapped ? second : first;
+    var end = swapped ? first : second;
+    var total = dayNumberOf(end) - dayNumberOf(start);
+
+    el.diffDays.textContent = total === 0
+      ? "نفس اليوم"
+      : joinParts([{ count: total, one: "يوم واحد", two: "يومان", many: "أيام", format: latinDigits }]);
+
+    var weeks = Math.floor(total / 7);
+    var rest = total % 7;
+    var weekText = weeks === 0 ? "" : unitPhrase(weeks, "أسبوع واحد", "أسبوعان", "أسابيع", latinDigits);
+    var restText = rest === 0 ? "" : unitPhrase(rest, "يوم واحد", "يومان", "أيام", latinDigits);
+    if (total === 0) el.diffWeeks.textContent = "لا فرق";
+    else if (weekText && restText) el.diffWeeks.textContent = weekText + " و" + restText;
+    else el.diffWeeks.textContent = weekText || restText || "أقل من أسبوع";
+
+    var startHijri = hijriOnDayNumber(dayNumberOf(start));
+    var endHijri = hijriOnDayNumber(dayNumberOf(end));
+    if (inRange(startHijri) && inRange(endHijri)) {
+      var diff = hijriAgeBetween(startHijri, endHijri);
+      el.diffHijri.textContent = joinParts(hijriAgeParts(diff, arabicDigits)) +
+        " (" + arabicDigits(startHijri.year) + " هـ ← " + arabicDigits(endHijri.year) + " هـ)";
+    } else {
+      el.diffHijri.textContent = "خارج النطاق";
+    }
+    el.diffNote.textContent = swapped
+      ? "التاريخ الثاني أسبق من الأول، فحسبنا الفرق بالمطلق بين التاريخين."
+      : "";
+  };
+
+  /* ---------- التهيئة ---------- */
+
+  var init = function () {
+    for (var month = 1; month <= 12; month += 1) {
+      var option = document.createElement("option");
+      option.value = String(month);
+      option.textContent = MONTHS[month - 1];
+      el.hm.append(option);
+    }
+
+    var today = todayDate();
+    var todayIso = isoOf(today);
+    var todayHijri = hijriOnDayNumber(dayNumberOf(today));
+
+    el.g.value = todayIso;
+    fillHijriFields(todayHijri);
+    el.until.value = todayIso;
+    el.from.value = todayIso;
+    el.to.value = todayIso;
+
+    el.dirG.addEventListener("click", function () {
+      setDirection("g2h");
+    });
+    el.dirH.addEventListener("click", function () {
+      setDirection("h2g");
+    });
+
+    el.g.addEventListener("input", function () {
+      if (direction !== "g2h") setDirection("g2h");
+      else runConvert();
+    });
+    el.g.addEventListener("change", function () {
+      if (direction !== "g2h") setDirection("g2h");
+      else runConvert();
+    });
+
+    var hijriInputs = [el.hd, el.hm, el.hy];
+    for (var i = 0; i < hijriInputs.length; i += 1) {
+      (function (input) {
+        var react = function () {
+          if (direction !== "h2g") setDirection("h2g");
+          else runConvert();
+        };
+        input.addEventListener("input", react);
+        input.addEventListener("change", react);
+      })(hijriInputs[i]);
+    }
+
+    el.todayButton.addEventListener("click", function () {
+      var now = todayDate();
+      var nowIso = isoOf(now);
+      el.g.value = nowIso;
+      fillHijriFields(hijriOnDayNumber(dayNumberOf(now)));
+      el.until.value = nowIso;
+      runConvert();
+      updateAge();
+      updateDiff();
+    });
+
+    var ageInputs = [el.born, el.until];
+    for (var a = 0; a < ageInputs.length; a += 1) {
+      ageInputs[a].addEventListener("input", updateAge);
+      ageInputs[a].addEventListener("change", updateAge);
+    }
+
+    var diffInputs = [el.from, el.to];
+    for (var d = 0; d < diffInputs.length; d += 1) {
+      diffInputs[d].addEventListener("input", updateDiff);
+      diffInputs[d].addEventListener("change", updateDiff);
+    }
+
+    setDirection("g2h");
+    updateAge();
+    updateDiff();
+  };
+
+  init();
+</script>

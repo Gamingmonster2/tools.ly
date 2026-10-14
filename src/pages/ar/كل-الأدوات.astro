@@ -1,0 +1,245 @@
+---
+import Base from "../../layouts/Base.astro";
+import Icon from "../../components/Icon.astro";
+import { arTools, arCategories, arUrlOf, arNewest, arLiveCount } from "../../data/arTools";
+
+// كل الأدوات من الأحدث إلى الأقدم، والجاهز منها وحده يظهر في البيانات المنظّمة.
+const allTools = arNewest(arTools);
+const liveTools = allTools.filter((tool) => tool.status === "live");
+const usedCategories = arCategories.filter((category) =>
+  arTools.some((tool) => tool.category === category.id)
+);
+
+const site = "https://tools.ly";
+
+// نص البحث لكل بطاقة: العنوان والوصف والكلمات المفتاحية، وهو ما يطابق ما يكتبه الزائر.
+const searchTextOf = (tool: (typeof arTools)[number]): string =>
+  [tool.title, tool.nav ?? "", tool.description, ...(tool.keywords ?? [])].join(" ");
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "كل الأدوات العربية",
+    url: new URL("/ar/كل-الأدوات/", site).href,
+    inLanguage: "ar",
+    description: `دليل أدوات Tools.ly العربية: ${arTools.length} أداة موزّعة على ${usedCategories.length} تصنيفات، ${arLiveCount} منها متوفّرة الآن. كلها تعمل داخل المتصفح بلا رفع ملفات ولا حسابات.`,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "أدوات Tools.ly العربية",
+      url: new URL("/ar/", site).href,
+      inLanguage: "ar",
+    },
+    hasPart: liveTools.map((tool) => ({
+      "@type": "WebApplication",
+      name: tool.nav ?? tool.title,
+      url: new URL(arUrlOf(tool), site).href,
+      applicationCategory: "UtilitiesApplication",
+      operatingSystem: "أي متصفح حديث",
+      inLanguage: "ar",
+      description: tool.description,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    })),
+  },
+];
+---
+
+<Base
+  title="كل الأدوات العربية"
+  description={`دليل أدوات Tools.ly العربية: ${arTools.length} أداة في ${usedCategories.length} تصنيفات، ${arLiveCount} منها جاهزة الآن. ابحث بالاسم أو رشّح بالتصنيف — بلا رفع ملفات ولا تتبّع ولا حسابات.`}
+  canonical="/ar/كل-الأدوات/"
+  locale="ar"
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">الدليل</p>
+      <h1>كل الأدوات العربية</h1>
+      <p class="lede">
+        {arTools.length} أدوات موزّعة على {usedCategories.length} تصنيفات، {arLiveCount} منها
+        جاهزة للاستخدام الآن والباقي قيد الإنشاء. ابحث بالاسم أو رشّح بالتصنيف؛ وكل أداة هنا تعمل
+        داخل متصفحك بلا رفع ملفات وبلا حساب.
+      </p>
+    </div>
+  </div>
+
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="field dir-search" style="margin-bottom:1.25rem">
+        <label for="ar-tool-search">ابحث في الأدوات</label>
+        <input
+          id="ar-tool-search"
+          type="search"
+          placeholder="جرّب: التقويم، الأرقام، التشكيل…"
+          autocomplete="off"
+          aria-describedby="ar-search-hint"
+        />
+      </div>
+      <p class="sr-only" id="ar-search-hint">
+        تُحدَّث النتائج أثناء الكتابة، ويمكن الترشيح أيضاً بزرّ تصنيف. لا يغادر ما تكتبه متصفحك.
+      </p>
+
+      <div class="cat-nav" role="group" aria-label="تصفية حسب التصنيف">
+        <button type="button" data-cat="all" aria-pressed="true">الكل</button>
+        {
+          usedCategories.map((category) => (
+            <button type="button" data-cat={category.id} aria-pressed="false">
+              {category.label}
+            </button>
+          ))
+        }
+      </div>
+
+      <p
+        data-count
+        aria-live="polite"
+        style="margin:0 0 1.25rem;font-size:0.9rem;color:var(--text-muted)"
+      >
+        تُعرض جميع الأدوات: {arTools.length}.
+      </p>
+
+      <div class="tool-grid" data-tool-grid>
+        {
+          allTools.map((tool) =>
+            tool.status === "live" ? (
+              <a
+                class="tool-card"
+                href={arUrlOf(tool)}
+                data-cat={tool.category}
+                data-search={searchTextOf(tool)}
+              >
+                <span class="tool-card__icon" aria-hidden="true">
+                  <Icon name={tool.icon} size={20} />
+                </span>
+                <span>
+                  <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+                  <span class="tool-card__desc">{tool.description}</span>
+                </span>
+              </a>
+            ) : (
+              <div
+                class="tool-card tool-card--soon"
+                data-cat={tool.category}
+                data-search={searchTextOf(tool)}
+              >
+                <span class="tool-card__icon" aria-hidden="true">
+                  <Icon name={tool.icon} size={20} />
+                </span>
+                <span>
+                  <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+                  <span class="tool-card__desc">{tool.description}</span>
+                  <span class="badge" style="margin-top:0.4rem">قريباً</span>
+                </span>
+              </div>
+            )
+          )
+        }
+      </div>
+
+      <p class="empty-state" data-empty hidden style="margin-top:1rem">لا توجد أداة تطابق بحثك</p>
+    </div>
+  </section>
+
+  <section class="section section--soft">
+    <div class="container">
+      <h2>ما الذي يقدّمه كل تصنيف؟</h2>
+      <p class="lede" style="margin-bottom:1.25rem">
+        التصنيفات مرتّبة حسب الموضوع لا حسب الأهمية، وكل أداة تنتمي إلى تصنيف واحد واضح.
+      </p>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">التصنيف</th>
+              <th scope="col">ماذا تجد فيه</th>
+              <th scope="col">عدد الأدوات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              usedCategories.map((category) => (
+                <tr>
+                  <th scope="row">{category.label}</th>
+                  <td>{category.blurb}</td>
+                  <td>{arTools.filter((tool) => tool.category === category.id).length}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  (function () {
+    const grid = document.querySelector("[data-tool-grid]");
+    if (!grid) return;
+
+    const search = document.getElementById("ar-tool-search");
+    const empty = document.querySelector("[data-empty]");
+    const count = document.querySelector("[data-count]");
+    const chips = Array.prototype.slice.call(document.querySelectorAll(".cat-nav button"));
+
+    // توحيد شكل الحروف قبل المقارنة: ينجح البحث سواء كتب الزائر الهمزة أو تركها،
+    // أو كتب تاء مربوطة مكان الهاء، أو أضاف تشكيلاً إلى الكلمة.
+    const normalise = function (value) {
+      return String(value === null || value === undefined ? "" : value)
+        .toLowerCase()
+        .replace(/[\u064B-\u0652\u0670\u0640]/g, "")
+        .replace(/[\u0623\u0625\u0622\u0671]/g, "\u0627")
+        .replace(/\u0649/g, "\u064A")
+        .replace(/\u0626/g, "\u064A")
+        .replace(/\u0624/g, "\u0648")
+        .replace(/\u0629/g, "\u0647");
+    };
+
+    const cards = Array.prototype.slice.call(grid.querySelectorAll(".tool-card")).map(function (el) {
+      return {
+        el: el,
+        category: el.getAttribute("data-cat") || "",
+        text: normalise(el.getAttribute("data-search") || el.textContent || ""),
+      };
+    });
+
+    const total = cards.length;
+    let activeCat = "all";
+
+    const apply = function () {
+      const query = normalise(search ? search.value : "").trim();
+      let visible = 0;
+
+      cards.forEach(function (card) {
+        const okCat = activeCat === "all" || card.category === activeCat;
+        const okText = query === "" || card.text.indexOf(query) !== -1;
+        const show = okCat && okText;
+        card.el.hidden = !show;
+        if (show) visible += 1;
+      });
+
+      if (empty) empty.hidden = visible !== 0;
+      if (count) {
+        count.textContent =
+          visible === total
+            ? "تُعرض جميع الأدوات: " + total + "."
+            : "تُعرض " + visible + " من أصل " + total + " أداة.";
+      }
+    };
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        activeCat = chip.getAttribute("data-cat") || "all";
+        chips.forEach(function (other) {
+          other.setAttribute("aria-pressed", String(other === chip));
+        });
+        apply();
+      });
+    });
+
+    if (search) search.addEventListener("input", apply);
+
+    apply();
+  })();
+</script>

@@ -1,0 +1,162 @@
+---
+import Base from "../../layouts/Base.astro";
+import Icon from "../../components/Icon.astro";
+import { arTools, arCategories, arUrlOf, arNewest, arLiveCount } from "../../data/arTools";
+
+// الأدوات الجاهزة، مرتّبة من الأحدث إلى الأقدم، وهي التي يبدأ منها الزائر.
+const liveTools = arNewest(arTools.filter((tool) => tool.status === "live"));
+const startTool = liveTools[0];
+
+// التصنيفات التي تحتوي أداة واحدة على الأقل، حتى لا نَعِد الزائر بتصنيف فارغ.
+const usedCategories = arCategories.filter((category) =>
+  arTools.some((tool) => tool.category === category.id)
+);
+
+const site = "https://tools.ly";
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "أدوات Tools.ly العربية",
+    alternateName: "Tools.ly Arabic",
+    url: new URL("/ar/", site).href,
+    inLanguage: "ar",
+    description:
+      "أدوات عربية مجانية تعمل بالكامل داخل المتصفح: عدّاد الحروف والكلمات، محوّل التقويم الهجري، وأدوات للنصوص والأرقام والخطوط. بلا رفع ملفات، وبلا تتبّع، وبلا حسابات.",
+    publisher: {
+      "@type": "Organization",
+      name: "Tools.ly",
+      url: new URL("/", site).href,
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "الأدوات العربية المتوفّرة الآن",
+    numberOfItems: liveTools.length,
+    itemListElement: liveTools.map((tool, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: tool.nav ?? tool.title,
+      url: new URL(arUrlOf(tool), site).href,
+    })),
+  },
+];
+---
+
+<Base
+  title="أدوات عربية تعمل داخل متصفحك"
+  description={`أدوات عربية مجانية تعمل داخل متصفحك: عدّاد الحروف والكلمات، محوّل التقويم الهجري، وأدوات للنصوص والأرقام. ${arLiveCount} منها متوفّرة الآن بلا رفع ملفات ولا تتبّع ولا حسابات.`}
+  canonical="/ar/"
+  locale="ar"
+  jsonLd={jsonLd}
+>
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow">مجانية · خاصة · تعمل دون إنترنت</p>
+      <h1>أدوات عربية جاهزة، تعمل في متصفحك وحده</h1>
+      <p class="lede">
+        حاسبات ومحوّلات وأدوات للنصوص العربية، مجتمعة في مكان واحد. لا يُرفع ملف، ولا يُنشأ حساب،
+        ولا يُرسل ما تكتبه إلى أي خادم.
+      </p>
+
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="/ar/كل-الأدوات/">
+          تصفّح الأدوات <Icon name="arrow" size={16} />
+        </a>
+        <a class="btn btn--ghost" href={arUrlOf(startTool)}>ابدأ الآن</a>
+      </div>
+
+      <div class="hero__stats">
+        <div class="hero__stat">
+          <b>{arTools.length}</b>
+          <span>أدوات في الدليل</span>
+        </div>
+        <div class="hero__stat">
+          <b>{arLiveCount}</b>
+          <span>متوفّرة الآن</span>
+        </div>
+        <div class="hero__stat">
+          <b>0</b>
+          <span>ملفات مرفوعة</span>
+        </div>
+        <div class="hero__stat">
+          <b>0</b>
+          <span>حسابات مطلوبة</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p class="eyebrow">ابدأ من هنا</p>
+      <h2>أدوات جاهزة للاستخدام الآن</h2>
+      <p class="lede">
+        ما تجده في هذا القسم يعمل اليوم بلا أي شرط: اكتب أو اختر، واحصل على النتيجة في اللحظة
+        نفسها. وبقية الأدوات موزّعة على {usedCategories.length} تصنيفات وتصدر تباعاً.
+      </p>
+
+      <div class="tool-grid" style="margin-top:1.5rem">
+        {
+          liveTools.map((tool) => (
+            <a class="tool-card" href={arUrlOf(tool)}>
+              <span class="tool-card__icon" aria-hidden="true">
+                <Icon name={tool.icon} size={20} />
+              </span>
+              <span>
+                <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+                <span class="tool-card__desc">{tool.description}</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--soft">
+    <div class="container">
+      <div class="prose">
+        <h2>لماذا تختلف هذه الأدوات؟</h2>
+        <p>
+          كل أداة هنا صفحة واحدة من HTML وCSS وجافاسكربت تُنزَّل مرة واحدة، ثم يجري كل شيء بعدها
+          داخل متصفحك. لا يخرج الحساب من جهازك، ولا ينتظر ردّاً من خادم بعيد؛ ولهذا لن تجد زر
+          «تسجيل الدخول»، ولا نافذة تطلب بريدك الإلكتروني، ولا شريط تقدّم ينتظر اكتمال الرفع.
+        </p>
+        <p>
+          والفرق يظهر في التفاصيل: <a href="/ar/عداد-الحروف/">عدّاد الحروف والكلمات</a> يحصي ما
+          تكتبه وأنت تكتبه، و<a href="/ar/التقويم-الهجري/">محوّل التقويم الهجري</a> يعطيك التاريخ
+          المقابل في اللحظة نفسها، وكلاهما يعمل بالطريقة ذاتها على الحاسوب والهاتف.
+        </p>
+
+        <h2>لا رفع ملفات، ولا تتبّع، ولا حسابات</h2>
+        <p>
+          لا ترسل هذه الصفحات ما تكتبه إلى أي جهة: لا رفع، ولا نسخة على خادم، ولا سجلّ للنصوص التي
+          ألصقتها. وحين تتعامل أداة مع ملف، فإنها تقرأه وتعالجه داخل الصفحة نفسها، ثم يُهمَل عند
+          إغلاق التبويب.
+        </p>
+        <p>
+          ولا متتبّعات إعلانية، ولا أدوات تحليل، ولا ملفات تعريف ارتباط. لا نعرف من زار الصفحة،
+          ولا مقدار ما بقي فيها، ولا ما كتبه؛ وهذا اختيار مقصود، لا شعار تسويقي. وإن أغلقت الصفحة
+          أو حدّثتها، فلا يبقى عنك شيء إلا ما احتفظ به متصفحك أنت بإرادتك.
+        </p>
+
+        <h2>تعمل دون إنترنت</h2>
+        <p>
+          لأن الحساب والتحويل والترتيب كلها تجري في المتصفح، يمكنك فتح الصفحة مرة واحدة ثم
+          استخدامها وأنت بلا شبكة تماماً. وإن انقطع الاتصال وأنت في منتصف العمل، فلا شيء يتوقف ولا
+          تُفقد نتيجة؛ فالعدّاد يحصي، والمحوّل يحوّل، والصفحة لا تنتظر أحداً.
+        </p>
+
+        <div class="callout" style="margin-top:2rem">
+          <p>
+            كل أداة موصوفة بتصنيفها وبعدد ما فيه من أدوات في
+            <a href="/ar/كل-الأدوات/">دليل الأدوات العربية</a>، وهناك يمكنك البحث والتصفية.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

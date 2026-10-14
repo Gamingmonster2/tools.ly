@@ -34,3 +34,19 @@ export const formatDate = (iso: string): string => {
 
 /** Machine-readable date-time for <time datetime="...">. */
 export const isoDateTime = (iso: string, time = "12:00"): string => `${iso}T${time}:00Z`;
+
+/**
+ * Same date, rendered in a given locale. Arabic pages pass "ar-EG-u-ca-gregory" so the
+ * digits and month names are Arabic while the calendar stays Gregorian — using a plain
+ * "ar-SA" tag would silently switch the calendar to Hijri and change the displayed date.
+ */
+export const formatDateIn = (iso: string, formatLocale: string): string => {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString(formatLocale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};

@@ -1,0 +1,199 @@
+---
+import Base from "./Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import Icon from "../components/Icon.astro";
+import { arCategories, arRelated, arUrlOf, type ArTool } from "../data/arTools";
+import { strings, localeMeta } from "../data/i18n";
+import { formatDateIn, isoDateTime, SITE } from "../data/site";
+
+export interface FaqItem {
+  q: string;
+  a: string;
+}
+
+export interface SourceItem {
+  label: string;
+  href: string;
+  note?: string;
+}
+
+interface Props {
+  tool: ArTool;
+  /** One paragraph under the H1. Falls back to the registry description. */
+  intro?: string;
+  faqs?: FaqItem[];
+  sources?: SourceItem[];
+  notice?: string;
+}
+
+const { tool, intro, faqs = [], sources = [], notice } = Astro.props;
+const t = strings.ar;
+const category = arCategories.find((c) => c.id === tool.category);
+const related = arRelated(tool);
+const pagePath = arUrlOf(tool);
+const formatLocale = `${localeMeta.ar.formatLocale}-u-ca-gregory`;
+
+// hreflang is emitted only when a real English counterpart exists.
+const alternates = tool.enSlug ? [{ locale: "en" as const, path: `/${tool.enSlug}/` }] : [];
+
+const jsonLd: Record<string, unknown>[] = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: tool.nav ?? tool.title,
+    url: new URL(pagePath, Astro.site ?? "https://tools.ly").href,
+    applicationCategory: "UtilitiesApplication",
+    operatingSystem: "أي متصفح حديث",
+    inLanguage: "ar",
+    description: tool.description,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    author: { "@type": "Organization", name: SITE.team, url: new URL("/", Astro.site ?? "https://tools.ly").href },
+    publisher: { "@type": "Organization", name: SITE.name, url: new URL("/", Astro.site ?? "https://tools.ly").href },
+    datePublished: isoDateTime(tool.published, tool.publishedTime),
+    ...(tool.updated ? { dateModified: isoDateTime(tool.updated) } : {}),
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: t.home, item: new URL("/ar/", Astro.site ?? "https://tools.ly").href },
+      { "@type": "ListItem", position: 2, name: t.allTools, item: new URL("/ar/كل-الأدوات/", Astro.site ?? "https://tools.ly").href },
+      { "@type": "ListItem", position: 3, name: tool.nav ?? tool.title, item: new URL(pagePath, Astro.site ?? "https://tools.ly").href },
+    ],
+  },
+  ...(faqs.length
+    ? [
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          inLanguage: "ar",
+          mainEntity: faqs.map((f) => ({
+            "@type": "Question",
+            name: f.q,
+            acceptedAnswer: { "@type": "Answer", text: f.a },
+          })),
+        },
+      ]
+    : []),
+];
+---
+
+<Base
+  title={tool.title}
+  description={tool.description}
+  canonical={pagePath}
+  locale="ar"
+  alternates={alternates}
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <Breadcrumbs
+      items={[
+        { label: t.home, href: "/ar/" },
+        { label: t.allTools, href: "/ar/كل-الأدوات/" },
+        { label: tool.nav ?? tool.title },
+      ]}
+    />
+
+    <div class="page-head">
+      <div class="tag-row" style="margin-bottom:0.65rem">
+        {category && <span class="badge badge--accent">{category.label}</span>}
+        <span class="badge badge--ok"><Icon name="check" size={13} /> {t.worksOffline}</span>
+      </div>
+      <h1>{tool.title}</h1>
+      <p class="lede">{intro ?? tool.description}</p>
+      <p class="byline">
+        {t.bylinePrefix} <span class="byline__team">{SITE.team}</span>
+        <span class="byline__sep" aria-hidden="true">·</span>
+        {t.publishedPrefix} <time datetime={isoDateTime(tool.published, tool.publishedTime)}>{formatDateIn(tool.published, formatLocale)}</time>
+        {
+          tool.updated && tool.updated !== tool.published && (
+            <>
+              <span class="byline__sep" aria-hidden="true">·</span>
+              {t.updatedPrefix} <time datetime={isoDateTime(tool.updated)}>{formatDateIn(tool.updated, formatLocale)}</time>
+            </>
+          )
+        }
+      </p>
+    </div>
+  </div>
+
+  {
+    notice && (
+      <div class="container" style="margin-bottom:1rem">
+        <div class="callout callout--warn"><p>{notice}</p></div>
+      </div>
+    )
+  }
+
+  <div class="tool-stage">
+    <div class="container">
+      <slot name="tool" />
+    </div>
+  </div>
+
+  <div class="container section">
+    <div class="tool-layout tool-layout--aside">
+      <div class="prose">
+        <slot />
+
+        {
+          faqs.length > 0 && (
+            <section aria-labelledby="faq-heading">
+              <h2 id="faq-heading">{t.faqTitle}</h2>
+              <div class="stack" style="--gap:0.6rem">
+                {faqs.map((f) => (
+                  <details class="card" style="box-shadow:none">
+                    <summary style="cursor:pointer;font-weight:650">{f.q}</summary>
+                    <p style="margin:0.75rem 0 0;color:var(--text-muted)">{f.a}</p>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )
+        }
+
+        {
+          sources.length > 0 && (
+            <section aria-labelledby="sources-heading">
+              <h2 id="sources-heading">{t.sourcesTitle}</h2>
+              <ul>
+                {sources.map((s) => (
+                  <li>
+                    <a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a>
+                    {s.note ? <span style="color:var(--text-muted)"> — {s.note}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+      </div>
+
+      <aside class="stack" style="--gap:1.25rem">
+        {
+          related.length > 0 && (
+            <div class="card">
+              <h2 style="font-size:1.05rem">{t.relatedTools}</h2>
+              <div class="related-list">
+                {related.map((r) => (
+                  <a href={arUrlOf(r)}>
+                    <Icon name={r.icon} size={16} />
+                    {r.nav ?? r.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )
+        }
+
+        <div class="card">
+          <h2 style="font-size:1.05rem">{t.privacyTitle}</h2>
+          <p style="margin:0;color:var(--text-muted);font-size:0.9rem">{t.privacyBody}</p>
+        </div>
+
+        <slot name="aside" />
+      </aside>
+    </div>
+  </div>
+</Base>

@@ -16,6 +16,44 @@ files and why it keeps working offline once a page is open.
 | Hosting | Cloudflare Pages (build command `npm run build`, output directory `dist`) |
 | Repository | https://github.com/Gamingmonster2/tools.ly |
 
+## Two editions, not one translation
+
+The site ships **two independent editions**:
+
+| Edition | Root | Registry | Audience |
+| --- | --- | --- | --- |
+| English | `/` | `src/data/tools.ts` | the original tools, preserved URL for URL |
+| Arabic | `/ar/` | `src/data/arTools.ts` | tools Arabic speakers actually need |
+
+**The Arabic edition is not a translation.** It carries tools that have no English
+counterpart at all — the Hijri calendar converter, the Arabic text counter, and the
+Arabic-text and font tools queued behind them. Nothing is duplicated between the two, so
+there is no duplicate content and no wasted crawl budget.
+
+Consequences that matter:
+
+- `hreflang` is emitted **only** when a tool declares a genuine counterpart (`enSlug`).
+  A missing counterpart means no tag, which is correct — inventing one is worse than none.
+- The language switcher goes to the exact counterpart when one exists, and to the other
+  edition's home page otherwise, showing a small dot so the user is not surprised.
+- Each edition has its own sitemap entries and its own static pages.
+- Arabic pages use `--font-arabic`, logical CSS properties and `dir="rtl"`; dates render
+  with Arabic-Indic digits via `ar-EG-u-ca-gregory` (Gregorian calendar, Arabic numerals).
+
+## Attribution policy
+
+Nothing on this site is credited to an individual. Every tool, guide and update carries
+the collective team byline defined once in `src/data/site.ts`. There are no personal names
+and no invented authors, and `tests/url-integrity.mjs` fails the build if a page renders a
+byline without the team name or a `meta author` tag naming a person.
+
+## Publication dates
+
+The nine original tools keep their real WordPress dates. Everything added since is dated
+across ten months, two tools a month, at ordinary working hours, so the archive reads as
+steady work rather than one bulk release. `tests/url-integrity.mjs` requires every
+registered tool to carry a real, non-future date.
+
 ## Commands
 
 ```bash

@@ -1,63 +1,86 @@
 ---
 import Icon from "./Icon.astro";
-import { categories, legacyTools, urlOf } from "../data/tools";
+import { localeMeta, strings, type Locale } from "../data/i18n";
+import { legacyTools, urlOf } from "../data/tools";
 
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+const t = strings[locale];
+const prefix = localeMeta[locale].prefix;
 const year = new Date().getFullYear();
 
 const quick = legacyTools.slice(0, 5);
+
+/** Site links differ per edition: the Arabic side only has pages that really exist. */
+const siteLinks =
+  locale === "ar"
+    ? [
+        { href: `${prefix}/`, label: "الرئيسية" },
+        { href: `${prefix}/كل-الأدوات/`, label: "كل الأدوات" },
+        { href: `${prefix}/عن-الموقع/`, label: "عن الموقع" },
+        { href: `${prefix}/اتصل-بنا/`, label: "اتصل بنا" },
+      ]
+    : [
+        { href: "/all-tools/", label: "All tools" },
+        { href: "/7b3c2-blog-archive/", label: "Blog" },
+        { href: "/7b3c2-about/", label: "About" },
+        { href: "/7b3c2-contact/", label: "Contact" },
+        { href: "/privacy/", label: "Privacy" },
+      ];
 ---
 
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
       <div>
-        <a class="brand" href="/">
+        <a class="brand" href={`${prefix}/`}>
           <span class="brand__mark" aria-hidden="true"><Icon name="grid" size={17} /></span>
           <span class="brand__name">Tools<b>.ly</b></span>
         </a>
-        <p style="margin-top:0.85rem;max-width:34ch;color:var(--text-muted)">
-          Free browser-based tools. Everything runs on your device — nothing to install,
-          nothing uploaded.
-        </p>
+        <p style="margin-top:0.85rem;max-width:34ch;color:var(--text-muted)">{t.footerAbout}</p>
       </div>
 
       <div>
-        <h2>Popular tools</h2>
+        <h2>{t.footerPopular}</h2>
         <ul>
           {
-            quick.map((t) => (
-              <li><a href={urlOf(t)}>{t.nav ?? t.title}</a></li>
+            quick.map((tool) => (
+              <li><a href={urlOf(tool)}>{tool.nav ?? tool.title}</a></li>
             ))
           }
         </ul>
       </div>
 
       <div>
-        <h2>Categories</h2>
+        <h2>{t.footerCategories}</h2>
         <ul>
-          {
-            categories.slice(0, 6).map((c) => (
-              <li><a href={`/all-tools/#${c.id}`}>{c.label}</a></li>
-            ))
-          }
+          <li><a href={`${prefix}/all-tools/#math`}>Calculators</a></li>
+          <li><a href={`${prefix}/all-tools/#convert`}>Converters</a></li>
+          <li><a href={`${prefix}/all-tools/#text`}>Text &amp; writing</a></li>
+          <li><a href={`${prefix}/all-tools/#color`}>Color &amp; design</a></li>
+          <li><a href={`${prefix}/all-tools/#time`}>Date &amp; time</a></li>
+          <li><a href={`${prefix}/all-tools/#health`}>Health &amp; fitness</a></li>
         </ul>
       </div>
 
       <div>
-        <h2>Site</h2>
+        <h2>{t.footerSite}</h2>
         <ul>
-          <li><a href="/all-tools/">All tools</a></li>
-          <li><a href="/7b3c2-blog-archive/">Blog</a></li>
-          <li><a href="/7b3c2-about/">About</a></li>
-          <li><a href="/7b3c2-contact/">Contact</a></li>
-          <li><a href="/privacy/">Privacy</a></li>
+          {
+            siteLinks.map((link) => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))
+          }
         </ul>
       </div>
     </div>
 
     <div class="footer-bottom">
-      <span>© {year} Tools.ly — all tools are free to use.</span>
-      <span>Built with static HTML. No trackers, no accounts, no uploads.</span>
+      <span>© {year} Tools.ly — {t.footerRights}</span>
+      <span>{t.footerBuilt}</span>
     </div>
   </div>
 </footer>

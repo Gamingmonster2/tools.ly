@@ -1,0 +1,671 @@
+---
+import ArToolLayout from "../../layouts/ArToolLayout.astro";
+import { arTools } from "../../data/arTools";
+
+const tool = arTools.find((t) => t.slug === "عداد-الحروف")!;
+
+const faqs = [
+  {
+    q: "هل يُحتسب التشكيل ضمن عدد الحروف؟",
+    a: "افتراضياً لا؛ فالعدّاد يفصل الحركات (الفتحة والضمة والكسرة والسكون والشدّة والتنوين) في سطر مستقل داخل جدول التفصيل، حتى يكون عدد الحروف مطابقاً لما تعارف عليه أهل اللغة: الحرف الأصلي وحده. وإن أردت احتسابها ضمن المجموع فأزل التحديد عن خيار «تجاهل التشكيل في عدّ الحروف».",
+  },
+  {
+    q: "لماذا يختلف عدد الكلمات هنا عن عدّادات النصوص الإنجليزية؟",
+    a: "لأن العدّاد يعتمد على تجزيء النص حسب حدود الكلمات في معيار يونيكود عبر Intl.Segmenter، لا على المسافات وحدها. وهذا مهم في العربية تحديداً؛ فعلامات الترقيم العربية مثل «،» و«؛» و«؟» تلتصق بالكلمة، وقد تدخل الأرقام العربية الهندية (٠١٢٣) في وسط الكلام، وقد يرد التشكيل على الحرف. كل هذه الحالات تُعامل معاملة صحيحة فلا تُحتسب الكلمة كلمتين.",
+  },
+  {
+    q: "ما معنى «الكلمات الفريدة» وكيف تُرتَّب؟",
+    a: "الكلمات الفريدة هي صيغ الكلمات المختلفة بعد التنظيف والتوحيد، تُحتسب مرة واحدة مهما تكررت. والترتيب والتصنيف يجريان عبر Intl.Collator بترتيب عربي صحيح، فلا تتأثر النتيجة بفروق الهمزات أو التشكيل ولا تختلط الهمزة بالألف.",
+  },
+  {
+    q: "هل يُرسل نصي إلى أي خادم؟",
+    a: "لا. كل العدّ والتحليل يجري داخل متصفحك بلغة جافاسكربت، ولا يوجد اتصال بالشبكة ولا رفع للملفات، ولذلك تعمل الأداة بلا إنترنت وبنص قد يكون خاصاً أو محمياً.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Intl.Segmenter",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter",
+    note: "المرجع الذي تعتمد عليه الأداة في تجزيء النص إلى كلمات بحدود يونيكود بدل الاعتماد على المسافات.",
+  },
+  {
+    label: "Unicode UAX #29 — Text Segmentation",
+    href: "https://www.unicode.org/reports/tr29/",
+    note: "التوصية المعيارية لحدود الكلمات، وهي الأصل الذي يحدّد كيف تُفصل الكلمة العربية عن الترقيم المجاور لها.",
+  },
+  {
+    label: "Unicode Arabic Script Code Chart (U+0600–U+06FF)",
+    href: "https://www.unicode.org/charts/PDF/U0600.pdf",
+    note: "جدول الحروف العربية والحركات والأرقام العربية الهندية، وعليه بُني تصنيف المحارف في جدول التفصيل.",
+  },
+];
+---
+
+<ArToolLayout
+  tool={tool}
+  intro="الصق نصاً عربياً واحصل فوراً على عدد الحروف والكلمات والجمل ووقت القراءة، مع تفصيل المحارف وأكثر الكلمات تكراراً."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="tool">
+          <div class="field">
+            <label for="ar-text">النص العربي</label>
+            <textarea
+              id="ar-text"
+              rows="10"
+              dir="rtl"
+              lang="ar"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="الصق نصك العربي هنا… أو اكتب مباشرة لترى الأرقام تتحدّث فوراً."
+            ></textarea>
+            <p class="hint" id="ar-hint">
+              الحساب يجري داخل متصفحك: لا رفع ولا إرسال، ويعمل بلا إنترنت.
+            </p>
+          </div>
+
+          <fieldset class="fieldset">
+            <legend>خيارات العدّ</legend>
+            <div class="opts">
+              <label class="check" for="opt-alef">
+                <input type="checkbox" id="opt-alef" checked />
+                <span>توحيد الألف (أ إ آ ← ا)</span>
+              </label>
+              <label class="check" for="opt-tashkeel">
+                <input type="checkbox" id="opt-tashkeel" checked />
+                <span>تجاهل التشكيل في عدّ الحروف</span>
+              </label>
+              <label class="check" for="opt-punct">
+                <input type="checkbox" id="opt-punct" checked />
+                <span>تجاهل الترقيم</span>
+              </label>
+              <label class="check" for="opt-digits">
+                <input type="checkbox" id="opt-digits" checked />
+                <span>تجاهل الأرقام</span>
+              </label>
+              <label class="check" for="opt-stopwords">
+                <input type="checkbox" id="opt-stopwords" />
+                <span>استبعاد كلمات الوقف الشائعة من جدول التكرار</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <section aria-labelledby="ar-stats-heading">
+            <h3 class="block-title" id="ar-stats-heading">الملخّص</h3>
+            <div class="stat-grid" aria-live="polite">
+              <div class="stat">
+                <div class="stat__label">الحروف</div>
+                <div class="stat__value" id="st-letters">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الحروف بدون مسافات</div>
+                <div class="stat__value" id="st-nospace">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الكلمات</div>
+                <div class="stat__value" id="st-words">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الجمل</div>
+                <div class="stat__value" id="st-sentences">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الأسطر</div>
+                <div class="stat__value" id="st-lines">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الفقرات</div>
+                <div class="stat__value" id="st-paragraphs">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الكلمات الفريدة</div>
+                <div class="stat__value" id="st-unique">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">وقت القراءة (١٨٠ كلمة/دقيقة)</div>
+                <div class="stat__value" id="st-reading">٠ دقيقة</div>
+              </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="ar-chars-heading">
+            <h3 class="block-title" id="ar-chars-heading">تفصيل المحارف</h3>
+            <div class="table-wrap">
+              <table class="data">
+                <caption class="sr-only">
+                  تفصيل محارف النص: الحروف والحركات والأرقام وعلامات الترقيم والرموز
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">الفئة</th>
+                    <th scope="col">العدد</th>
+                    <th scope="col">النسبة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">الحروف (بلا تشكيل وبلا أرقام)</th>
+                    <td class="readout" id="ch-letters">٠</td>
+                    <td class="readout" id="pc-letters">٠٪</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">الحركات والتشكيل</th>
+                    <td class="readout" id="ch-marks">٠</td>
+                    <td class="readout" id="pc-marks">٠٪</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">الأرقام (٠–٩ و 0–9)</th>
+                    <td class="readout" id="ch-digits">٠</td>
+                    <td class="readout" id="pc-digits">٠٪</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">علامات الترقيم</th>
+                    <td class="readout" id="ch-punct">٠</td>
+                    <td class="readout" id="pc-punct">٠٪</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">الرموز والمسافات</th>
+                    <td class="readout" id="ch-symbols">٠</td>
+                    <td class="readout" id="pc-symbols">٠٪</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section aria-labelledby="ar-repeat-heading">
+            <h3 class="block-title" id="ar-repeat-heading">الكلمات العشر الأكثر تكراراً</h3>
+            <p class="hint" id="ar-repeat-note">
+              الترتيب والتصنيف بترتيب عربي صحيح عبر Intl.Collator، والنسب من إجمالي الكلمات.
+            </p>
+            <div class="table-wrap" id="ar-repeat-wrap">
+              <table class="data">
+                <caption class="sr-only">أكثر الكلمات تكراراً في النص مع العدد والنسبة</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">الكلمة</th>
+                    <th scope="col">التكرار</th>
+                    <th scope="col">النسبة</th>
+                  </tr>
+                </thead>
+                <tbody id="ar-repeat-body"></tbody>
+              </table>
+            </div>
+            <p class="empty-state" id="ar-repeat-empty">لا توجد كلمات بعد؛ اكتب نصاً عربياً لعرض التكرار.</p>
+          </section>
+
+          <div class="actions">
+            <button type="button" class="btn btn--primary" id="btn-copy">نسخ الملخّص</button>
+            <button type="button" class="btn btn--ghost" id="btn-clear">تفريغ</button>
+            <span class="status" id="copy-status" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </div>
+      <div class="panel__foot">
+        الأرقام في الملخّص تُعرض بالأرقام العربية الهندية (٠–٩)، أما الملخّص المنسوخ فيستخدم الأرقام
+        الغربية (0–9) ليسهل لصقه في أي محرّر أو بريد.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>كيف تعمل الأداة</h2>
+  <p>
+    كل ما تكتبه أو تلصقه يبقى في جهازك، وتُحسب النتائج أثناء الكتابة بلا زر «احسب». يفحص العدّاد النص
+    محرفاً محرفاً، فيصنّف كل محرف إلى واحدة من خمس فئات: حرف، أو حركة وتشكيل، أو رقم، أو علامة ترقيم،
+    أو رمز ومسافة. هذا التصنيف هو ما يجعل الأرقام ذات معنى في العربية؛ فالحرف المجرّد يُعدّ في «الحروف»،
+    والفتحة والشدّة تُفصَلان في سطر «الحركات والتشكيل»، والأرقام العربية الهندية (٠١٢٣٤٥٦٧٨٩) والأرقام
+    الغربية (0–9) تُجمعان في فئة واحدة.
+  </p>
+  <p>
+    أما عدّ الكلمات فلا يعتمد على المسافات؛ إذ تستخدم الأداة <code>Intl.Segmenter</code> بدرجة التجزئة
+    <code>word</code>، وهو واجهة برمجية مبنية على توصية يونيكود UAX #29 لحدود النص. هذا هو الفرق الجوهري:
+    عدّاد إنجليزي يبحث عن المسافات فقط، فيخطئ حين تلتصق الفاصلة العربية «،» أو علامة الاستفهام «؟»
+    بالكلمة، أو حين يدخل الرقم في وسط الجملة، أو حين يتشكّل الحرف. واجهة التجزئة تعرف حدود الكلمة كما
+    يعرفها يونيكود، فإن لم تكن متوفرة في متصفح قديم عادت الأداة تلقائياً إلى تعبير نمطي واعٍ بمحارف
+    يونيكود للحروف والأرقام، فتحصل على نتيجة قريبة جداً في كل الأحوال.
+  </p>
+  <p>
+    والكلمات الفريدة تُستخرج بعد توحيد الهمزات وإزالة التشكيل والتطويل، ثم تُرتَّب وتُقارَن عبر
+    <code>Intl.Collator("ar")</code> بترتيب عربي صحيح، فلا تختلط «أحمد» بـ«احمد» ولا تتأثر المقارنة
+    بفروق الهمزات. وإلى جانب ذلك يُحسب وقت القراءة بمعدل ١٨٠ كلمة في الدقيقة، وهو معدل القراءة الجهرية
+    المريحة للنص العربي، فيظهر بالدقائق مع تحويل الدقائق الزائدة عند تجاوز الستين.
+  </p>
+
+  <h2>دقة الأرقام وحدودها</h2>
+  <p>
+    الأرقام هنا دقيقة بمعنى أنها قابلة للتفسير: يظهر لك عدد الحروف وفق الخيارات المفعّلة، ويظهر التشكيل
+    والأرقام والترقيم والرموز في بنود مستقلة، فتعرف تماماً من أين جاء كل رقم. لكن ثلاثة أمور تستحق
+    الانتباه. الأول أن «الحرف» في العربية ليس دائماً محرفاً واحداً؛ فالشدة قد تمثّل حرفين متطابقين مدغمين،
+    والعدّاد يحسبها حركة لا حرفاً، وهو اختيار شائع لكنه اجتهادي. والثاني أن الهمزات على واو وياء
+    (ؤ، ئ) والألف المقصورة (ى) تُعامل معاملة الحرف ولا يُوحّدها خيار توحيد الألف إلا في صور الألف
+    الأربع. والثالث أن عدّ الجمل تقريبي بطبيعته؛ إذ يتوقف على العلامات الختامية (نقطة، علامة استفهام،
+    علامة تعجب) فإذا كتبتَ نصاً بلا ترقيم اختتامي عُدّ النص جملة واحدة.
+  </p>
+  <p>
+    كذلك وقت القراءة تقدير لا وعد: ١٨٠ كلمة في الدقيقة معدل متعارف عليه للقراءة الجهرية، لكنه يتباين
+    بحسب صعوبة النص وطول الجمل وكمّ التشكيل. وعدد الفقرات محسوب بفواصل الأسطر المتتالية (سطر فارغ بين
+    الفقرات)، فإن كتبتَ فقرات متلاصقة بلا سطر فارغ عُدّت فقرة واحدة. وأخيراً، الكلمات الفريدة حساسة
+    للحركات قبل تفعيل التوحيد؛ فلذلك يُطبَّق التنظيف نفسه على حسابها وعلى جدول التكرار، حتى يكون
+    الاتساق بين الجداول.
+  </p>
+
+  <h2>كيف تستخدمها عملياً</h2>
+  <p>
+    للأغراض التحريرية: الصق المقال وانظر إلى ستة أرقام — الكلمات، والجمل، ووقت القراءة. الجملة العربية
+    الفصيحة تتراوح عادة بين ١٢ و٢٠ كلمة، فإن كان متوسط الجملة لديك فوق الثلاثين فالنص يحتاج تقطيعاً.
+    ويمكنك التحقق من ذلك بسرعة: قارن عدد الكلمات بعدد الجمل.
+  </p>
+  <p>
+    لوسائل التواصل والمنشورات القصيرة: شغّل «الحروف بدون مسافات» و«الحروف» معاً؛ فهما الرقمان اللذان
+    تصفهما المنصات عادةً. وإن كان النص مُشكّلاً فأزل التحديد عن «تجاهل التشكيل» لتحصل على الطول الفعلي
+    بعد إضافة الحركات.
+  </p>
+  <p>
+    للترجمة والمراجعة اللغوية: استخدم «توحيد الألف» و«استبعاد كلمات الوقف» معاً، فيتقارب أثر «إنّ» و«ان»
+    و«إلى» و«الى»، ويبرز جدول التكرار الكلمات الدلالية بدل حروف الجر والضمائر التي تتكرر في كل نص. وإذا
+    أردت قائمة تُلصق في مكان آخر، اضغط «نسخ الملخّص» فيُنسخ كل شيء بأرقام غربية جاهزة للصق، ثم «تفريغ»
+    لتفريغ المساحة والبدء بنص جديد.
+  </p>
+
+  <style>
+    .tool {
+      display: grid;
+      gap: clamp(1rem, 2.5vw, 1.5rem);
+    }
+    .tool textarea {
+      font-family: var(--font-arabic);
+      font-size: 1.05rem;
+      line-height: 1.9;
+      min-height: 12rem;
+    }
+    .block-title {
+      font-size: 1.05rem;
+      margin-block: 0 0.6rem;
+    }
+    .hint {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .opts {
+      display: grid;
+      gap: 0.25rem 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      padding-block-start: 0.25rem;
+      border-block-start: 1px solid var(--border);
+    }
+    .status {
+      font-size: 0.85rem;
+      color: var(--ok);
+    }
+    .stat__label { text-transform: none; }
+    .table-wrap + .empty-state { margin-block-start: 0.75rem; }
+    [hidden] { display: none !important; }
+    @media (max-width: 380px) {
+      .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat__value { font-size: 1.25rem; }
+      .actions .btn { flex: 1 1 auto; }
+    }
+  </style>
+
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+
+      const textarea = $("ar-text");
+      const optAlef = $("opt-alef");
+      const optTashkeel = $("opt-tashkeel");
+      const optPunct = $("opt-punct");
+      const optDigits = $("opt-digits");
+      const optStopwords = $("opt-stopwords");
+      const repeatBody = $("ar-repeat-body");
+      const repeatWrap = $("ar-repeat-wrap");
+      const repeatEmpty = $("ar-repeat-empty");
+      const copyStatus = $("copy-status");
+
+      const numFmt = new Intl.NumberFormat("ar-EG");
+      const collator = new Intl.Collator("ar", { sensitivity: "base", numeric: true });
+
+      // حدود الكلمات والجمل: توصية يونيكود UAX #29 (عبر Intl.Segmenter عند توفّرها).
+      const segWord = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+        ? new Intl.Segmenter("ar", { granularity: "word" })
+        : null;
+      const segSentence = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+        ? new Intl.Segmenter("ar", { granularity: "sentence" })
+        : null;
+
+      const TASHKEEL = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g;
+      const TATWEEL = /\u0640/g;
+      const AR_LETTER = /[\u0621-\u063A\u0641-\u064A\u066E-\u06D3\u06FA-\u06FF\u0750-\u077F\u08A0-\u08C9]/;
+      const ANY_LETTER = /[\p{L}\p{M}]/u;
+      const AR_DIGIT = /[\u0660-\u0669\u06F0-\u06F9]/;
+      const NUMERIC = /[0-9\u0660-\u0669\u06F0-\u06F9]/;
+      const PUNCT = /[\p{P}\p{S}]/u;
+      const SPACE = /[\s\u00A0\u200B-\u200F\u2028\u2029\uFEFF]/;
+      const SENTENCE_END = /[.!?\u061F\u06D4\u2026\u061B\u060C]/;
+
+      function normalize(text) {
+        return text
+          .replace(/[\u0622\u0623\u0625\u0627\u0671]/g, "\u0627")
+          .replace(TATWEEL, "")
+          .replace(TASHKEEL, "")
+          .replace(/\u0649/g, "\u064A")
+          .replace(/\u0629/g, "\u0647")
+          .trim();
+      }
+
+      // كلمات الوقف تُخزَّن بصيغتها المُوحَّدة، لأن المفتاح المستخدم في العدّ مُوحَّد أيضاً.
+      const STOPWORDS = new Set(
+        [
+          "و", "في", "من", "على", "أن", "إن", "إلى", "عن", "هذا", "هذه", "هذان", "هاتان",
+          "التي", "الذي", "الذين", "اللاتي", "اللواتي", "ما", "لا", "لم", "لن", "قد", "كل",
+          "بعد", "قبل", "بين", "حتى", "إذا", "كما", "لكن", "بل", "أو", "ثم", "هو", "هي",
+          "هم", "هن", "نحن", "أنا", "أنت", "كان", "كانت", "يكون", "تكون", "مع", "عند",
+          "لأن", "كي", "سوف", "هناك", "ذلك", "تلك", "به", "له", "لها", "لهم", "فيه", "فيها",
+          "عليه", "عليها", "منه", "منها", "إليه", "إليها", "بينما", "حيث", "أي", "أية",
+          "بعض", "غير", "سوى", "نفس", "ذاته", "أيضا", "أيضاً", "إنما", "كذلك", "ومن", "وفي",
+          "ولا", "فإن", "وإن", "أما", "إما", "لو", "لولا", "حين", "متى", "كيف", "أين", "لماذا"
+        ].map(normalize)
+      );
+
+      function countSentences(text) {
+        if (!text.trim()) return 0;
+        const trimmed = text.trim();
+        if (segSentence) {
+          let n = 0;
+          for (const part of segSentence.segment(trimmed)) {
+            if (part.segment.trim()) n++;
+          }
+          if (n > 0) return n;
+        }
+        const naive = trimmed.split(SENTENCE_END).filter((s) => s.trim()).length;
+        if (SENTENCE_END.test(trimmed) || naive === 0) return naive;
+        return naive + 1;
+      }
+
+      // تجزيء الكلمات: Intl.Segmenter أولاً، ثم تعبير نمطي واعٍ بمحارف يونيكود.
+      function collectWords(text) {
+        const words = [];
+        const source = text || "";
+        if (segWord) {
+          for (const part of segWord.segment(source)) {
+            if (!part.isWordLike) continue;
+            const value = part.segment.trim();
+            if (value) words.push(value);
+          }
+          if (words.length) return words;
+        }
+        const chunks = source.split(/[^\p{L}\p{N}\p{M}\u200C\u200D]+/u);
+        for (const chunk of chunks) {
+          const value = chunk.trim();
+          if (value) words.push(value);
+        }
+        return words;
+      }
+
+      function countParagraphs(text) {
+        if (!text || !text.trim()) return 0;
+        return text
+          .split(/\n\s*\n+/)
+          .map((b) => b.trim())
+          .filter(Boolean).length;
+      }
+
+      function readableTime(words) {
+        const minutes = words / 180;
+        if (!words) return "٠ دقيقة";
+        if (minutes < 1) return "أقل من دقيقة";
+        const rounded = Math.max(1, Math.round(minutes));
+        if (rounded < 60) return numFmt.format(rounded) + " دقيقة";
+        const hours = Math.floor(rounded / 60);
+        const rest = rounded % 60;
+        return rest
+          ? numFmt.format(hours) + " ساعة و" + numFmt.format(rest) + " دقيقة"
+          : numFmt.format(hours) + " ساعة";
+      }
+
+      function classify(text) {
+        const stats = { letters: 0, marks: 0, digits: 0, punct: 0, symbols: 0, total: 0 };
+        let noSpace = 0;
+        for (const ch of text) {
+          stats.total++;
+          if (SPACE.test(ch)) {
+            stats.symbols++;
+            continue;
+          }
+          noSpace++;
+          if (TASHKEEL.test(ch)) {
+            TASHKEEL.lastIndex = 0;
+            stats.marks++;
+          } else if (AR_LETTER.test(ch) || ANY_LETTER.test(ch)) {
+            stats.letters++;
+          } else if (AR_DIGIT.test(ch) || NUMERIC.test(ch)) {
+            stats.digits++;
+          } else if (PUNCT.test(ch)) {
+            stats.punct++;
+          } else {
+            stats.symbols++;
+          }
+        }
+        return { stats: stats, noSpace: noSpace };
+      }
+
+      function plain(n) {
+        return new Intl.NumberFormat("en-US").format(n);
+      }
+
+      function setReading(el, words) {
+        el.textContent = readableTime(words);
+      }
+
+      function update() {
+        const raw = textarea.value;
+        const words = collectWords(raw);
+        const breakdown = classify(raw);
+        const letters = breakdown.stats.letters;
+        const marks = breakdown.stats.marks;
+        const digits = breakdown.stats.digits;
+        const punct = breakdown.stats.punct;
+        const symbols = breakdown.stats.symbols;
+
+        const ignoreMarks = optTashkeel.checked;
+        const ignoreDigits = optDigits.checked;
+        const ignorePunct = optPunct.checked;
+
+        const letterTotal = letters + (ignoreMarks ? 0 : marks) + (ignoreDigits ? 0 : digits);
+        const noSpaceTotal =
+          letterTotal + (ignorePunct ? 0 : punct) + symbols;
+
+        const uniqueWords = new Set(words.map((w) => normalize(w)).filter(Boolean));
+
+        $("st-letters").textContent = numFmt.format(letterTotal);
+        $("st-nospace").textContent = numFmt.format(noSpaceTotal);
+        $("st-words").textContent = numFmt.format(words.length);
+        $("st-sentences").textContent = numFmt.format(countSentences(raw));
+        $("st-lines").textContent = numFmt.format(raw ? raw.split(/\r\n|\r|\n/).length : 0);
+        $("st-paragraphs").textContent = numFmt.format(countParagraphs(raw));
+        $("st-unique").textContent = numFmt.format(uniqueWords.size);
+        setReading($("st-reading"), words.length);
+
+        const base = breakdown.stats.total || 1;
+        const rows = [
+          ["ch-letters", "pc-letters", letters],
+          ["ch-marks", "pc-marks", marks],
+          ["ch-digits", "pc-digits", digits],
+          ["ch-punct", "pc-punct", punct],
+          ["ch-symbols", "pc-symbols", symbols],
+        ];
+        for (const row of rows) {
+          $(row[0]).textContent = numFmt.format(row[2]);
+          const ratio = breakdown.stats.total ? (row[2] / base) * 100 : 0;
+          $(row[1]).textContent = numFmt.format(Math.round(ratio * 10) / 10) + "٪";
+        }
+
+        const excludeStop = optStopwords.checked;
+        const counts = new Map();
+        for (const word of words) {
+          const key = normalize(word);
+          if (!key || !ANY_LETTER.test(key)) continue;
+          if (excludeStop && STOPWORDS.has(key)) continue;
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        const totalWords = words.length || 1;
+        const ranked = Array.from(counts.entries()).sort(function (a, b) {
+          return b[1] - a[1] || collator.compare(a[0], b[0]);
+        });
+
+        repeatBody.textContent = "";
+        const top = ranked.slice(0, 10);
+        top.forEach(function (entry, index) {
+          const tr = document.createElement("tr");
+          const cellIndex = document.createElement("td");
+          cellIndex.className = "readout";
+          cellIndex.textContent = numFmt.format(index + 1);
+          const cellWord = document.createElement("td");
+          cellWord.textContent = entry[0];
+          const cellCount = document.createElement("td");
+          cellCount.className = "readout";
+          cellCount.textContent = numFmt.format(entry[1]);
+          const cellRatio = document.createElement("td");
+          cellRatio.className = "readout";
+          cellRatio.textContent =
+            numFmt.format(Math.round((entry[1] / totalWords) * 1000) / 10) + "٪";
+          tr.appendChild(cellIndex);
+          tr.appendChild(cellWord);
+          tr.appendChild(cellCount);
+          tr.appendChild(cellRatio);
+          repeatBody.appendChild(tr);
+        });
+
+        if (top.length) {
+          repeatWrap.hidden = false;
+          repeatEmpty.hidden = true;
+        } else {
+          repeatWrap.hidden = true;
+          repeatEmpty.hidden = false;
+        }
+      }
+
+      function buildSummary() {
+        const raw = textarea.value;
+        const words = collectWords(raw);
+        const breakdown = classify(raw);
+        const lines = [
+          "ملخّص النص العربي — عدّاد الحروف",
+          "",
+          "الحروف: " + plain(breakdown.stats.letters),
+          "الحروف بدون مسافات: " +
+            plain(breakdown.stats.letters + breakdown.stats.marks + breakdown.stats.digits + breakdown.stats.punct + breakdown.stats.symbols),
+          "الكلمات: " + plain(words.length),
+          "الجمل: " + plain(countSentences(raw)),
+          "الأسطر: " + plain(raw ? raw.split(/\r\n|\r|\n/).length : 0),
+          "الفقرات: " + plain(countParagraphs(raw)),
+          "الكلمات الفريدة: " +
+            plain(new Set(words.map((w) => normalize(w)).filter(Boolean)).size),
+          "وقت القراءة (180 كلمة/دقيقة): " +
+            (words.length ? Math.max(1, Math.round(words.length / 180)) + " دقيقة" : "0 دقيقة"),          "",
+          "تفصيل المحارف:",
+          "الحروف: " + plain(breakdown.stats.letters),
+          "الحركات/التشكيل: " + plain(breakdown.stats.marks),
+          "الأرقام: " + plain(breakdown.stats.digits),
+          "علامات الترقيم: " + plain(breakdown.stats.punct),
+          "الرموز والمسافات: " + plain(breakdown.stats.symbols),
+          "",
+          "أكثر الكلمات تكراراً" +
+            (optStopwords.checked ? " (بعد استبعاد كلمات الوقف الشائعة)" : "") +
+            ":",
+        ];
+
+        const counts = new Map();
+        for (const word of words) {
+          const key = normalize(word);
+          if (!key || !ANY_LETTER.test(key)) continue;
+          if (optStopwords.checked && STOPWORDS.has(key)) continue;
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        const ranked = Array.from(counts.entries())
+          .sort(function (a, b) {
+            return b[1] - a[1] || collator.compare(a[0], b[0]);
+          })
+          .slice(0, 10);
+
+        if (!ranked.length) {
+          lines.push("- لا توجد كلمات.");
+        } else {
+          const total = words.length || 1;
+          ranked.forEach(function (entry, index) {
+            lines.push(
+              String(index + 1) +
+                ". " +
+                entry[0] +
+                " — " +
+                plain(entry[1]) +
+                " (" +
+                (Math.round((entry[1] / total) * 1000) / 10) +
+                "%)"
+            );
+          });
+        }
+        return lines.join("\n");
+      }
+
+      copyStatus.textContent = "";
+
+      textarea.addEventListener("input", update);
+      [optAlef, optTashkeel, optPunct, optDigits, optStopwords].forEach(function (el) {
+        el.addEventListener("change", update);
+      });
+
+      $("btn-clear").addEventListener("click", function () {
+        textarea.value = "";
+        copyStatus.textContent = "تم تفريغ النص.";
+        update();
+        textarea.focus();
+      });
+
+      $("btn-copy").addEventListener("click", function () {
+        const summary = buildSummary();
+        const done = function () {
+          copyStatus.textContent = "تم نسخ الملخّص إلى الحافظة.";
+        };
+        const fail = function () {
+          copyStatus.textContent = "تعذّر النسخ تلقائياً؛ حدّد النص وانسخه يدوياً.";
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(summary).then(done, fail);
+          return;
+        }
+        const helper = document.createElement("textarea");
+        helper.value = summary;
+        helper.setAttribute("readonly", "readonly");
+        helper.setAttribute("aria-hidden", "true");
+        helper.style.insetInlineStart = "-9999px";
+        helper.style.position = "absolute";
+        document.body.appendChild(helper);
+        helper.select();
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch (err) {
+          ok = false;
+        }
+        document.body.removeChild(helper);
+        if (ok) done();
+        else fail();
+      });
+
+      update();
+    })();
+  </script>
+</ArToolLayout>

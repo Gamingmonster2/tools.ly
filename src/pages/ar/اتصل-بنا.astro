@@ -1,0 +1,308 @@
+---
+import Base from "../../layouts/Base.astro";
+import Icon from "../../components/Icon.astro";
+
+// عنوان المراسلة معرّف مرة واحدة هنا؛ غيّره من هذا السطر فقط عند الحاجة.
+const CONTACT_EMAIL = "sales@tools.ly";
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: "اتصل بـ Tools.ly",
+    url: "https://tools.ly/ar/اتصل-بنا/",
+    inLanguage: "ar",
+    description:
+      "راسل فريق Tools.ly العربية للإبلاغ عن خطأ، أو تصحيح معلومة، أو اقتراح أداة جديدة، أو الإبلاغ عن مشكلة في العرض أو الوصولية.",
+    isPartOf: {
+      "@type": "WebSite",
+      name: "أدوات Tools.ly العربية",
+      url: "https://tools.ly/ar/",
+      inLanguage: "ar",
+    },
+  },
+];
+---
+
+<Base
+  title="اتصل بنا"
+  description="راسل فريق Tools.ly العربية: أبلغ عن خطأ، أو صحّح معلومة، أو اقترح أداة جديدة. النموذج يجهّز رسالة في تطبيق بريدك، ولا يُرسل شيء قبل أن تضغط إرسال بنفسك."
+  canonical="/ar/اتصل-بنا/"
+  locale="ar"
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">اتصل بنا</p>
+      <h1>راسلنا، وسنقرأ رسالتك</h1>
+      <p class="lede">
+        الإبلاغ عن خطأ، أو تصحيح معلومة، أو اقتراح أداة جديدة، أو مشكلة في العرض على جهازك — كلها
+        مرحّب بها هنا. وكلما كانت رسالتك محدّدة أكثر، كان التصحيح أسرع وأدق.
+      </p>
+    </div>
+  </div>
+
+  <div class="container section">
+    <div class="tool-layout tool-layout--aside">
+      <div>
+        <form class="card" id="cf-form" novalidate>
+          <div class="field-grid">
+            <div class="field">
+              <label for="cf-name">الاسم</label>
+              <input id="cf-name" name="name" type="text" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="cf-email">البريد الإلكتروني</label>
+              <input
+                id="cf-email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                inputmode="email"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:1rem">
+            <label for="cf-topic">نوع الرسالة</label>
+            <select id="cf-topic" name="topic">
+              <option>الإبلاغ عن خطأ</option>
+              <option>معلومات غير صحيحة</option>
+              <option>اقتراح أداة جديدة</option>
+              <option>مشكلة في العرض أو الوصولية</option>
+              <option>موضوع آخر</option>
+            </select>
+          </div>
+
+          <div class="field" style="margin-top:1rem">
+            <label for="cf-tool">رابط الأداة (اختياري)</label>
+            <input
+              id="cf-tool"
+              name="tool"
+              type="text"
+              placeholder="الصق عنوان الصفحة، أو اتركه فارغاً"
+            />
+          </div>
+
+          <div class="field" style="margin-top:1rem">
+            <label for="cf-message">الرسالة</label>
+            <textarea
+              id="cf-message"
+              name="message"
+              rows="7"
+              lang="ar"
+              spellcheck="true"
+              required
+              placeholder="ماذا حدث؟ وما الذي كنت تتوقّعه؟ واذكر المتصفح والجهاز إن كان ذلك مفيداً."
+            ></textarea>
+          </div>
+
+          <p id="cf-error" class="callout callout--warn" role="alert" hidden style="margin-top:1rem"></p>
+
+          <div class="form-actions">
+            <button class="btn btn--primary" type="submit">
+              افتح تطبيق البريد
+              <Icon name="external" size={16} />
+            </button>
+            <button class="btn btn--ghost" type="button" id="cf-copy-btn">
+              انسخ الرسالة
+              <Icon name="copy" size={16} />
+            </button>
+          </div>
+
+          <p class="callout" style="margin-top:1.25rem">
+            هذا موقع ثابت، ولا يوجد خادم نماذج يستقبل رسالتك. لذلك يفتح الزر «افتح تطبيق البريد»
+            برنامج البريد على جهازك وفيه العنوان والموضوع ونصّ الرسالة،
+            <strong> ولا يُرسل شيء إلى أي جهة حتى تضغط إرسال داخل برنامجك أنت</strong>.
+          </p>
+          <p id="cf-status" role="status" aria-live="polite" style="margin:0.6rem 0 0;color:var(--text-muted);font-size:0.92rem"></p>
+        </form>
+      </div>
+
+      <aside class="stack">
+        <div class="card">
+          <h2 style="font-size:1.05rem">البريد المباشر</h2>
+          <p style="color:var(--text-muted);font-size:0.92rem;margin-bottom:0.5rem">
+            تفضّل كتابة رسالتك بنفسك؟ استخدم هذا العنوان.
+          </p>
+          <p class="result-box" style="font-size:0.9rem">
+            <a href={`mailto:${CONTACT_EMAIL}`} style="color:inherit">{CONTACT_EMAIL}</a>
+          </p>
+        </div>
+
+        <div class="card">
+          <h2 style="font-size:1.05rem">قبل أن تكتب</h2>
+          <ul style="margin:0;padding-inline-start:1.1rem;color:var(--text-muted);font-size:0.9rem">
+            <li>اذكر رابط الصفحة التي تتحدّث عنها بالضبط.</li>
+            <li>قل لنا نوع المتصفح والجهاز الذي استخدمته.</li>
+            <li>إن كانت المشكلة في الأرقام، فاذكر القيم التي أدخلتها.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h2 style="font-size:1.05rem">وقت الردّ</h2>
+          <p style="margin:0;color:var(--text-muted);font-size:0.9rem">
+            هذا مشروع مستقل يُدار في الوقت المتاح، فليس الردّ فورياً. لكن كل رسالة تُقرأ فعلاً،
+            والأخطاء تُصحَّح على الصفحة نفسها.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script define:vars={{ CONTACT_EMAIL }}>
+    (function () {
+      const form = document.getElementById("cf-form");
+      if (!form) return;
+
+      const error = document.getElementById("cf-error");
+      const status = document.getElementById("cf-status");
+
+      // لا نضع أي إدخال من المستخدم في innerHTML؛ كل النصوص تُكتب عبر textContent.
+      const say = function (text, isError) {
+        if (isError) {
+          if (error) {
+            error.textContent = text;
+            error.hidden = false;
+          }
+          if (status) status.textContent = "";
+          return;
+        }
+        if (error) {
+          error.textContent = "";
+          error.hidden = true;
+        }
+        if (status) status.textContent = text;
+      };
+
+      const valueOf = function (id) {
+        const el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      };
+
+      const buildBody = function () {
+        const name = valueOf("cf-name");
+        const email = valueOf("cf-email");
+        const topic = valueOf("cf-topic");
+        const tool = valueOf("cf-tool");
+        const message = valueOf("cf-message");
+        return [
+          "نوع الرسالة: " + topic,
+          tool ? "رابط الأداة: " + tool : "",
+          "",
+          message,
+          "",
+          "— " + name + (email ? " (" + email + ")" : ""),
+          "أُرسلت من: " + location.href,
+        ]
+          .filter(Boolean)
+          .join("\n");
+      };
+
+      const copyText = function (text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(text).then(
+            function () {
+              return true;
+            },
+            function () {
+              return fallbackCopy(text);
+            }
+          );
+        }
+        return Promise.resolve(fallbackCopy(text));
+      };
+
+      // بديل للمتصفحات التي تمنع الكتابة إلى الحافظة أو تعمل دون HTTPS.
+      const fallbackCopy = function (text) {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.insetInlineStart = "-9999px";
+        document.body.appendChild(area);
+        area.select();
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch (e) {
+          ok = false;
+        }
+        area.remove();
+        return ok;
+      };
+
+      const validate = function () {
+        const name = valueOf("cf-name");
+        const email = valueOf("cf-email");
+        const message = valueOf("cf-message");
+
+        if (!name || !email || !message) {
+          say("يرجى إكمال الحقول المطلوبة: الاسم، والبريد الإلكتروني، والرسالة.", true);
+          return null;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          say("صيغة البريد الإلكتروني غير صحيحة — يرجى مراجعتها.", true);
+          return null;
+        }
+        return { name: name, email: email, message: message };
+      };
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (!validate()) return;
+
+        const topic = valueOf("cf-topic");
+        const customSubject = encodeURIComponent("[Tools.ly] " + topic);
+        const body = encodeURIComponent(buildBody());
+        say("يفتح الآن برنامج البريد على جهازك. لم يُرسل شيء بعد حتى تضغط إرسال هناك.", false);
+        window.location.href =
+          "mailto:" + CONTACT_EMAIL + "?subject=" + customSubject + "&body=" + body;
+      });
+
+      const copyBtn = document.getElementById("cf-copy-btn");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", function () {
+          if (!validate()) return;
+          copyText(buildBody()).then(function (ok) {
+            if (ok) {
+              say("تم نسخ الرسالة إلى الحافظة. يمكنك لصقها في أي تطبيق بريد.", false);
+            } else {
+              say(
+                "لم نتمكّن من النسخ تلقائياً — حدّد النص داخل الحقول وانسخه يدوياً.",
+                true
+              );
+            }
+          });
+        });
+      }
+    })();
+  </script>
+</Base>
+
+<style>
+  .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+  }
+
+  /* عند 360px يبقى الزر بعرض كامل بدل أن ينضغط النصّ. */
+  @media (max-width: 420px) {
+    .form-actions .btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .tool-layout--aside :global(aside .card) {
+    padding: 1.1rem 1.2rem;
+  }
+
+  .tool-layout--aside :global(aside .card h2) {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+  }
+</style>

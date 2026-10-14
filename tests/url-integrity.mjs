@@ -123,6 +123,30 @@ function walk(dir) {
   return out;
 }
 
+// Internal-link guard: every root-relative link in the built HTML must resolve to a file
+// that actually exists. A missing page shows up as a 404 for a visitor long before it
+// shows up in any analytics, so catch it here instead.
+for (const file of walk(pagesDir)) {
+  const html = readFileSync(file, "utf8");
+  const rel = relative(dist, file);
+  const seen = new Set();
+
+  for (const [, rawHref] of html.matchAll(/href="(\/[^"#?]*)"/g)) {
+    const href = decodeURIComponent(rawHref);
+    if (seen.has(href)) continue;
+    seen.add(href);
+
+    const candidate = href.endsWith("/")
+      ? join(dist, href.slice(1), "index.html")
+      : join(dist, href.slice(1));
+
+    const exists = existsSync(candidate) || existsSync(join(candidate, "index.html"));
+    if (!exists) {
+      problems.push(`${rel} links to ${href} but that page was not built`);
+    }
+  }
+}
+
 // Rendered-output checks: whatever the source looks like, the built page must have exactly
 // one <h1> and carry a canonical URL and a lang attribute, or it is not shippable.
 for (const file of walk(pagesDir)) {

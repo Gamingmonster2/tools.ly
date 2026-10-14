@@ -2,16 +2,28 @@
 import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import { localeMeta, otherLocale, type Locale } from "../data/i18n";
+
+export interface Alternate {
+  locale: Locale;
+  /** Path within that locale, e.g. "/unit-converter/". */
+  path: string;
+}
 
 export interface Props {
   title: string;
   description: string;
-  /** Canonical path. Defaults to the current URL path, always with a trailing slash. */
+  /** Canonical path within the current locale. Defaults to the current URL path. */
   canonical?: string;
   ogType?: "website" | "article" | "application";
   noindex?: boolean;
-  /** JSON-LD structured data objects injected in <head>. */
   jsonLd?: Record<string, unknown>[];
+  locale?: Locale;
+  /**
+   * Genuine counterparts in other languages. Emitted as reciprocal hreflang links.
+   * Leave empty when the page has no real translation — a wrong hreflang is worse than none.
+   */
+  alternates?: Alternate[];
 }
 
 const {
@@ -21,28 +33,51 @@ const {
   ogType = "website",
   noindex = false,
   jsonLd = [],
+  locale = "en",
+  alternates = [],
 } = Astro.props;
 
+const meta = localeMeta[locale];
 const site = Astro.site ?? new URL("https://tools.ly");
 const rawPath = canonical ?? Astro.url.pathname;
 const path = rawPath.endsWith("/") ? rawPath : `${rawPath}/`;
 const canonicalUrl = new URL(path, site).href;
 const fullTitle = title.includes("Tools.ly") ? title : `${title} | Tools.ly`;
+
+const hreflangLinks = [
+  { hreflang: meta.htmlLang, href: canonicalUrl },
+  ...alternates.map((alt) => ({
+    hreflang: localeMeta[alt.locale].htmlLang,
+    href: new URL(
+      `${localeMeta[alt.locale].prefix}${alt.path}`.replace(/\/$/, "") + "/",
+      site
+    ).href,
+  })),
+];
+const hasDefault = alternates.some((alternate) => alternate.locale === "en");
+
+// The language switcher goes to the exact counterpart when one is declared, and to the
+// other locale's home page otherwise (the header marks that case visually).
+const counterpart = alternates.find((alternate) => alternate.locale === otherLocale(locale));
+const switchPath = counterpart ? counterpart.path : null;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={meta.htmlLang} dir={meta.dir} data-locale={locale}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
+    {hreflangLinks.map((link) => <link rel="alternate" hreflang={link.hreflang} href={link.href} />)}
+    {hasDefault && <link rel="alternate" hreflang="x-default" href={new URL("/", site).href} />}
     {noindex && <meta name="robots" content="noindex, follow" />}
     {!noindex && <meta name="robots" content="index, follow, max-image-preview:large" />}
 
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="Tools.ly" />
+    <meta property="og:locale" content={locale === "ar" ? "ar_AR" : "en_US"} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
@@ -71,11 +106,11 @@ const fullTitle = title.includes("Tools.ly") ? title : `${title} | Tools.ly`;
   </head>
 
   <body>
-    <a class="skip-link" href="#main">Skip to content</a>
-    <Header />
+    <a class="skip-link" href="#main">{locale === "ar" ? "تجاوز إلى المحتوى" : "Skip to content"}</a>
+    <Header locale={locale} switchPath={switchPath} />
     <main id="main">
       <slot />
     </main>
-    <Footer />
+    <Footer locale={locale} />
   </body>
 </html>
