@@ -14,7 +14,7 @@ export const SITE = {
   /** Short byline shown on tool pages, blog cards and structured data. */
   team: "Tools.ly Team",
   /** Longer formal name used where there is room for it, such as the About page. */
-  teamFull: "Toolsly Platform Development Team",
+  teamFull: "Tools.ly Platform Development Team",
   tagline: "Free browser-based tools that never upload your data.",
 } as const;
 
