@@ -1,0 +1,743 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "stopwatch")!;
+
+const faqs = [
+  {
+    q: "How precise is the stopwatch, and how is it measured?",
+    a: "Elapsed time is measured with performance.now(), a monotonic high-resolution timer that returns a fractional millisecond count since the page loaded. Instead of adding a small amount on every tick, the stopwatch stores the timestamp at which the run began and subtracts it from the current reading on every animation frame, so nothing is lost when frames are dropped. In a visible tab that means the reading is limited mainly by your display's refresh rate — about 16 ms per frame at 60 Hz — and the last three displayed digits only change at the pace the browser paints. It is excellent for laps, intervals and reaction work; it is not a laboratory instrument, and it cannot resolve differences smaller than your screen's frame interval.",
+  },
+  {
+    q: "What is the difference between lap time and split time?",
+    a: "Split time is the total elapsed time from the start of the run to the end of that lap; lap time is only the duration of that lap — the difference between the previous split and the current one. If you record a lap at 1:30 and then the next at 2:00, the first row shows a lap of 1:30 on a split of 1:30, and the second shows a lap of 0:30 on a split of 2:00. Splits are always increasing, so the table can tell you at a glance when you slowed down even if the laps themselves look similar.",
+  },
+  {
+    q: "Does the stopwatch keep running if I switch tabs or lock the screen?",
+    a: "Yes, and the elapsed time stays honest. Because the start timestamp is fixed and the difference is recomputed rather than accumulated, a throttled or paused tab cannot make the stopwatch fall behind — when you return, the display jumps straight to the correct total. Two things do change in the background: the digits may stop updating while the tab is hidden, since the browser may stop painting animation frames, and lap recording has to be done by you, so laps are only captured when you actually press the button. The reading in a hidden tab is still correct whenever it is next drawn.",
+  },
+  {
+    q: "Can I save or share the lap times?",
+    a: "Use the export button, which builds a CSV file in the browser and downloads it. The file has one row per lap with columns for the lap number, the lap time, the split time and a marker for the fastest and slowest lap, and it opens directly in a spreadsheet. Nothing is sent anywhere: the text is assembled from the table in memory, wrapped in a Blob, handed to the download as a temporary object URL and then that URL is revoked. Reloading or closing the page clears all laps, so export before you leave.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — performance.now()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Performance/now",
+    note: "The monotonic, sub-millisecond timer the stopwatch reads for start, stop and lap timestamps — immune to system clock changes, unlike Date.now().",
+  },
+  {
+    label: "MDN Web Docs — Page Visibility API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+    note: "Explains how hidden tabs are throttled and how visibilitychange fires; the reason this stopwatch recomputes elapsed time from a stored timestamp instead of counting ticks.",
+  },
+  {
+    label: "MDN Web Docs — Web Audio API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API",
+    note: "Background for browser audio in general; this page needs no sound at all, and the companion countdown timer uses the same API family for its optional beep.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="A millisecond stopwatch with lap and split timing, fastest and slowest lap markers, keyboard shortcuts and a one-click CSV export of every lap."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body sw">
+        <section class="sw__stage" aria-labelledby="sw-stage-h">
+          <h2 class="sw__h" id="sw-stage-h">Elapsed time</h2>
+          <p class="sw__time readout" id="sw-display" role="timer" aria-live="polite">
+            <span class="sw__h-part" id="sw-hours-part" hidden></span><span id="sw-time-text">00:00.000</span>
+          </p>
+          <p class="sw__status" id="sw-status" aria-live="polite">Stopped at 00:00.000 (0.00 s). Press Start to begin.</p>
+          <p class="sr-only" id="sw-announce" aria-live="polite"></p>
+
+          <div class="sw__btns">
+            <button type="button" class="btn btn--primary" id="sw-start">Start</button>
+            <button type="button" class="btn btn--ghost" id="sw-stop">Stop</button>
+            <button type="button" class="btn btn--soft" id="sw-lap">Lap</button>
+            <button type="button" class="btn btn--ghost" id="sw-reset">Reset</button>
+            <button type="button" class="btn btn--soft" id="sw-export">Export laps as CSV</button>
+          </div>
+
+          <div class="sw__keys">
+            <p class="sw__keys-h" id="sw-keys-h">Keyboard shortcuts</p>
+            <ul class="sw__keys-list" aria-labelledby="sw-keys-h">
+              <li><kbd>Space</kbd> start or stop</li>
+              <li><kbd>L</kbd> record a lap</li>
+              <li><kbd>R</kbd> reset</li>
+            </ul>
+            <p class="sw__help">
+              Shortcuts are ignored while the focus is inside a text field. While a button has focus, use the
+              button's own key — <kbd>Enter</kbd> — so a single press does not count twice.
+            </p>
+          </div>
+        </section>
+
+        <section class="sw__laps" aria-labelledby="sw-laps-h">
+          <h2 class="sw__h" id="sw-laps-h">Laps</h2>
+          <div class="stat-grid">
+            <div class="stat">
+              <p class="stat__label">Laps recorded</p>
+              <p class="stat__value" id="sw-lap-count">0</p>
+            </div>
+            <div class="stat">
+              <p class="stat__label">Fastest lap</p>
+              <p class="stat__value readout" id="sw-fastest">—</p>
+            </div>
+            <div class="stat">
+              <p class="stat__label">Slowest lap</p>
+              <p class="stat__value readout" id="sw-slowest">—</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data">
+              <caption class="sr-only">Lap times with split totals and markers for the fastest and slowest lap</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Lap</th>
+                  <th scope="col">Lap time</th>
+                  <th scope="col">Split (total)</th>
+                  <th scope="col">Marker</th>
+                </tr>
+              </thead>
+              <tbody id="sw-lap-body">
+                <tr id="sw-lap-empty">
+                  <td colspan="4">
+                    <div class="empty-state" id="sw-lap-note">
+                      No laps yet. Press Lap while the stopwatch runs, or use the L key.
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="sw__help">
+            Lap time is the duration of that lap alone; split is the total from the start. The fastest and
+            slowest laps are marked as soon as two laps exist.
+          </p>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Elapsed time is computed from a stored start timestamp on every frame, so laps stay accurate even
+        when the tab is throttled in the background. Laps live in memory only — export them before you
+        close the page.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the stopwatch works</h2>
+  <p>
+    Everything begins with a timestamp. When you press <em>Start</em>, the page reads a monotonic
+    high-resolution clock and remembers that instant as the run's origin. Every animation frame it reads
+    the clock again, subtracts the origin, subtracts any time that had already been banked from previous
+    runs, and writes the result into the readout. Nothing is ever incremented, so a slow frame, a
+    throttled background tab or a sleeping laptop cannot make the total drift — the stopwatch simply
+    reports the difference between two clock readings whenever it is asked.
+  </p>
+  <p>
+    Lap and split times come from the same idea. Pressing <em>Lap</em> records the current total as a new
+    split. The lap time shown next to it is that split minus the previous one, and the final lap is
+    always the latest split minus the previous split. Because both figures are derived from stored
+    timestamps rather than from arithmetic done at press time, the table stays internally consistent:
+    the splits always add up to the total on the readout.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Control</th>
+          <th scope="col">Action</th>
+          <th scope="col">When it is available</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Start</td>
+          <td>Begins timing, or resumes from a stop</td>
+          <td>Whenever the stopwatch is not already running</td>
+        </tr>
+        <tr>
+          <td>Stop</td>
+          <td>Freezes the total and keeps every lap</td>
+          <td>Only while running</td>
+        </tr>
+        <tr>
+          <td>Lap</td>
+          <td>Appends a split and works out that lap's duration</td>
+          <td>Only while running</td>
+        </tr>
+        <tr>
+          <td>Reset</td>
+          <td>Returns the readout to zero and clears the table</td>
+          <td>Whenever time has been recorded</td>
+        </tr>
+        <tr>
+          <td>Export</td>
+          <td>Writes every lap to a CSV file on your device</td>
+          <td>When at least one lap exists</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Stop is a real pause, not a reset: the total freezes, the laps stay in the table, and pressing
+    <em>Start</em> again continues from the frozen total as though no time had passed in between. That
+    makes the tool usable for anything that gets interrupted — a set of stretches, a queue of tasks or
+    an interval workout — without losing the earlier laps.
+  </p>
+
+  <h2>Accuracy and honest limits</h2>
+  <p>
+    The clock source is the browser's high-resolution monotonic timer, which is deliberately independent
+    of the system date, so changing the computer's clock or crossing a daylight-saving boundary cannot
+    corrupt a measurement. What limits the numbers you actually see is painting, not measuring.
+  </p>
+  <ul>
+    <li>
+      <strong>Display resolution follows the frame rate.</strong> The millisecond field updates each time
+      the browser paints, roughly every 16&nbsp;ms on a 60&nbsp;Hz screen. The underlying elapsed value is
+      finer than that, but no on-screen digit can update faster than the screen does, so treat the last
+      digit as indicative rather than authoritative.
+    </li>
+    <li>
+      <strong>Hidden tabs may not repaint.</strong> The stopwatch keeps correct time in a background tab,
+      but the digits can appear frozen when you return for a fraction of a second before the next frame
+      catches up. If you need to read the numbers continuously, keep the tab visible.
+    </li>
+    <li>
+      <strong>Laps are manual.</strong> A lap is recorded at the moment you press the button, so your own
+      reaction time — typically a couple of tenths of a second for a mouse or keyboard press — is part of
+      the measurement. For anything where precision matters, press and hold nothing extra: one clean press
+      per lap gives the most repeatable result.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Laps exist only in this page's memory. Refreshing, navigating away or closing the tab clears them
+      with no warning, so use <em>Export laps as CSV</em> before you leave if the results matter.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      <strong>Start timing.</strong> Press <em>Start</em> or the <kbd>Space</kbd> key. The readout shows
+      minutes, seconds and milliseconds, and grows an hours segment automatically once the run passes an
+      hour.
+    </li>
+    <li>
+      <strong>Record laps.</strong> Press <em>Lap</em> or <kbd>L</kbd> at each marker. A row appears with
+      the lap number, that lap's own duration and the running split total.
+    </li>
+    <li>
+      <strong>Read the markers.</strong> As soon as two laps exist, the fastest is badged green and the
+      slowest red, both in the table and in the summary tiles above it. Ties are left unmarked rather than
+      picked arbitrarily.
+    </li>
+    <li>
+      <strong>Stop and resume.</strong> Press <em>Stop</em> or <kbd>Space</kbd> to freeze the total;
+      pressing <em>Start</em> again continues from the same total, so an interruption costs nothing.
+    </li>
+    <li>
+      <strong>Reset for a clean run.</strong> Press <em>Reset</em> or <kbd>R</kbd> to zero the readout and
+      empty the laps table — export first if you want to keep them.
+    </li>
+    <li>
+      <strong>Export.</strong> <em>Export laps as CSV</em> builds a file named for the date with columns
+      for lap, lap time, split and marker, and downloads it straight to your device.
+    </li>
+  </ol>
+  <p>
+    Every shortcut is suppressed while the focus sits in a text field, so typing a note in another part of
+    the page can never trigger a lap or a reset by accident. All timing happens locally: no data is sent
+    anywhere, no account is needed, and the page works with the network switched off.
+  </p>
+</ToolLayout>
+
+<style>
+  .sw {
+    display: grid;
+    gap: clamp(1.25rem, 2.5vw, 1.9rem);
+  }
+
+  .sw__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0 0 0.6rem;
+  }
+
+  .sw__help {
+    margin: 0.6rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .sw__stage {
+    display: grid;
+    justify-items: center;
+    gap: 0.6rem;
+    text-align: center;
+  }
+
+  .sw__time {
+    margin: 0;
+    font-size: clamp(2.1rem, 11vw, 3.6rem);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--text);
+  }
+
+  .sw__h-part {
+    color: var(--text-muted);
+  }
+
+  .sw--running .sw__time {
+    color: var(--accent);
+  }
+
+  .sw__status {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    max-width: 46ch;
+  }
+
+  .sw__btns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+
+  .sw__keys {
+    margin-top: 0.4rem;
+    display: grid;
+    gap: 0.35rem;
+    justify-items: center;
+  }
+
+  .sw__keys-h {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 650;
+    color: var(--text-muted);
+  }
+
+  .sw__keys-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .sw__keys-list kbd,
+  .sw__help kbd {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-sm);
+    padding: 0.05rem 0.35rem;
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .sw__laps {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .sw__laps .stat__value {
+    font-size: 1.15rem;
+  }
+
+  table.data td:nth-child(n + 2),
+  table.data th:nth-child(n + 2) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  table.data tbody tr.sw--fastest td {
+    background: var(--ok-soft);
+  }
+
+  table.data tbody tr.sw--slowest td {
+    background: var(--danger-soft);
+  }
+
+  table.data tbody tr.sw--fastest td:first-child {
+    box-shadow: inset 3px 0 0 var(--ok);
+  }
+
+  table.data tbody tr.sw--slowest td:first-child {
+    box-shadow: inset 3px 0 0 var(--danger);
+  }
+
+  .sw__flag {
+    font-weight: 700;
+  }
+
+  .sw__flag--fastest {
+    color: var(--ok);
+  }
+
+  .sw__flag--slowest {
+    color: var(--danger);
+  }
+
+  .sw__empty {
+    margin: 0;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  @media (min-width: 860px) {
+    .sw__keys {
+      justify-items: center;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    "use strict";
+
+    var panel = document.querySelector(".sw");
+    var timeText = document.getElementById("sw-time-text");
+    var hoursPart = document.getElementById("sw-hours-part");
+    var statusEl = document.getElementById("sw-status");
+    var announceEl = document.getElementById("sw-announce");
+    var startBtn = document.getElementById("sw-start");
+    var stopBtn = document.getElementById("sw-stop");
+    var lapBtn = document.getElementById("sw-lap");
+    var resetBtn = document.getElementById("sw-reset");
+    var exportBtn = document.getElementById("sw-export");
+    var tableBody = document.getElementById("sw-lap-body");
+    var emptyNote = document.getElementById("sw-lap-note");
+    var lapCountEl = document.getElementById("sw-lap-count");
+    var fastestEl = document.getElementById("sw-fastest");
+    var slowestEl = document.getElementById("sw-slowest");
+
+    var running = false;
+    var origin = 0; // performance.now() reading when the current run began
+    var banked = 0; // milliseconds accumulated by previous runs
+    var elapsed = 0; // milliseconds shown while stopped
+    var splits = []; // total milliseconds at the end of each lap
+    var rafId = 0;
+    var lastPaint = -1;
+
+    function now() {
+      return window.performance && window.performance.now ? window.performance.now() : Date.now();
+    }
+
+    function currentMs() {
+      return running ? banked + (now() - origin) : elapsed;
+    }
+
+    function pad(value, width) {
+      var s = String(Math.floor(value));
+      while (s.length < width) s = "0" + s;
+      return s;
+    }
+
+    function format(ms) {
+      var total = Math.max(0, ms);
+      var minutes = Math.floor(total / 60000);
+      var seconds = Math.floor((total % 60000) / 1000);
+      var millis = Math.floor(total % 1000);
+      return pad(minutes, 2) + ":" + pad(seconds, 2) + "." + pad(millis, 3);
+    }
+
+    function setDisplay(ms) {
+      var total = Math.max(0, Math.floor(ms));
+      var minutes = Math.floor(total / 60000);
+      var seconds = Math.floor((total % 60000) / 1000);
+      var millis = total % 1000;
+      var hours = Math.floor(minutes / 60);
+      if (hours > 0) {
+        hoursPart.hidden = false;
+        hoursPart.textContent = hours + ":";
+        minutes = minutes % 60;
+      } else {
+        hoursPart.hidden = true;
+        hoursPart.textContent = "";
+      }
+      var text = pad(minutes, 2) + ":" + pad(seconds, 2) + "." + pad(millis, 3);
+      if (timeText.textContent !== text) timeText.textContent = text;
+    }
+
+    function statusText(ms) {
+      if (running) return "Running — " + format(ms) + " (" + (ms / 1000).toFixed(2) + " s).";
+      if (ms > 0) return "Stopped at " + format(ms) + " (" + (ms / 1000).toFixed(2) + " s). Press Start to continue.";
+      return "Stopped at 00:00.000 (0.00 s). Press Start to begin.";
+    }
+
+    function summary() {
+      var fastestIdx = -1;
+      var slowestIdx = -1;
+      var fastestMs = Infinity;
+      var slowestMs = -Infinity;
+      var prev = 0;
+      for (var i = 0; i < splits.length; i++) {
+        var lap = splits[i] - prev;
+        if (lap < fastestMs) {
+          fastestMs = lap;
+          fastestIdx = i;
+        }
+        if (lap > slowestMs) {
+          slowestMs = lap;
+          slowestIdx = i;
+        }
+        prev = splits[i];
+      }
+      if (splits.length < 2) {
+        fastestIdx = -1;
+        slowestIdx = -1;
+      } else if (fastestMs === slowestMs) {
+        fastestIdx = -1;
+        slowestIdx = -1;
+      }
+      return { fastestIdx: fastestIdx, slowestIdx: slowestIdx };
+    }
+
+    function renderLaps() {
+      var marks = summary();
+      while (tableBody.firstChild) tableBody.removeChild(tableBody.firstChild);
+
+      if (!splits.length) {
+        var row = document.createElement("tr");
+        var cell = document.createElement("td");
+        cell.colSpan = 4;
+        var note = document.createElement("p");
+        note.className = "sw__empty";
+        note.textContent = "No laps yet. Press Lap while the stopwatch runs, or use the L key.";
+        cell.appendChild(note);
+        row.appendChild(cell);
+        tableBody.appendChild(row);
+        lapCountEl.textContent = "0";
+        fastestEl.textContent = "—";
+        slowestEl.textContent = "—";
+        if (emptyNote) emptyNote.textContent = note.textContent;
+        return;
+      }
+
+      var prev = 0;
+      for (var i = 0; i < splits.length; i++) {
+        var lap = splits[i] - prev;
+        var tr = document.createElement("tr");
+        if (i === marks.fastestIdx) tr.className = "sw--fastest";
+        else if (i === marks.slowestIdx) tr.className = "sw--slowest";
+
+        var numCell = document.createElement("th");
+        numCell.scope = "row";
+        numCell.textContent = "Lap " + (i + 1);
+
+        var lapCell = document.createElement("td");
+        lapCell.textContent = format(lap);
+
+        var splitCell = document.createElement("td");
+        splitCell.textContent = format(splits[i]);
+
+        var markCell = document.createElement("td");
+        if (i === marks.fastestIdx) {
+          var fast = document.createElement("span");
+          fast.className = "sw__flag sw__flag--fastest";
+          fast.textContent = "Fastest";
+          markCell.appendChild(fast);
+        } else if (i === marks.slowestIdx) {
+          var slow = document.createElement("span");
+          slow.className = "sw__flag sw__flag--slowest";
+          slow.textContent = "Slowest";
+          markCell.appendChild(slow);
+        } else {
+          markCell.textContent = "—";
+        }
+
+        tr.appendChild(numCell);
+        tr.appendChild(lapCell);
+        tr.appendChild(splitCell);
+        tr.appendChild(markCell);
+        tableBody.appendChild(tr);
+        prev = splits[i];
+      }
+
+      lapCountEl.textContent = String(splits.length);
+      fastestEl.textContent = marks.fastestIdx === -1 ? "—" : format(splits[marks.fastestIdx] - (marks.fastestIdx === 0 ? 0 : splits[marks.fastestIdx - 1]));
+      slowestEl.textContent = marks.slowestIdx === -1 ? "—" : format(splits[marks.slowestIdx] - (marks.slowestIdx === 0 ? 0 : splits[marks.slowestIdx - 1]));
+    }
+
+    function paint(force) {
+      var ms = currentMs();
+      if (!force && Math.floor(ms) === lastPaint) return;
+      lastPaint = Math.floor(ms);
+      setDisplay(ms);
+      statusEl.textContent = statusText(ms);
+    }
+
+    function frame() {
+      if (!running) return;
+      paint(false);
+      rafId = window.requestAnimationFrame(frame);
+    }
+
+    function start() {
+      if (running) return;
+      origin = now();
+      running = true;
+      if (panel) panel.classList.add("sw--running");
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      lapBtn.disabled = false;
+      resetBtn.disabled = false;
+      exportBtn.disabled = splits.length === 0;
+      paint(true);
+      cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(frame);
+    }
+
+    function stop() {
+      if (!running) return;
+      elapsed = currentMs();
+      running = false;
+      banked = elapsed;
+      cancelAnimationFrame(rafId);
+      if (panel) panel.classList.remove("sw--running");
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      lapBtn.disabled = true;
+      resetBtn.disabled = elapsed <= 0 && splits.length === 0;
+      paint(true);
+    }
+
+    function reset() {
+      cancelAnimationFrame(rafId);
+      running = false;
+      origin = 0;
+      banked = 0;
+      elapsed = 0;
+      splits = [];
+      lastPaint = -1;
+      if (panel) panel.classList.remove("sw--running");
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      lapBtn.disabled = true;
+      resetBtn.disabled = true;
+      exportBtn.disabled = true;
+      renderLaps();
+      paint(true);
+      announceEl.textContent = "Stopwatch reset. All laps cleared.";
+    }
+
+    function lap() {
+      if (!running) return;
+      splits.push(currentMs());
+      renderLaps();
+      exportBtn.disabled = splits.length === 0;
+      var index = splits.length - 1;
+      var lapMs = splits[index] - (index === 0 ? 0 : splits[index - 1]);
+      announceEl.textContent = "Lap " + (index + 1) + " recorded: " + format(lapMs) + ", split " + format(splits[index]) + ".";
+    }
+
+    function downloadCsv() {
+      if (!splits.length) return;
+      var rows = [["Lap", "Lap time", "Split (total)", "Marker"]];
+      var marks = summary();
+      var prev = 0;
+      for (var i = 0; i < splits.length; i++) {
+        var lapMs = splits[i] - prev;
+        var marker = i === marks.fastestIdx ? "Fastest" : i === marks.slowestIdx ? "Slowest" : "";
+        rows.push([String(i + 1), format(lapMs), format(splits[i]), marker]);
+        prev = splits[i];
+      }
+      var csv = rows
+        .map(function (row) {
+          return row
+            .map(function (field) {
+              return '"' + String(field).replace(/"/g, '""') + '"';
+            })
+            .join(",");
+        })
+        .join("\r\n");
+
+      var hasBlob = typeof Blob !== "undefined" && window.URL && window.URL.createObjectURL;
+      if (!hasBlob) {
+        announceEl.textContent = "This browser cannot create a download automatically. The laps are: " + rows.map(function (r) { return r.join(" "); }).join("; ");
+        return;
+      }
+
+      try {
+        var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        var url = window.URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = "stopwatch-laps-" + new Date().toISOString().slice(0, 10) + ".csv";
+        link.rel = "noopener";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // Release the temporary object URL once the download has been handed over.
+        window.setTimeout(function () {
+          window.URL.revokeObjectURL(url);
+        }, 0);
+        announceEl.textContent = "Exporting " + splits.length + " laps as a CSV file.";
+      } catch (err) {
+        announceEl.textContent = "The CSV export could not be created in this browser.";
+      }
+    }
+
+    startBtn.addEventListener("click", start);
+    stopBtn.addEventListener("click", stop);
+    lapBtn.addEventListener("click", lap);
+    resetBtn.addEventListener("click", reset);
+    exportBtn.addEventListener("click", downloadCsv);
+
+    document.addEventListener("keydown", function (event) {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      var target = event.target;
+      if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (target && target.closest && target.closest("button, a")) return;
+
+      if (event.key === " " || event.key === "Spacebar") {
+        event.preventDefault();
+        if (running) stop();
+        else start();
+      } else if (event.key === "l" || event.key === "L") {
+        event.preventDefault();
+        if (running) lap();
+      } else if (event.key === "r" || event.key === "R") {
+        event.preventDefault();
+        reset();
+      }
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) paint(true);
+    });
+
+    window.addEventListener("focus", function () {
+      paint(true);
+    });
+
+    renderLaps();
+    reset();
+  })();
+</script>

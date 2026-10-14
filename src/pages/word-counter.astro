@@ -1,0 +1,574 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "word-counter")!;
+
+const faqs = [
+  {
+    q: "Is this word counter accurate for every language?",
+    a: "It is reliable for languages that separate words with spaces, such as English, Spanish, German or Russian, because modern browsers ship the Unicode word-break rules. It is only approximate for Chinese, Japanese and Thai, which do not put spaces between words and need a dictionary-based segmenter that a browser does not always provide. Treat the counts for those scripts as an estimate and always proofread the figure before you quote it.",
+  },
+  {
+    q: "How is reading time calculated?",
+    a: "Reading time divides the word count by 200 words per minute and speaking time by 130 words per minute, then rounds to the nearest second. Those two speeds are common editorial conventions rather than measured facts: silent reading of technical prose is usually slower, and a rehearsed script is often faster. Use the numbers as a planning aid, not a promise.",
+  },
+  {
+    q: "What counts as a sentence or a paragraph here?",
+    a: "A sentence ends at a full stop, question mark, exclamation mark or ellipsis followed by whitespace or the end of the text, so abbreviations such as “e.g.” split a sentence and inflate the count slightly. A paragraph is a block of text separated from the next block by at least one blank line — single line breaks inside a block do not start a new paragraph.",
+  },
+  {
+    q: "Why do the ten most frequent words skip words like “the” and “and”?",
+    a: "Those are stopwords: extremely common function words that carry little meaning on their own. Filtering them out makes the list show the words your text is actually about. The toggle above the table includes them again, which is useful when you want the raw distribution or when you are analysing a language whose stopword list is not English.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — Intl.Segmenter",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter",
+    note: "The browser API this tool uses for word segmentation when it is available, including the isWordLike flag behind the word count.",
+  },
+  {
+    label: "Unicode Standard Annex #29 — Unicode Text Segmentation",
+    href: "https://www.unicode.org/reports/tr29/",
+    note: "The default word-boundary rules that make counting work across scripts, and the reason dictionary-based segmentation is needed for Chinese, Japanese and Thai.",
+  },
+  {
+    label: "W3C — Understanding Success Criterion 3.1.5: Reading Level",
+    href: "https://www.w3.org/WAI/WCAG22/Understanding/reading-level.html",
+    note: "Background on why text difficulty, and therefore reading speed, varies so much from one passage and one reader to the next.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Paste or type your text and watch words, characters, sentences, paragraphs, unique words and reading time update as you go — with a frequency table of the ten most-used words."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body wc">
+        <div class="field">
+          <label for="wc-text">Your text</label>
+          <textarea
+            id="wc-text"
+            rows="10"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Start typing or paste your text here…"
+            aria-describedby="wc-text-help"></textarea>
+          <p class="wc__help" id="wc-text-help">
+            Everything is counted in your browser. Nothing is uploaded and nothing leaves this page.
+          </p>
+        </div>
+
+        <div class="stat-grid" id="wc-stats" aria-live="polite" aria-atomic="false">
+          <div class="stat">
+            <div class="stat__label">Words</div>
+            <div class="stat__value" id="wc-words">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Characters</div>
+            <div class="stat__value" id="wc-chars">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Characters, no spaces</div>
+            <div class="stat__value" id="wc-chars-nospace">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Sentences</div>
+            <div class="stat__value" id="wc-sentences">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Paragraphs</div>
+            <div class="stat__value" id="wc-paragraphs">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Unique words</div>
+            <div class="stat__value" id="wc-unique">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Avg. word length</div>
+            <div class="stat__value" id="wc-avg">0 <small>chars</small></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Reading time · 200 wpm</div>
+            <div class="stat__value" id="wc-reading">0 s</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Speaking time · 130 wpm</div>
+            <div class="stat__value" id="wc-speaking">0 s</div>
+          </div>
+        </div>
+
+        <section class="wc__freq" aria-labelledby="wc-freq-h">
+          <div class="wc__freq-head">
+            <h2 class="wc__h" id="wc-freq-h">Ten most frequent words</h2>
+            <div class="check">
+              <input type="checkbox" id="wc-stopwords" />
+              <label for="wc-stopwords">Include common stopwords (the, and, of…)</label>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data">
+              <caption class="sr-only">
+                The ten most frequent words in your text, with how many times each appears and its share of all words.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Word</th>
+                  <th scope="col">Count</th>
+                  <th scope="col">Share of all words</th>
+                </tr>
+              </thead>
+              <tbody id="wc-freq-body">
+                <tr>
+                  <td colspan="3">Type or paste some text to see the ten most frequent words.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="wc__actions">
+          <button type="button" class="btn btn--soft" id="wc-copy">Copy summary</button>
+          <button type="button" class="btn btn--ghost" id="wc-clear">Clear</button>
+          <span class="badge badge--ok" id="wc-copy-status" role="status" aria-live="polite" hidden>Copied!</span>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Statistics refresh on every keystroke — no Apply button. Stopword filtering uses an English list, so
+        try the toggle if your text is not in English.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the word counter works</h2>
+  <p>
+    The counter reads your text locally and runs four small passes over it. First it splits the text into
+    <em>words</em>. Where the browser exposes <code>Intl.Segmenter</code> — Chrome, Edge, Safari and Firefox all
+    ship it today — the counter uses it with <code>granularity: "word"</code>, the same Unicode algorithm that
+    powers find-as-you-type in your operating system. Each segment carries an <code>isWordLike</code> flag, so
+    punctuation, emoji and stray symbols are skipped while genuine words and numbers are kept. In a browser
+    without that API the counter falls back to a Unicode-aware regular expression, which gives the same answer
+    for ordinary Western prose.
+  </p>
+  <p>
+    The remaining passes are deliberately simple and deterministic. Sentences are counted at full stops,
+    question marks, exclamation marks and ellipses; paragraphs are counted as blocks separated by at least one
+    blank line; unique words are counted on a case-folded form of each word, so <em>Word</em> and <em>word</em>
+    count once. Average word length is the mean number of characters in a word. Reading time divides the word
+    count by 200 words per minute and speaking time by 130 words per minute.
+  </p>
+  <p>
+    The frequency table groups words by their lower-cased form, drops a short English stopword list unless you
+    re-include it, and sorts by count. Percentages are shares of <em>all</em> words in the text, including the
+    stopwords that the table itself hides, so the column always adds up against the same denominator.
+  </p>
+
+  <h2>Accuracy and limits — read this before you quote a number</h2>
+  <p>
+    Word counting is only well defined for languages that put spaces between words. That covers English and most
+    European languages, but not Chinese, Japanese or Thai, which write without spaces. For those scripts a
+    correct count needs a dictionary-based segmenter, and browsers do not guarantee one: <code>Intl.Segmenter</code>
+    may return a whole sentence as a single segment, or split it at arbitrary points. The regex fallback behaves
+    similarly, because its word-boundary rules have nothing to latch onto. <strong>Treat any count for a
+    no-space script as approximate</strong> and verify it in a tool that ships a proper dictionary before you
+    publish the figure or bill against it.
+  </p>
+  <ul>
+    <li><strong>Hyphenated and apostrophe words.</strong> <em>well-known</em> and <em>don't</em> are single words in the browser's Unicode rules, but some editorial house styles count them as two. If your style guide differs, expect a gap of a few percent.</li>
+    <li><strong>Abbreviations.</strong> A sentence counter that keys on full stops reads <em>e.g.</em> and <em>Mr.</em> as sentence ends. That is why the sentence figure can run slightly high on academic or legal text.</li>
+    <li><strong>Numbers and symbols.</strong> Standalone figures such as <em>2025</em> count as words; a lone <em>&amp;</em> or <em>+</em> does not. Maths-heavy text therefore reads as having fewer words than a human would say it has.</li>
+    <li><strong>Characters are counted in UTF-16 code units.</strong> An emoji outside the basic plane — most of them — counts as two. The "no spaces" figure removes every Unicode whitespace character, not just the ordinary space.</li>
+    <li><strong>Reading and speaking speeds are estimates.</strong> 200 and 130 words per minute are widely used conventions, but a dense technical passage can drop below 150 wpm while a rehearsed script can exceed 160. Use the numbers to compare drafts, not to promise a duration.</li>
+    <li><strong>Stopwords are English.</strong> The filter list contains English function words only. For another language, turn the toggle on and read the raw distribution instead.</li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Rounding hides small differences: a 12-second reading time can mean anywhere from 8 to 16 seconds in real
+      life. When a count matters — a freelance invoice, a competition entry with a hard limit — paste the text
+      into the form that will judge it and check there too.
+    </p>
+  </div>
+
+  <h2>How to use the counter</h2>
+  <ol>
+    <li><strong>Paste or type your text.</strong> Click into the box and start writing, or paste from anywhere. Every statistic updates as you type; there is nothing to submit.</li>
+    <li><strong>Read the panel.</strong> Words, characters with and without spaces, sentences, paragraphs, unique words, average word length and the two time estimates all sit in one grid, so you can compare them at a glance.</li>
+    <li><strong>Inspect the vocabulary.</strong> The table below the grid lists the ten most frequent words with a count and a percentage. Tick <em>Include common stopwords</em> to see the raw distribution, or leave it off to see which content words dominate.</li>
+    <li><strong>Copy the summary.</strong> <em>Copy summary</em> puts a plain-text report — every statistic plus the top words — on your clipboard, ready to paste into an email, a brief or a spreadsheet.</li>
+    <li><strong>Start over.</strong> <em>Clear</em> empties the box and resets every figure to zero without reloading the page.</li>
+  </ol>
+  <p>
+    A practical tip: for a length-limited piece, write first and count afterwards. Trimming to hit a count is
+    easier than padding, and the unique-word figure is a fast signal that you are repeating yourself — a high
+    word count with a low unique count usually means the same point has been made twice.
+  </p>
+</ToolLayout>
+
+<style>
+  .wc {
+    display: grid;
+    gap: clamp(1rem, 2.5vw, 1.5rem);
+  }
+  .wc__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  textarea#wc-text {
+    width: 100%;
+    min-height: 11rem;
+    resize: vertical;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+  }
+  textarea#wc-text:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .wc__freq {
+    display: grid;
+    gap: 0.65rem;
+  }
+  .wc__freq-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .wc__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0;
+  }
+  .wc__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  /* Rows are built in JS, so they need :global() to reach past style scoping. */
+  .wc :global(table.data td:first-child) {
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+  .wc :global(table.data td:nth-child(2)),
+  .wc :global(table.data td:nth-child(3)) {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (max-width: 420px) {
+    .wc__freq-head {
+      display: grid;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var STOPWORDS = new Set(
+      (
+        "a about above after again against all am an and any are as at be because been before being " +
+        "below between both but by can cannot could did do does doing down during each few for from " +
+        "further had has have having he her here hers herself him himself his how i if in into is it " +
+        "its itself just me more most my myself no nor not now of off on once only or other our ours " +
+        "ourselves out over own same she should so some such than that the their theirs them themselves " +
+        "then there these they this those through to too under until up us very was we were what when " +
+        "where which while who whom why will with would you your yours yourself yourselves"
+      ).split(" ")
+    );
+
+    var textarea = document.getElementById("wc-text");
+    var stopToggle = document.getElementById("wc-stopwords");
+    var freqBody = document.getElementById("wc-freq-body");
+    var copyBtn = document.getElementById("wc-copy");
+    var clearBtn = document.getElementById("wc-clear");
+    var copyStatus = document.getElementById("wc-copy-status");
+
+    var els = {
+      words: document.getElementById("wc-words"),
+      chars: document.getElementById("wc-chars"),
+      charsNoSpace: document.getElementById("wc-chars-nospace"),
+      sentences: document.getElementById("wc-sentences"),
+      paragraphs: document.getElementById("wc-paragraphs"),
+      unique: document.getElementById("wc-unique"),
+      avg: document.getElementById("wc-avg"),
+      reading: document.getElementById("wc-reading"),
+      speaking: document.getElementById("wc-speaking"),
+    };
+
+    var lastStats = null;
+    var copyTimer = null;
+
+    /* ---------- segmentation ---------- */
+
+    var segmenter = null;
+    if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+      try {
+        segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+      } catch (err) {
+        segmenter = null;
+      }
+    }
+
+    var regexWords = null;
+    try {
+      regexWords = new RegExp("[\\p{L}\\p{N}\\p{M}]+(?:['\\u2019\\u2010-][\\p{L}\\p{N}]+)*", "gu");
+    } catch (err) {
+      regexWords = /[A-Za-z0-9]+(?:['’\-][A-Za-z0-9]+)*/g;
+    }
+
+    function wordTokens(text) {
+      if (!text) return [];
+      if (segmenter) {
+        var out = [];
+        var segments = Array.from(segmenter.segment(text));
+        for (var i = 0; i < segments.length; i++) {
+          if (segments[i].isWordLike) out.push(segments[i].segment);
+        }
+        return out;
+      }
+      return text.match(regexWords) || [];
+    }
+
+    function keyOf(token) {
+      return token.toLowerCase();
+    }
+
+    function lengthOf(str) {
+      return Array.from(str).length;
+    }
+
+    /* ---------- statistics ---------- */
+
+    function countSentences(text) {
+      var trimmed = text.trim();
+      if (!trimmed) return 0;
+      var parts = trimmed.split(/[.!?\u2026]+/);
+      var total = 0;
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].trim().length > 0) total++;
+      }
+      return total;
+    }
+
+    function countParagraphs(text) {
+      if (!text.trim()) return 0;
+      var blocks = text.split(/\r?\n[ \t]*\r?\n+/);
+      var total = 0;
+      for (var i = 0; i < blocks.length; i++) {
+        if (blocks[i].trim().length > 0) total++;
+      }
+      return total;
+    }
+
+    function formatDuration(wordCount, wpm) {
+      if (wordCount <= 0) return "0 s";
+      var seconds = Math.round((wordCount / wpm) * 60);
+      if (seconds < 60) return seconds + " s";
+      var minutes = Math.floor(seconds / 60);
+      var rest = seconds % 60;
+      if (rest === 0) return minutes + " min";
+      return minutes + " min " + rest + " s";
+    }
+
+    function frequency(tokens, includeStopwords) {
+      var counts = new Map();
+      var total = tokens.length;
+      for (var i = 0; i < tokens.length; i++) {
+        var key = keyOf(tokens[i]);
+        if (!key) continue;
+        if (!includeStopwords && STOPWORDS.has(key)) continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      var list = Array.from(counts.entries()).map(function (entry) {
+        return { word: entry[0], count: entry[1], share: total ? (entry[1] / total) * 100 : 0 };
+      });
+      list.sort(function (a, b) {
+        return b.count - a.count || a.word.localeCompare(b.word);
+      });
+      return list.slice(0, 10);
+    }
+
+    function analyse(text) {
+      var tokens = wordTokens(text);
+      var keyed = [];
+      for (var i = 0; i < tokens.length; i++) {
+        var key = keyOf(tokens[i]);
+        if (key) keyed.push(key);
+      }
+
+      var unique = new Set(keyed);
+      var totalLength = 0;
+      for (var j = 0; j < keyed.length; j++) totalLength += lengthOf(keyed[j]);
+
+      var noSpaces = text.replace(/\s/g, "");
+
+      return {
+        words: tokens.length,
+        chars: text.length,
+        charsNoSpace: noSpaces.length,
+        sentences: countSentences(text),
+        paragraphs: countParagraphs(text),
+        unique: unique.size,
+        avg: keyed.length ? totalLength / keyed.length : 0,
+        reading: formatDuration(tokens.length, 200),
+        speaking: formatDuration(tokens.length, 130),
+        top: frequency(tokens, stopToggle.checked),
+      };
+    }
+
+    /* ---------- rendering ---------- */
+
+    function renderFreq(list) {
+      freqBody.textContent = "";
+      if (!list.length) {
+        var row = document.createElement("tr");
+        var cell = document.createElement("td");
+        cell.colSpan = 3;
+        cell.textContent = textarea.value.trim()
+          ? "No words to count yet — try including stopwords, or add some letters."
+          : "Type or paste some text to see the ten most frequent words.";
+        row.appendChild(cell);
+        freqBody.appendChild(row);
+        return;
+      }
+      for (var i = 0; i < list.length; i++) {
+        var tr = document.createElement("tr");
+        var w = document.createElement("td");
+        w.textContent = list[i].word;
+        var c = document.createElement("td");
+        c.textContent = String(list[i].count);
+        var s = document.createElement("td");
+        s.textContent = list[i].share.toFixed(1) + "%";
+        tr.appendChild(w);
+        tr.appendChild(c);
+        tr.appendChild(s);
+        freqBody.appendChild(tr);
+      }
+    }
+
+    function update() {
+      var stats = analyse(textarea.value);
+      lastStats = stats;
+
+      els.words.textContent = String(stats.words);
+      els.chars.textContent = String(stats.chars);
+      els.charsNoSpace.textContent = String(stats.charsNoSpace);
+      els.sentences.textContent = String(stats.sentences);
+      els.paragraphs.textContent = String(stats.paragraphs);
+      els.unique.textContent = String(stats.unique);
+      els.avg.textContent = stats.avg.toFixed(1) + " ";
+      var small = document.createElement("small");
+      small.textContent = "chars";
+      els.avg.appendChild(small);
+      els.reading.textContent = stats.reading;
+      els.speaking.textContent = stats.speaking;
+
+      renderFreq(stats.top);
+    }
+
+    /* ---------- clipboard ---------- */
+
+    function summaryText() {
+      var stats = lastStats || analyse(textarea.value);
+      var lines = [
+        "Text summary",
+        "Words: " + stats.words,
+        "Characters: " + stats.chars,
+        "Characters without spaces: " + stats.charsNoSpace,
+        "Sentences: " + stats.sentences,
+        "Paragraphs: " + stats.paragraphs,
+        "Unique words: " + stats.unique,
+        "Average word length: " + stats.avg.toFixed(1) + " characters",
+        "Reading time (200 wpm): " + stats.reading,
+        "Speaking time (130 wpm): " + stats.speaking,
+        "",
+        "Most frequent words" + (stopToggle.checked ? " (stopwords included)" : " (stopwords excluded)") + ":",
+      ];
+      if (!stats.top.length) {
+        lines.push("  — none");
+      } else {
+        for (var i = 0; i < stats.top.length; i++) {
+          lines.push("  " + stats.top[i].word + " — " + stats.top[i].count + " (" + stats.top[i].share.toFixed(1) + "%)");
+        }
+      }
+      return lines.join("\n");
+    }
+
+    function legacyCopy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      var ok = false;
+      try {
+        ta.select();
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    function flash(label) {
+      copyStatus.textContent = label;
+      copyStatus.hidden = false;
+      if (copyTimer) clearTimeout(copyTimer);
+      copyTimer = setTimeout(function () {
+        copyStatus.hidden = true;
+      }, 1600);
+    }
+
+    /* ---------- wiring ---------- */
+
+    textarea.addEventListener("input", update);
+    stopToggle.addEventListener("change", update);
+
+    copyBtn.addEventListener("click", function () {
+      var text = summaryText();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            flash("Copied!");
+          },
+          function () {
+            flash(legacyCopy(text) ? "Copied!" : "Select the text and press Ctrl+C");
+          }
+        );
+      } else {
+        flash(legacyCopy(text) ? "Copied!" : "Select the text and press Ctrl+C");
+      }
+    });
+
+    clearBtn.addEventListener("click", function () {
+      textarea.value = "";
+      textarea.focus();
+      update();
+    });
+
+    update();
+  })();
+</script>

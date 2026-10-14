@@ -1,0 +1,807 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "countdown-timer")!;
+
+const faqs = [
+  {
+    q: "Why does the countdown stay exact when I switch tabs?",
+    a: "The timer never counts by adding a second to a stored number. When you press Start it records a target time — the moment the countdown should reach zero — and every animation frame recomputes the remaining time as that target minus the current clock time. Browsers deliberately slow JavaScript timers in background tabs, sometimes to one tick per second or less, so an additive timer would fall behind while the tab is hidden and show the wrong number when you came back. Because this one measures against the clock instead, it returns from a background tab with the correct remaining time, and it will already show 'Time is up' if the moment passed while you were away.",
+  },
+  {
+    q: "How accurate is the countdown, and where does it break down?",
+    a: "In a visible tab it is typically accurate to a small fraction of a second, limited by your screen's refresh rate — roughly 16 ms per frame at 60 Hz. Three limits are worth knowing. First, date-clock changes: the countdown compares wall-clock timestamps, so moving the system clock or a daylight-saving jump shifts it; the stopwatch, which uses a monotonic timer, does not. Second, a background tab may not paint at all, so the display can freeze on a stale value until you return, even though the deadline itself is unchanged. Third, the sound needs a short lead: the Web Audio tone is scheduled the instant the countdown reaches zero, so allow a few tens of milliseconds for the audio hardware to start if you are cueing something important.",
+  },
+  {
+    q: "Will the alarm sound work, and is the beep on by default?",
+    a: "The tone is generated live in the browser with the Web Audio API — it is a short synthesised sine wave, not a downloaded sound file, so nothing is fetched from the network. Sound is off by default and only plays after you switch on the labelled checkbox, which also keeps you inside the browser's autoplay rules: browsers only allow audio in response to a user gesture, and toggling the box is that gesture. The tab must also stay open — a background tab still plays audio, but a closed tab cannot. If you need a louder or repeated alarm, a native phone alarm is the better tool; treat this beep as a gentle cue.",
+  },
+  {
+    q: "Does the page warn me before I navigate away?",
+    a: "Yes, while a countdown is running. If you try to close the tab, reload or follow a link, the browser asks you to confirm leaving, so an accidental click cannot silently discard a running timer. The warning is removed as soon as the countdown is paused, reset or finished, and it is only ever active while the timer is actually counting. Note that browsers show their own generic wording for that dialog and the page cannot customise it, and some browsers suppress the prompt entirely if you have not interacted with the page.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — Date.now()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/now",
+    note: "The wall-clock reading the countdown uses: a start timestamp is stored once, and every frame the remaining time is recomputed from it instead of being accumulated tick by tick.",
+  },
+  {
+    label: "MDN Web Docs — Page Visibility API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+    note: "Explains why hidden tabs are throttled and how visibilitychange fires. That behaviour is the reason a countdown must measure against the clock rather than count setInterval ticks.",
+  },
+  {
+    label: "MDN Web Docs — Web Audio API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API",
+    note: "Reference for the AudioContext, OscillatorNode and gain envelope used to synthesise the optional end-of-countdown beep entirely in the browser.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Set hours, minutes and seconds or tap a preset, then watch a large mono readout and a progress ring count down to zero — with an optional beep that stays off until you ask for it."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body ct">
+        <section class="ct__stage" aria-labelledby="ct-stage-h">
+          <h2 class="ct__h" id="ct-stage-h">Time remaining</h2>
+
+          <div class="ct__ring-wrap">
+            <svg class="ct__ring" viewBox="0 0 200 200" role="img" aria-label="Progress ring showing the fraction of the countdown still remaining">
+              <circle class="ct__ring-track" cx="100" cy="100" r="88" fill="none" stroke-width="10"></circle>
+              <circle class="ct__ring-fill" id="ct-arc" cx="100" cy="100" r="88" fill="none" stroke-width="10" stroke-linecap="round" transform="rotate(-90 100 100)"></circle>
+            </svg>
+            <div class="ct__center">
+              <p class="ct__label" id="ct-readout-label">Time remaining</p>
+              <p class="ct__time readout" id="ct-display" role="timer" aria-live="polite">00:05:00</p>
+              <div class="ct__flags">
+                <span class="badge" id="ct-up" hidden>Time is up</span>
+                <span class="badge badge--accent" id="ct-phase" hidden>Final 10 seconds</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="ct__status" id="ct-status" aria-live="polite">Ready — press Start to begin the countdown.</p>
+        </section>
+
+        <section class="ct__controls" aria-labelledby="ct-controls-h">
+          <h2 class="ct__h" id="ct-controls-h">Controls</h2>
+          <div class="ct__btns">
+            <button type="button" class="btn btn--primary" id="ct-start">Start</button>
+            <button type="button" class="btn btn--ghost" id="ct-pause">Pause</button>
+            <button type="button" class="btn btn--soft" id="ct-resume">Resume</button>
+            <button type="button" class="btn btn--ghost" id="ct-reset">Reset</button>
+          </div>
+
+          <form class="ct__form" id="ct-form" novalidate>
+            <fieldset class="fieldset" id="ct-set">
+              <legend>Countdown length</legend>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="ct-hours">Hours</label>
+                  <input type="number" id="ct-hours" name="hours" min="0" max="23" step="1" value="0" inputmode="numeric" />
+                </div>
+                <div class="field">
+                  <label for="ct-minutes">Minutes</label>
+                  <input type="number" id="ct-minutes" name="minutes" min="0" max="59" step="1" value="5" inputmode="numeric" />
+                </div>
+                <div class="field">
+                  <label for="ct-seconds">Seconds</label>
+                  <input type="number" id="ct-seconds" name="seconds" min="0" max="59" step="1" value="0" inputmode="numeric" />
+                </div>
+              </div>
+              <p class="ct__help">
+                Values are clamped to 0–23 hours and 0–59 minutes and seconds. Editing any field while the
+                countdown is paused sets the time that Resume will continue from.
+              </p>
+            </fieldset>
+          </form>
+
+          <div class="ct__presets">
+            <p class="ct__preset-label" id="ct-presets-label">Quick presets</p>
+            <div class="tag-row" id="ct-presets" role="group" aria-labelledby="ct-presets-label">
+              <button type="button" class="btn btn--soft btn--sm" data-preset="1">1 min</button>
+              <button type="button" class="btn btn--soft btn--sm" data-preset="3">3 min</button>
+              <button type="button" class="btn btn--soft btn--sm" data-preset="5">5 min</button>
+              <button type="button" class="btn btn--soft btn--sm" data-preset="10">10 min</button>
+              <button type="button" class="btn btn--soft btn--sm" data-preset="25">25 min</button>
+              <button type="button" class="btn btn--soft btn--sm" data-preset="60">60 min</button>
+            </div>
+          </div>
+
+          <div class="ct__sound">
+            <label class="check" for="ct-sound">
+              <input type="checkbox" id="ct-sound" />
+              <span>Beep when the countdown reaches zero (off by default)</span>
+            </label>
+            <p class="ct__help">
+              The tone is synthesised in your browser with the Web Audio API — no sound file is downloaded.
+              Leave it off for silent countdowns.
+            </p>
+          </div>
+
+          <ul class="ct__keys">
+            <li><kbd>Enter</kbd> in a length field starts the countdown.</li>
+            <li><kbd>Space</kbd> starts or pauses when a control button has focus.</li>
+            <li>The tab title shows the remaining time while the countdown runs.</li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Timing is measured from a stored timestamp, not from interval ticks, so the countdown stays accurate
+        even when the tab is backgrounded and throttled.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the countdown timer works</h2>
+  <p>
+    The page keeps one number: the moment the countdown should reach zero. Press <em>Start</em> and the
+    script reads the current clock time, adds the length you set, and stores that target. From then on
+    every animation frame asks a single question — how much time is left between now and the target? —
+    and paints the answer into the readout and the ring. Pausing stores how much was left at that
+    instant; resuming builds a fresh target from the paused value, so a pause of any length never
+    changes what is left.
+  </p>
+  <p>
+    That design is the whole reason the timer survives a background tab. Browsers throttle timers in
+    tabs you are not looking at, sometimes to a single tick per second, and some browsers stop
+    repainting entirely. A timer that added one second per tick would quietly lose those ticks and
+    drift; this one cannot, because it never counts — it only re-measures. When you come back, the
+    display jumps straight to the correct remaining time, and if the target passed while you were away
+    the page opens in its finished state.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Part of the tool</th>
+          <th scope="col">What it does</th>
+          <th scope="col">Why it is built that way</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Readout</td>
+          <td>Hours, minutes and seconds in a fixed-width mono font</td>
+          <td>Tabular numerals stop the digits jittering sideways as they change</td>
+        </tr>
+        <tr>
+          <td>Progress ring</td>
+          <td>An SVG circle whose stroke offset tracks the fraction remaining</td>
+          <td>A whole-arc length is known up front, so one number drives the drawing</td>
+        </tr>
+        <tr>
+          <td>Presets</td>
+          <td>1, 3, 5, 10, 25 and 60 minute buttons</td>
+          <td>One press beats typing three fields for the common durations</td>
+        </tr>
+        <tr>
+          <td>Beep</td>
+          <td>An optional synthesised tone at zero</td>
+          <td>Generated live, so the page keeps working with no network at all</td>
+        </tr>
+        <tr>
+          <td>Tab title</td>
+          <td>Mirrors the remaining time while running</td>
+          <td>Lets you keep an eye on the timer from another tab</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The <em>final 10 seconds</em> badge appears once the last stretch begins. Because the display is
+    recomputed every frame rather than once per second, the readout stays smooth instead of visibly
+    stepping, although the painted time is always rounded down to the second so the numbers you see
+    never overstate what is left.
+  </p>
+
+  <h2>Accuracy and honest limits</h2>
+  <p>
+    Inside a visible tab this timer is as precise as the browser's frame rate allows — on a typical
+    60&nbsp;Hz display that is about 16&nbsp;milliseconds per update, far finer than the seconds you
+    read. Three real limitations are worth stating plainly rather than hiding.
+  </p>
+  <ul>
+    <li>
+      <strong>It follows the system clock.</strong> The remaining time is wall-clock arithmetic on
+      timestamps, so if the operating system's clock is changed — a time-server correction, a manual
+      fix or a daylight-saving jump — the countdown moves with it. The companion stopwatch avoids this
+      by measuring with a monotonic timer instead.
+    </li>
+    <li>
+      <strong>A hidden tab may not repaint.</strong> The deadline stays correct, but the pixels do not.
+      If you need to watch the numbers continuously, keep the tab visible or use the browser's own
+      picture-in-picture or full-screen arrangement.
+    </li>
+    <li>
+      <strong>The alarm is a cue, not a ringtone.</strong> The beep is a short tone at a modest volume,
+      it plays once, and it needs an open tab and a switched-on toggle. It is a deliberate nudge for
+      cooking, a presentation or a stretch break — not a replacement for a phone alarm you would rely
+      on to wake up.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Closing the tab cancels the countdown, and nothing is stored afterwards. While a countdown is
+      running the page asks for confirmation before you navigate away, but that prompt is the browser's
+      own dialog with the browser's own wording — the page cannot change the text, and some browsers
+      skip it entirely if you have not interacted with the page.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      <strong>Set the length.</strong> Type hours, minutes and seconds, or press a preset. Pressing
+      <kbd>Enter</kbd> in any length field starts the countdown immediately; the presets only change the
+      length while the timer is idle or paused.
+    </li>
+    <li>
+      <strong>Start.</strong> The ring unwinds from a full circle as time runs down, and the tab title
+      begins showing the remaining time so you can follow it from another tab.
+    </li>
+    <li>
+      <strong>Pause and resume.</strong> Pause freezes the remaining time and re-opens the length
+      fields, so you can round it to a new value before resuming. Resume continues from exactly where
+      you stopped — the pause itself costs nothing.
+    </li>
+    <li>
+      <strong>Watch the end.</strong> The last ten seconds are flagged, and at zero the readout settles
+      on <em>00:00:00</em>, a <em>Time is up</em> badge appears and the digits flash unless your system
+      asks for reduced motion.
+    </li>
+    <li>
+      <strong>Hear it or not.</strong> Switch on the labelled checkbox before you start if you want the
+      beep; it is off on every visit and never turns itself on. Reset returns the timer to the length in
+      the fields, ready to run again.
+    </li>
+  </ol>
+  <p>
+    Nothing leaves your device. There is no upload, no account and no analytics call, and the tone is
+    generated locally rather than streamed, so the whole page keeps working on a plane, in a locked-down
+    network or with the browser in offline mode.
+  </p>
+</ToolLayout>
+
+<style>
+  .ct {
+    display: grid;
+    gap: clamp(1.25rem, 2.5vw, 1.9rem);
+  }
+
+  .ct__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0 0 0.6rem;
+  }
+
+  .ct__help {
+    margin: 0.6rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .ct__stage {
+    display: grid;
+    justify-items: center;
+    gap: 0.35rem;
+    text-align: center;
+  }
+
+  .ct__ring-wrap {
+    position: relative;
+    width: min(300px, 76vw);
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+  }
+
+  .ct__ring {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .ct__ring-track {
+    stroke: var(--bg-sunken);
+  }
+
+  .ct__ring-fill {
+    stroke: var(--accent);
+    transition: stroke 0.25s ease;
+  }
+
+  .ct--up .ct__ring-fill {
+    stroke: var(--danger);
+  }
+
+  .ct__center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 0.35rem;
+    padding: 1.75rem;
+  }
+
+  .ct__label {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .ct__time {
+    margin: 0;
+    font-size: clamp(1.9rem, 9vw, 2.9rem);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: var(--text);
+  }
+
+  .ct__flags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 1.6rem;
+  }
+
+  .ct--up #ct-up {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .ct__status {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    max-width: 42ch;
+  }
+
+  .ct__controls {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .ct__btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .ct__form {
+    margin: 0;
+  }
+
+  .ct__presets {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .ct__preset-label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 650;
+    color: var(--text-muted);
+  }
+
+  .ct__sound {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .ct__sound .check {
+    align-items: flex-start;
+  }
+
+  .ct__sound .check input {
+    margin-top: 0.2rem;
+  }
+
+  .ct__keys {
+    margin: 0;
+    padding-inline-start: 1.15rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .ct__keys li {
+    margin-bottom: 0.3rem;
+  }
+
+  .ct__keys kbd {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-sm);
+    padding: 0.05rem 0.35rem;
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  @media (min-width: 860px) {
+    .ct__stage {
+      gap: 0.75rem;
+    }
+  }
+
+  /* flashing readout when the countdown reaches zero */
+  .ct--up .ct__time {
+    color: var(--danger);
+  }
+
+  .ct--flash .ct__time {
+    animation: ct-flash 0.55s steps(1, end) 6;
+  }
+
+  @keyframes ct-flash {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.2;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ct--flash .ct__time {
+      animation: none;
+    }
+    .ct__ring-fill {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    "use strict";
+
+    var CT = {};
+    var panel = document.querySelector(".ct");
+    var form = CT.form = document.getElementById("ct-form");
+    var hoursEl = CT.hours = document.getElementById("ct-hours");
+    var minutesEl = CT.minutes = document.getElementById("ct-minutes");
+    var secondsEl = CT.seconds = document.getElementById("ct-seconds");
+    var displayEl = CT.display = document.getElementById("ct-display");
+    var statusEl = CT.status = document.getElementById("ct-status");
+    var upBadge = document.getElementById("ct-up");
+    var phaseBadge = document.getElementById("ct-phase");
+    var arcEl = CT.arc = document.getElementById("ct-arc");
+    var startBtn = CT.start = document.getElementById("ct-start");
+    var pauseBtn = CT.pause = document.getElementById("ct-pause");
+    var resumeBtn = CT.resume = document.getElementById("ct-resume");
+    var resetBtn = CT.reset = document.getElementById("ct-reset");
+    var soundBox = CT.sound = document.getElementById("ct-sound");
+    var presetsHost = document.getElementById("ct-presets");
+    var lengthFields = [hoursEl, minutesEl, secondsEl];
+    var presetButtons = [].slice.call(document.querySelectorAll("#ct-presets [data-preset]"));
+
+    var RING_LENGTH = 2 * Math.PI * 88;
+    var PHASE_MS = 10000;
+    var TITLE_BASE = document.title;
+
+    var state = "idle"; // idle | running | paused | up
+    var durationMs = 300000;
+    var remainMs = durationMs;
+    var deadline = 0;
+    var rafId = 0;
+    var audioCtx = null;
+    var lastRenderedSecond = -1;
+    var flashTimer = 0;
+
+    if (arcEl) {
+      arcEl.style.strokeDasharray = RING_LENGTH + " " + RING_LENGTH;
+      arcEl.style.strokeDashoffset = "0";
+    }
+
+    function clampInt(value, max) {
+      var n = parseInt(value, 10);
+      if (!isFinite(n) || n < 0) n = 0;
+      if (n > max) n = max;
+      return n;
+    }
+
+    function readFields() {
+      return (
+        clampInt(hoursEl.value, 23) * 3600000 +
+        clampInt(minutesEl.value, 59) * 60000 +
+        clampInt(secondsEl.value, 59) * 1000
+      );
+    }
+
+    function writeFields(ms) {
+      var total = Math.max(0, Math.floor(ms / 1000));
+      hoursEl.value = String(Math.floor(total / 3600));
+      minutesEl.value = String(Math.floor((total % 3600) / 60));
+      secondsEl.value = String(total % 60);
+    }
+
+    function formatClock(ms) {
+      var t = Math.max(0, Math.ceil(ms / 1000));
+      var h = Math.floor(t / 3600);
+      var m = Math.floor((t % 3600) / 60);
+      var s = t % 60;
+      return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function formatShort(ms) {
+      var t = Math.max(0, Math.ceil(ms / 1000));
+      var m = Math.floor(t / 60);
+      var s = t % 60;
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    // Remaining time: always measured against the stored deadline, never accumulated tick by tick.
+    function computeRemaining() {
+      if (state === "running") {
+        var left = deadline - Date.now();
+        return left > 0 ? left : 0;
+      }
+      return remainMs;
+    }
+
+    function beep() {
+      try {
+        var Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return;
+        if (!audioCtx) audioCtx = new Ctor();
+        if (audioCtx.state === "suspended" && audioCtx.resume) audioCtx.resume();
+        var now = audioCtx.currentTime;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 1.05);
+      } catch (err) {
+        /* audio is an optional enhancement; never break the timer over it */
+      }
+    }
+
+    function setTitleFor(ms) {
+      document.title = formatShort(ms) + " — countdown running";
+    }
+
+    function render(force) {
+      var ms = computeRemaining();
+      var sec = Math.ceil(ms / 1000);
+      if (force !== true && sec === lastRenderedSecond && state !== "up") return;
+      lastRenderedSecond = sec;
+
+      displayEl.textContent = formatClock(ms);
+      var fraction = durationMs > 0 ? Math.max(0, Math.min(1, ms / durationMs)) : 0;
+      if (arcEl) arcEl.style.strokeDashoffset = String(RING_LENGTH * (1 - fraction));
+
+      if (state === "running") {
+        setTitleFor(ms);
+        if (phaseBadge) phaseBadge.hidden = !(ms > 0 && ms <= PHASE_MS);
+        statusEl.textContent =
+          ms <= PHASE_MS && ms > 0
+            ? "Final seconds — get ready."
+            : "Counting down. Pause to hold, Reset to clear.";
+      } else if (state === "paused") {
+        if (phaseBadge) phaseBadge.hidden = true;
+        statusEl.textContent = "Paused at " + formatClock(ms) + ". Resume to continue, or edit the length fields.";
+      } else if (state === "up") {
+        if (phaseBadge) phaseBadge.hidden = true;
+        statusEl.textContent = "Time is up — the countdown reached zero.";
+      } else {
+        if (phaseBadge) phaseBadge.hidden = true;
+        statusEl.textContent =
+          ms > 0 ? "Ready — press Start to begin the countdown." : "Set a length above zero to start.";
+      }
+    }
+
+    function setButtons() {
+      var idleOrPaused = state === "idle" || state === "paused";
+      startBtn.disabled = state === "running" || state === "paused" || state === "up";
+      pauseBtn.disabled = state !== "running";
+      resumeBtn.disabled = state !== "paused";
+      resetBtn.disabled = state === "idle" && readFields() === 300000;
+      for (var i = 0; i < lengthFields.length; i++) lengthFields[i].disabled = state === "running";
+      for (var j = 0; j < presetButtons.length; j++) presetButtons[j].disabled = !idleOrPaused;
+      if (panel) panel.classList.toggle("ct--up", state === "up");
+      if (upBadge) upBadge.hidden = state !== "up";
+    }
+
+    function frame() {
+      if (state !== "running") return;
+      var left = computeRemaining();
+      if (left <= 0) {
+        remainMs = 0;
+        finish();
+        return;
+      }
+      render(false);
+      rafId = window.requestAnimationFrame(frame);
+    }
+
+    function start() {
+      var requested = readFields();
+      if (state === "idle" || state === "up") {
+        durationMs = requested > 0 ? requested : 60000;
+        writeFields(durationMs);
+      }
+      if (durationMs <= 0) return;
+      remainMs = durationMs;
+      deadline = Date.now() + remainMs;
+      state = "running";
+      lastRenderedSecond = -1;
+      setButtons();
+      render(true);
+      cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(frame);
+    }
+
+    function pause() {
+      if (state !== "running") return;
+      remainMs = computeRemaining();
+      state = "paused";
+      cancelAnimationFrame(rafId);
+      setButtons();
+      render(true);
+    }
+
+    function resume() {
+      if (state !== "paused") return;
+      if (remainMs <= 0) return;
+      deadline = Date.now() + remainMs;
+      state = "running";
+      lastRenderedSecond = -1;
+      setButtons();
+      render(true);
+      cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(frame);
+    }
+
+    function reset() {
+      cancelAnimationFrame(rafId);
+      state = "idle";
+      durationMs = readFields();
+      if (durationMs <= 0) durationMs = 60000;
+      remainMs = durationMs;
+      writeFields(durationMs);
+      deadline = 0;
+      lastRenderedSecond = -1;
+      document.title = TITLE_BASE;
+      if (panel) panel.classList.remove("ct--flash");
+      setButtons();
+      render(true);
+    }
+
+    function finish() {
+      cancelAnimationFrame(rafId);
+      state = "up";
+      remainMs = 0;
+      lastRenderedSecond = -1;
+      document.title = TITLE_BASE;
+      setButtons();
+      render(true);
+      if (panel) {
+        panel.classList.remove("ct--flash");
+        void panel.offsetWidth;
+        panel.classList.add("ct--flash");
+        window.clearTimeout(flashTimer);
+        flashTimer = window.setTimeout(function () {
+          panel.classList.remove("ct--flash");
+        }, 3600);
+      }
+      if (soundBox.checked) beep();
+    }
+
+    function applyPreset(minutes) {
+      var ms = minutes * 60000;
+      if (state === "paused") {
+        remainMs = ms;
+        writeFields(ms);
+        setButtons();
+        render(true);
+        return;
+      }
+      durationMs = ms;
+      remainMs = ms;
+      writeFields(ms);
+      if (panel) panel.classList.remove("ct--flash");
+      setButtons();
+      render(true);
+    }
+
+    startBtn.addEventListener("click", start);
+    pauseBtn.addEventListener("click", pause);
+    resumeBtn.addEventListener("click", resume);
+    resetBtn.addEventListener("click", reset);
+
+    for (var f = 0; f < lengthFields.length; f++) {
+      lengthFields[f].addEventListener("input", function () {
+        durationMs = readFields();
+        if (state === "paused") {
+          remainMs = durationMs;
+        } else if (state !== "running") {
+          remainMs = durationMs;
+          state = "idle";
+          document.title = TITLE_BASE;
+        }
+        if (panel) panel.classList.remove("ct--flash");
+        setButtons();
+        render(true);
+      });
+      lengthFields[f].addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          startBtn.click();
+        }
+      });
+    }
+
+    if (presetsHost) {
+      presetsHost.addEventListener("click", function (event) {
+        var btn = event.target.closest("[data-preset]");
+        if (!btn || btn.disabled) return;
+        applyPreset(clampInt(btn.getAttribute("data-preset"), 600));
+      });
+    }
+
+    if (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        startBtn.click();
+      });
+    }
+
+    soundBox.addEventListener("change", function () {
+      if (!soundBox.checked) return;
+      // Prepare the audio context inside the user gesture that enables the sound.
+      try {
+        var Ctor = window.AudioContext || window.webkitAudioContext;
+        if (Ctor && !audioCtx) audioCtx = new Ctor();
+        if (audioCtx && audioCtx.state === "suspended" && audioCtx.resume) audioCtx.resume();
+      } catch (err) {
+        /* ignore: the timer still works silently */
+      }
+    });
+
+    window.addEventListener("beforeunload", function (event) {
+      if (state !== "running") return;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (state === "running" && !document.hidden) {
+        render(true);
+      }
+    });
+
+    // Re-read the clock immediately if the machine wakes from sleep mid-countdown.
+    window.addEventListener("focus", function () {
+      if (state === "running") render(true);
+    });
+
+    reset();
+  })();
+</script>

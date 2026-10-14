@@ -77,7 +77,10 @@ export type IconName =
   | "hash"
   | "percent"
   | "calendar"
-  | "audio";
+  | "audio"
+  | "link"
+  | "braces"
+  | "list";
 
 /**
  * The eight URLs that already exist on the live WordPress site.
@@ -179,19 +182,28 @@ export const legacyTools: Tool[] = [
   },
 ];
 
-/** The next wave: browser-only tools shown as "coming soon" until built. */
+/** Everything rebuilt in the second wave, live as of this commit. */
 export const plannedTools: Tool[] = [
-  { slug: "bmi-calculator", title: "BMI Calculator", description: "Body mass index with healthy-range guidance.", category: "health", icon: "scale", status: "soon" },
-  { slug: "percentage-calculator", title: "Percentage Calculator", description: "Everyday percentage, increase and discount math.", category: "math", icon: "percent", status: "soon" },
-  { slug: "unit-converter", title: "Unit Converter", description: "Length, mass, volume, speed and temperature.", category: "convert", icon: "ruler", status: "soon" },
-  { slug: "word-counter", title: "Word & Character Counter", description: "Words, characters, sentences and reading time.", category: "text", icon: "type", status: "soon" },
-  { slug: "qr-code-generator", title: "QR Code Generator", description: "Create QR codes for links, text and Wi-Fi.", category: "dev", icon: "qr", status: "soon" },
-  { slug: "date-difference-calculator", title: "Date Difference Calculator", description: "Days, weeks and months between two dates.", category: "time", icon: "calendar", status: "soon" },
-  { slug: "countdown-timer", title: "Countdown Timer", description: "A precise timer with sound alerts.", category: "time", icon: "timer", status: "soon" },
-  { slug: "base64-encoder", title: "Base64 Encoder / Decoder", description: "Encode and decode text or files instantly.", category: "dev", icon: "code", status: "soon" },
-  { slug: "image-compressor", title: "Image Compressor", description: "Shrink images without uploading them anywhere.", category: "media", icon: "image", status: "soon" },
-  { slug: "random-number-generator", title: "Random Number Generator", description: "Random numbers, dice and lottery draws.", category: "privacy", icon: "hash", status: "soon" },
-  { slug: "password-strength-checker", title: "Password Strength Checker", description: "See how long a password would take to crack.", category: "privacy", icon: "shield", status: "soon" },
+  { slug: "unit-converter", title: "Unit Converter", description: "Length, mass, volume, area, speed, temperature and data sizes.", category: "convert", icon: "ruler", status: "live", keywords: ["convert", "units", "metric", "imperial"] },
+  { slug: "percentage-calculator", title: "Percentage Calculator", description: "Percentages, increases, decreases and discounts, explained.", category: "math", icon: "percent", status: "live", keywords: ["percent", "percentage", "discount", "increase"] },
+  { slug: "word-counter", title: "Word & Character Counter", description: "Words, characters, sentences and reading time as you type.", category: "text", icon: "type", status: "live", keywords: ["word count", "characters", "reading time"] },
+  { slug: "text-case-converter", title: "Text Case Converter", description: "UPPER, lower, Title, Sentence and camelCase in one click.", category: "text", icon: "type", status: "live", keywords: ["uppercase", "lowercase", "title case", "camelcase"] },
+  { slug: "remove-duplicate-lines", title: "Remove Duplicate Lines", description: "Deduplicate and sort lists, with counts of what was removed.", category: "text", icon: "list", status: "live", keywords: ["duplicate", "dedupe", "sort lines", "unique"] },
+  { slug: "lorem-ipsum-generator", title: "Lorem Ipsum Generator", description: "Placeholder text by paragraph, sentence or word count.", category: "text", icon: "sparkles", status: "live", keywords: ["lorem", "ipsum", "placeholder", "dummy text"] },
+  { slug: "base64-encoder", title: "Base64 Encoder / Decoder", description: "Encode and decode text or files, entirely in the browser.", category: "dev", icon: "code", status: "live", keywords: ["base64", "encode", "decode"] },
+  { slug: "url-encoder", title: "URL Encoder / Decoder", description: "Percent-encode URLs and query strings, and read them back.", category: "dev", icon: "link", status: "live", keywords: ["url", "encode", "decode", "percent", "query string"] },
+  { slug: "hash-generator", title: "Hash Generator", description: "SHA-1, SHA-256, SHA-384 and SHA-512 checksums via Web Crypto.", category: "dev", icon: "hash", status: "live", keywords: ["sha256", "hash", "checksum", "digest"] },
+  { slug: "json-formatter", title: "JSON Formatter & Validator", description: "Pretty-print, minify and locate the exact error in broken JSON.", category: "dev", icon: "braces", status: "live", keywords: ["json", "format", "validate", "minify"] },
+  { slug: "qr-code-generator", title: "QR Code Generator", description: "Create a QR code for a link, text, email or Wi-Fi network.", category: "dev", icon: "qr", status: "live", keywords: ["qr", "barcode", "wifi", "link"] },
+  { slug: "date-difference-calculator", title: "Date Difference Calculator", description: "Days, weeks, months and working days between two dates.", category: "time", icon: "calendar", status: "live", keywords: ["date", "difference", "days between", "workdays"] },
+  { slug: "age-calculator", title: "Age Calculator", description: "Your exact age in years, months, days and heartbeats.", category: "time", icon: "calendar", status: "live", keywords: ["age", "birthday", "date of birth"] },
+  { slug: "countdown-timer", title: "Countdown Timer", description: "A precise countdown with a visible progress ring.", category: "time", icon: "timer", status: "live", keywords: ["countdown", "timer", "alarm"] },
+  { slug: "stopwatch", title: "Stopwatch", description: "Start, stop and record laps with millisecond precision.", category: "time", icon: "clock", status: "live", keywords: ["stopwatch", "lap", "split", "timer"] },
+  { slug: "random-number-generator", title: "Random Number Generator", description: "Unbiased random numbers, dice rolls and lottery draws.", category: "privacy", icon: "hash", status: "live", keywords: ["random", "dice", "lottery", "number"] },
+  { slug: "password-strength-checker", title: "Password Strength Checker", description: "See how long a password would resist guessing, and why.", category: "privacy", icon: "shield", status: "live", keywords: ["password", "strength", "entropy", "crack time"] },
+  { slug: "bmi-calculator", title: "BMI Calculator", description: "Body mass index with the WHO bands and their limitations.", category: "health", icon: "scale", status: "live", keywords: ["bmi", "body mass index", "healthy weight"] },
+  { slug: "image-compressor", title: "Image Compressor", description: "Shrink JPEG, PNG and WebP files without uploading them.", category: "media", icon: "image", status: "live", keywords: ["compress", "image", "jpeg", "webp", "optimise"] },
+  { slug: "image-resizer", title: "Image Resizer", description: "Resize and crop images to exact pixel dimensions in-browser.", category: "media", icon: "image", status: "live", keywords: ["resize", "crop", "image", "dimensions"] },
 ];
 
 export const allTools: Tool[] = [...legacyTools, ...plannedTools];

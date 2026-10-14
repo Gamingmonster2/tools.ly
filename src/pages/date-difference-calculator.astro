@@ -1,0 +1,665 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "date-difference-calculator")!;
+
+const faqs = [
+  {
+    q: "How are the years, months and days worked out?",
+    a: "They are counted on the calendar, not by dividing your total days. The tool takes the start date, adds whole years until it can add no more without overshooting, then adds whole months the same way, and finally counts the leftover days one at a time. That is why 3 March 2024 to 18 July 2025 gives 1 year, 4 months and 15 days rather than a decimal figure — 487 total days divided by 30.44 would be a different and less useful answer. This borrowing of months and days is the same approach a person takes when counting an anniversary by hand.",
+  },
+  {
+    q: "Does the tool count the end date itself?",
+    a: "Only if you ask it to. By default the two dates are treated as points on a line, so a stay from 1 June to 3 June is 2 days. Switch on “Include the end date in the totals” and the end of that period is counted as a full day, making it 3 days, which is what you usually want for hotel nights, rental periods, notice periods and deadlines such as “you have 14 days from today”. The calendar breakdown in years, months and days is a distance between two instants, so it stays the same either way; only the totals change.",
+  },
+  {
+    q: "Which days count as working days?",
+    a: "The tool counts every weekday that falls inside the period and skips Saturday and Sunday, which is the Monday-to-Friday convention used in most of Europe and the Americas. Because weekends differ by country and region, there is no “correct” answer baked in — if you work a Sunday-to-Thursday week, subtract the difference yourself or read the total days figure and adjust. Public holidays are never guessed, so paste the ones that apply to you into the holiday box, one YYYY-MM-DD per line, and they will be removed from the count as well. Blank lines and duplicate lines are ignored.",
+  },
+  {
+    q: "Why do the hours differ from the days multiplied by 24?",
+    a: "Because days are counted on the calendar and hours are counted as elapsed time. The working days exclude weekends, and daylight saving transitions make one or two days in the year 23 or 25 hours long, so multiplying the total days by 24 would be slightly off for any period that crosses a clock change. If you leave both time fields empty the totals are whole days and the hours are exact; as soon as you enter a start or end time, the total days figure becomes a decimal and the hours and minutes come from the real elapsed milliseconds instead.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — Date",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date",
+    note: "The reference for the date arithmetic used here, including the local-time constructor, the daylight-saving edge cases and why getTime() differences are the safe way to measure elapsed time.",
+  },
+  {
+    label: "IANA time zone database (tz database)",
+    href: "https://www.iana.org/time-zones",
+    note: "The authoritative record of the daylight-saving and offset changes that make some calendar days 23 or 25 hours long, which is why elapsed hours are not simply days multiplied by 24.",
+  },
+  {
+    label: "Wikipedia — ISO 8601",
+    href: "https://en.wikipedia.org/wiki/ISO_8601",
+    note: "Describes the YYYY-MM-DD calendar-date format expected in the holiday box and the week-numbering conventions behind Monday-to-Sunday weeks.",
+  },
+];
+
+const intro =
+  "Count the days, weeks, months and working days between any two dates — with optional times, an include-the-end-date toggle and a holiday list you paste yourself.";
+---
+
+<ToolLayout tool={tool} intro={intro} faqs={faqs} sources={sources}>
+  <Fragment slot="tool">
+    <div class="panel ddc">
+      <div class="panel__body">
+        <fieldset class="fieldset">
+          <legend>Dates</legend>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="ddc-start">Start date</label>
+              <input id="ddc-start" type="date" autocomplete="off" data-start-date />
+            </div>
+            <div class="field">
+              <label for="ddc-start-time">Start time <span class="hint">(optional)</span></label>
+              <input id="ddc-start-time" type="time" autocomplete="off" data-start-time />
+            </div>
+            <div class="field">
+              <label for="ddc-end">End date</label>
+              <input id="ddc-end" type="date" autocomplete="off" data-end-date />
+            </div>
+            <div class="field">
+              <label for="ddc-end-time">End time <span class="hint">(optional)</span></label>
+              <input id="ddc-end-time" type="time" autocomplete="off" data-end-time />
+            </div>
+          </div>
+
+          <div class="ddc__controls">
+            <button type="button" class="btn btn--ghost" data-swap>Swap the two dates</button>
+            <label class="check" for="ddc-inclusive">
+              <input id="ddc-inclusive" type="checkbox" data-inclusive />
+              <span>Include the end date in the totals</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="ddc__holidays">
+          <div class="field">
+            <label for="ddc-holidays">Public holidays to exclude <span class="hint">(one YYYY-MM-DD per line, optional)</span></label>
+            <textarea
+              id="ddc-holidays"
+              rows="4"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              aria-describedby="ddc-holiday-status"
+              placeholder="2025-12-25"
+              data-holidays></textarea>
+          </div>
+          <p class="ddc__note" id="ddc-holiday-status" data-holiday-status></p>
+        </div>
+
+        <div class="ddc__out">
+          <p class="result-box ddc__sentence" role="status" aria-live="polite" data-sentence></p>
+
+          <div class="stat-grid ddc__stats" data-stats></div>
+
+          <p class="ddc__range" data-range></p>
+        </div>
+      </div>
+      <div class="panel__foot">
+        Both dates default to today, so the first figure you see is a same-day result. Everything is
+        calculated on your own device clock and nothing is uploaded.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    Type a start date and an end date and the tool reports the same gap in several different ways:
+    as a calendar breakdown of years, months and days, as a total number of days, as whole weeks plus
+    a remainder in days, as elapsed hours and minutes, and as working days with weekends and any
+    holidays you list removed. Both time fields are optional. Leave them empty and the dates are
+    treated as starting at midnight; fill one in and the arithmetic becomes precise to the minute.
+  </p>
+  <p>
+    The calendar breakdown is the part that most day-counting tools get wrong. It is not produced by
+    dividing the total number of days by 30 or by 365.25. Instead the tool walks the calendar forward
+    from the start date: it adds whole years while they still fit, then whole months while they still
+    fit, and finally counts the leftover days one by one until it reaches the end date. That is the
+    same borrowing a person does mentally — 3 March 2024 to 18 July 2025 is 1 year, 4 months and 15
+    days, because 3 March 2025 is one year, 3 July 2025 is four months after that, and 18 July is
+    fifteen days later.
+  </p>
+  <p>
+    Totals come from a different route: elapsed milliseconds between the two instants, obtained from
+    the browser's own date arithmetic and then divided into days, hours and minutes. Working days are
+    counted separately by stepping over each calendar day in the period, skipping Saturday and Sunday,
+    and skipping any date your holiday list contains. The two methods are deliberately kept apart so
+    that a weekday count never has to agree with a fractional day count.
+  </p>
+  <p>
+    "Include the end date" only affects the totals. Switch it on and a single day is added to the
+    elapsed time, which turns a 1 June to 3 June range from 2 days into 3. The years, months and days
+    breakdown describes the distance between two instants, so it is unchanged — 1 June to 3 June is
+    always "2 days" as a difference, and 3 days when the last day is counted as a whole day of the
+    period.
+  </p>
+
+  <h2>Accuracy and the limits of counting days</h2>
+  <p>
+    The commonest source of error in date arithmetic is the difference between a day and 24 hours.
+    Days are counted on the calendar: from local midnight to local midnight, whatever the clock does
+    in between. When daylight saving starts or ends, that stretch is 23 or 25 hours, so for any period
+    covering a clock change the elapsed hours are not the day count multiplied by 24. This tool keeps
+    the two separate for exactly that reason, and reads the daylight-saving rules from the time zone
+    your device is set to.
+  </p>
+  <p>
+    Weekends are a convention, not a fact. Saturday and Sunday are excluded because that is the
+    Monday-to-Friday working week in most of Europe and the Americas, but Israel, much of the Middle
+    East and parts of Asia use Friday and Saturday or Sunday through Thursday. Public holidays vary
+    even more: they differ by country, by region, by year, and some are moved or announced at short
+    notice. Nothing here is guessed from a calendar of national holidays, so for anything official you
+    should still confirm the count against the holiday list that applies to you.
+  </p>
+  <p>
+    The tool is also indifferent to what a "month" means in a contract. A period of one month may be
+    defined as the same day number in the next month, as 30 days, or as a whole calendar month
+    including both ends. If you are calculating a legal deadline, a notice period, a visa window or
+    anything else with a contractual definition, use this page to get a quick figure and then check it
+    against the wording that governs you, or against a lawyer or the issuing authority.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      Very early dates are approximate. Devices and libraries disagree about the proleptic Gregorian
+      calendar, so entering a date before 1582 or before your country adopted the Gregorian reform can
+      give a result that is off by the days that were skipped. Ten-digit-year edge cases and clocks set
+      to the wrong time zone will also shift a boundary date by one day.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      Set the start date. Both date fields begin at today, so if you are counting from today you can
+      leave the first one alone.
+    </li>
+    <li>
+      Set the end date, then add times only if they matter. A shift from 09:00 to 17:00 on the same
+      date is 8 hours, not a whole day, and the totals will reflect that.
+    </li>
+    <li>
+      Decide whether the last day counts. Tick the box for hotel nights, rental periods, notice periods
+      and deadline wording such as "within 14 days of the date of this letter". Leave it clear when you
+      want the distance between two dates, as in most anniversary and duration questions.
+    </li>
+    <li>
+      Paste your holidays, one <code>YYYY-MM-DD</code> date per line, if you need a working-day count
+      rather than a calendar-day count. The line under the box tells you how many valid dates were
+      accepted and flags anything it could not read.
+    </li>
+    <li>
+      Use <strong>Swap the two dates</strong> to flip the direction when you entered them the wrong way
+      round. Everything recalculates instantly and the sentence above the figures updates as you type.
+    </li>
+  </ol>
+  <p>
+    A worked example: to count how many working days remain between today and a deadline, set the
+    start to today, the end to the deadline, tick the box if the deadline day itself counts as a
+    working day, and paste your remaining public holidays. The "Working days" tile is the answer, and
+    the sentence above it gives you the calendar gap to quote in your reply.
+  </p>
+</ToolLayout>
+
+<style>
+  .ddc__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-top: 1rem;
+  }
+  .ddc__holidays {
+    margin-top: 1.1rem;
+  }
+  .ddc__note {
+    margin: 0.4rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 1.2em;
+    overflow-wrap: anywhere;
+  }
+  .ddc__note[data-state="bad"] {
+    color: var(--danger);
+  }
+  .ddc__note[data-state="ok"] {
+    color: var(--ok);
+  }
+  .ddc__out {
+    margin-top: 1.3rem;
+  }
+  .ddc__sentence {
+    margin: 0 0 1rem;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+  .ddc__range {
+    margin: 0.9rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .ddc .hint {
+    font-weight: 500;
+    color: var(--text-faint);
+  }
+  @media (max-width: 400px) {
+    .ddc__controls {
+      gap: 0.6rem;
+    }
+    .ddc__controls .btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    const root = document.querySelector(".ddc");
+    if (!root) return;
+
+    const startDateEl = root.querySelector("[data-start-date]");
+    const startTimeEl = root.querySelector("[data-start-time]");
+    const endDateEl = root.querySelector("[data-end-date]");
+    const endTimeEl = root.querySelector("[data-end-time]");
+    const inclusiveEl = root.querySelector("[data-inclusive]");
+    const holidaysEl = root.querySelector("[data-holidays]");
+    const holidayStatusEl = root.querySelector("[data-holiday-status]");
+    const sentenceEl = root.querySelector("[data-sentence]");
+    const statsEl = root.querySelector("[data-stats]");
+    const rangeEl = root.querySelector("[data-range]");
+    const swapBtn = root.querySelector("[data-swap]");
+
+    const MS_DAY = 86400000;
+    const MS_HOUR = 3600000;
+    const MS_MINUTE = 60000;
+
+    const MONTHS = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ];
+    const WEEKDAYS = [
+      "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    ];
+
+    /* ---------------------------------------------------------------- dates */
+
+    function pad2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    /* Build a local date; never Date.parse on a bare YYYY-MM-DD string. */
+    function makeDate(y, m, d) {
+      return new Date(y, m, d, 0, 0, 0, 0);
+    }
+
+    function parseYmd(value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+      if (!match) return null;
+      const y = Number(match[1]);
+      const m = Number(match[2]);
+      const d = Number(match[3]);
+      if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+      const date = makeDate(y, m - 1, d);
+      /* Rejects 31 April, 30 February and similar. */
+      if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+      return date;
+    }
+
+    function parseHm(value) {
+      const match = /^(\d{1,2}):(\d{2})$/.exec(String(value).trim());
+      if (!match) return null;
+      const h = Number(match[1]);
+      const mi = Number(match[2]);
+      if (h > 23 || mi > 59) return null;
+      return { h: h, m: mi };
+    }
+
+    function formatLong(date) {
+      return date.getDate() + " " + MONTHS[date.getMonth()] + " " + date.getFullYear();
+    }
+
+    function formatHm(h, m) {
+      return pad2(h) + ":" + pad2(m);
+    }
+
+    function formatNumber(value) {
+      return value.toLocaleString("en-GB", { maximumFractionDigits: 2 });
+    }
+
+    function formatDays(value) {
+      if (Math.abs(value - Math.round(value)) < 1e-9) {
+        return formatNumber(Math.round(value));
+      }
+      return value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function plural(n, word) {
+      return n + " " + word + (n === 1 ? "" : "s");
+    }
+
+    /* ----------------------------------------------------------- calendar */
+
+    /* Last day of a month, so 31 January plus one month clamps to 28/29 February. */
+    function lastDayOfMonth(y, m) {
+      return new Date(y, m + 1, 0).getDate();
+    }
+
+    function addMonthsClamped(date, months) {
+      const y = date.getFullYear();
+      const m = date.getMonth() + months;
+      const targetY = y + Math.floor(m / 12);
+      const targetM = ((m % 12) + 12) % 12;
+      const day = Math.min(date.getDate(), lastDayOfMonth(targetY, targetM));
+      return makeDate(targetY, targetM, day);
+    }
+
+    function addDays(date, days) {
+      return new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate() + days,
+        0, 0, 0, 0
+      );
+    }
+
+    function dayKey(date) {
+      return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate());
+    }
+
+    function compareDay(a, b) {
+      const av = a.getFullYear() * 10000 + (a.getMonth() + 1) * 100 + a.getDate();
+      const bv = b.getFullYear() * 10000 + (b.getMonth() + 1) * 100 + b.getDate();
+      return av === bv ? 0 : av < bv ? -1 : 1;
+    }
+
+    /*
+     * Calendar difference, done by borrowing months and days.
+     *
+     * 1. whole months only, clamped when the target month is shorter
+     * 2. decrement while the candidate overshoots
+     * 3. leftover days counted one at a time
+     */
+    function borrowCalendar(from, to) {
+      if (compareDay(from, to) > 0) return { years: 0, months: 0, days: 0 };
+
+      let months =
+        (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+      if (months < 0) months = 0;
+
+      let anchor = addMonthsClamped(from, months);
+      while (months > 0 && compareDay(anchor, to) > 0) {
+        months--;
+        anchor = addMonthsClamped(from, months);
+      }
+
+      let days = 0;
+      let cursor = anchor;
+      while (compareDay(cursor, to) < 0) {
+        cursor = addDays(cursor, 1);
+        days++;
+        if (days > 400) break; /* a month can never leave more than 31 days over */
+      }
+
+      return { years: Math.floor(months / 12), months: months % 12, days: days };
+    }
+
+    function breakdownText(years, months, days) {
+      const parts = [];
+      if (years > 0) parts.push(plural(years, "year"));
+      if (months > 0) parts.push(plural(months, "month"));
+      if (days > 0 || parts.length === 0) parts.push(plural(days, "day"));
+      if (parts.length === 1) return parts[0];
+      if (parts.length === 2) return parts[0] + " and " + parts[1];
+      return parts[0] + ", " + parts[1] + " and " + parts[2];
+    }
+
+    /* -------------------------------------------------------------- stats */
+
+    function makeStat(label) {
+      const wrap = document.createElement("div");
+      wrap.className = "stat";
+      const hasValue = document.createElement("div");
+      hasValue.className = "stat__value";
+      const value = document.createElement("span");
+      value.setAttribute("data-value", "");
+      hasValue.appendChild(value);
+      const labelEl = document.createElement("div");
+      labelEl.className = "stat__label";
+      labelEl.textContent = label;
+      wrap.append(hasValue, labelEl);
+      return { wrap: wrap, value: value };
+    }
+
+    const STATS = [
+      { key: "calendar", label: "Years, months, days" },
+      { key: "totalDays", label: "Total days" },
+      { key: "weeks", label: "Total weeks" },
+      { key: "weeksPlus", label: "Weeks + days" },
+      { key: "hours", label: "Total hours" },
+      { key: "minutes", label: "Total minutes" },
+      { key: "working", label: "Working days" },
+    ];
+
+    const statNodes = {};
+    STATS.forEach(function (entry) {
+      const node = makeStat(entry.label);
+      statNodes[entry.key] = node.value;
+      statsEl.appendChild(node.wrap);
+    });
+
+    /* ------------------------------------------------------------ holidays */
+
+    function readHolidays() {
+      const set = Object.create(null);
+      const raw = holidaysEl.value.split(/\r?\n/);
+      let valid = 0;
+      let invalid = 0;
+      const bad = [];
+      for (let i = 0; i < raw.length; i++) {
+        const line = raw[i].trim();
+        if (!line) continue;
+        const date = parseYmd(line);
+        if (!date) {
+          invalid++;
+          if (bad.length < 3) bad.push(line);
+          continue;
+        }
+        const key = dayKey(date);
+        if (!set[key]) {
+          set[key] = true;
+          valid++;
+        }
+      }
+      return { set: set, valid: valid, invalid: invalid, bad: bad };
+    }
+
+    function renderHolidayStatus(info) {
+      if (!holidaysEl.value.trim()) {
+        holidayStatusEl.textContent = "No holidays excluded; weekends are still skipped.";
+        holidayStatusEl.removeAttribute("data-state");
+        return;
+      }
+      if (info.invalid > 0) {
+        holidayStatusEl.textContent =
+          plural(info.valid, "date") + " read, and " + plural(info.invalid, "line") +
+          " could not be parsed as YYYY-MM-DD: " + info.bad.join(", ") + ".";
+        holidayStatusEl.setAttribute("data-state", "bad");
+        return;
+      }
+      holidayStatusEl.textContent =
+        plural(info.valid, "holiday") + " will be removed from the working-day count.";
+      holidayStatusEl.setAttribute("data-state", "ok");
+    }
+
+    function countWorkingDays(from, to, holidaySet) {
+      /* Weekdays from `from` to `to`, exclusive of `to` unless inclusive. */
+      let cursor = from;
+      let count = 0;
+      let guard = 0;
+      while (compareDay(cursor, to) < 0) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6 && !holidaySet[dayKey(cursor)]) count++;
+        cursor = addDays(cursor, 1);
+        guard++;
+        if (guard > 200000) break;
+      }
+      return count;
+    }
+
+    /* ------------------------------------------------------------ compute */
+
+    function setStat(key, text, unit) {
+      const node = statNodes[key];
+      if (!node) return;
+      node.textContent = "";
+      node.appendChild(document.createTextNode(text));
+      if (unit) {
+        const small = document.createElement("small");
+        small.textContent = " " + unit;
+        node.appendChild(small);
+      }
+    }
+
+    function blank(message) {
+      sentenceEl.textContent = message;
+      STATS.forEach(function (entry) {
+        setStat(entry.key, "—");
+      });
+      rangeEl.textContent = "";
+    }
+
+    function compute() {
+      const start = parseYmd(startDateEl.value);
+      const end = parseYmd(endDateEl.value);
+
+      if (!start || !end) {
+        blank("Enter a start date and an end date to see the difference.");
+        return;
+      }
+
+      const startTime = parseHm(startTimeEl.value);
+      const endTime = parseHm(endTimeEl.value);
+      const holidays = readHolidays();
+      renderHolidayStatus(holidays);
+
+      const startMs = new Date(
+        start.getFullYear(), start.getMonth(), start.getDate(),
+        startTime ? startTime.h : 0, startTime ? startTime.m : 0, 0, 0
+      ).getTime();
+      const endMs = new Date(
+        end.getFullYear(), end.getMonth(), end.getDate(),
+        endTime ? endTime.h : 0, endTime ? endTime.m : 0, 0, 0
+      ).getTime();
+
+      const backwards = endMs < startMs;
+      const loDate = backwards ? end : start;
+      const hiDate = backwards ? start : end;
+      const loMs = backwards ? endMs : startMs;
+      const hiMs = backwards ? startMs : endMs;
+
+      let deltaMs = hiMs - loMs;
+      if (inclusiveEl.checked) deltaMs += MS_DAY;
+
+      const totalDays = deltaMs / MS_DAY;
+      const calendar = borrowCalendar(loDate, hiDate);
+      const totalHours = deltaMs / MS_HOUR;
+      const totalMinutes = deltaMs / MS_MINUTE;
+
+      /* Whole-week pairing from the calendar days, plus the leftover days. */
+      const wholeWeeks = Math.floor(totalDays / 7);
+      const leftoverDays = Math.round(totalDays - wholeWeeks * 7);
+
+      const workingDays = inclusiveEl.checked
+        ? countWorkingDays(loDate, hiDate, holidays.set) + isWorkingDay(hiDate, holidays.set)
+        : countWorkingDays(loDate, hiDate, holidays.set);
+
+      setStat("calendar", breakdownText(calendar.years, calendar.months, calendar.days));
+      setStat("totalDays", formatDays(totalDays));
+      setStat("weeks", String(Math.floor(totalDays / 7)), "weeks");
+      setStat("weeksPlus", wholeWeeks + " weeks + " + plural(leftoverDays, "day"));
+      setStat("hours", formatNumber(Math.floor(totalHours)), "hours");
+      setStat("minutes", formatNumber(Math.floor(totalMinutes)), "minutes");
+      setStat("working", formatNumber(workingDays), "days");
+      /* The human sentence, built from the real dates. */
+      let sentence =
+        "From " + formatLong(start) + " to " + formatLong(end) + " is " +
+        breakdownText(calendar.years, calendar.months, calendar.days) + ".";
+
+      const hasTimes = !!(startTime || endTime);
+      if (hasTimes) {
+        const remainderMinutes = Math.round(deltaMs / MS_MINUTE);
+        const remH = Math.floor(remainderMinutes / 60);
+        const remM = remainderMinutes % 60;
+        if (remH > 0 || remM > 0) {
+          sentence += " That is " + plural(remH, "hour") + " and " + plural(remM, "minute") +
+            " of elapsed time.";
+        }
+      } else {
+        sentence += " In total that is " + plural(Math.round(totalDays), "day") +
+          (inclusiveEl.checked ? ", counting the end date as a full day" : "") + ".";
+      }
+
+      sentenceEl.textContent = sentence;
+
+      let rangeText = formatLong(loDate) + " to " + formatLong(hiDate);
+      if (hasTimes) {
+        rangeText += " · times from " + (startTime ? formatHm(startTime.h, startTime.m) : "00:00") +
+          " to " + (endTime ? formatHm(endTime.h, endTime.m) : "00:00");
+      }
+      if (backwards) {
+        rangeText += " · the dates were entered in reverse order, and the difference is unsigned";
+      }
+      if (inclusiveEl.checked) {
+        rangeText += " · the end date is counted as a full day in every total except the calendar breakdown";
+      }
+      rangeEl.textContent = rangeText;
+    }
+
+    /* True when a given day is a weekday and not in the holiday list. */
+    function isWorkingDay(date, holidaySet) {
+      const dow = date.getDay();
+      if (dow === 0 || dow === 6) return 0;
+      if (holidaySet[dayKey(date)]) return 0;
+      return 1;
+    }
+
+    /* -------------------------------------------------------------- wiring */
+
+    function todayIso() {
+      const now = new Date();
+      return now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate());
+    }
+
+    startDateEl.value = todayIso();
+    endDateEl.value = todayIso();
+
+    startDateEl.addEventListener("change", compute);
+    endDateEl.addEventListener("change", compute);
+    startTimeEl.addEventListener("change", compute);
+    endTimeEl.addEventListener("change", compute);
+    inclusiveEl.addEventListener("change", compute);
+    holidaysEl.addEventListener("input", compute);
+
+    swapBtn.addEventListener("click", function () {
+      const d = startDateEl.value;
+      const t = startTimeEl.value;
+      startDateEl.value = endDateEl.value;
+      endDateEl.value = d;
+      startTimeEl.value = endTimeEl.value;
+      endTimeEl.value = t;
+      compute();
+    });
+
+    compute();
+  })();
+</script>

@@ -1,0 +1,879 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "random-number-generator")!;
+
+const faqs = [
+  {
+    q: "Is this random number generator truly random?",
+    a: "It is uniformly random, which is the property that matters. Every value is drawn from crypto.getRandomValues(), the operating system's cryptographically secure random source, and values outside a whole multiple of the requested range are discarded and redrawn (rejection sampling). The result is that each outcome has exactly the same probability - there is no modulo bias. It is not a physical entropy source such as dice or radioactive decay, but it is the strongest randomness a web page can obtain.",
+  },
+  {
+    q: "Why can't I generate more numbers than the range allows?",
+    a: "Because you asked for no duplicates. Drawing without replacement from a range of five values cannot produce six distinct results, so the tool tells you the pool size instead of silently repeating a number. Either raise the maximum, lower the count, or allow duplicates.",
+  },
+  {
+    q: "Is this good enough for a lottery draw?",
+    a: "For a private draw among friends, yes - the selection is uniform and nobody can predict the order. For a regulated public lottery you would still want witnesses, a published algorithm and a tamper-evident audit trail, because the trust comes from the process rather than from the software. This tool cannot prove to a third party that the numbers were drawn fairly.",
+  },
+  {
+    q: "Does the tool send my list anywhere?",
+    a: "No. The names you paste are held in a variable in the page's memory while the tab is open, used for the draw, and discarded when you close or reload the page. The page makes no network requests at all, so it keeps working with your Wi-Fi turned off.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN - Crypto.getRandomValues()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues",
+    note: "Documents the browser API used here, including the caveat that values computed modulo a range are biased unless whole multiples are rejected.",
+  },
+  {
+    label: "NIST SP 800-63B - Digital Identity Guidelines",
+    href: "https://pages.nist.gov/800-63-3/sp800-63b.html",
+    note: "Its discussion of random value generation and look-up secrets is a concise statement of why security-relevant values must come from an approved random source rather than a general-purpose PRNG.",
+  },
+  {
+    label: "OWASP Authentication Cheat Sheet",
+    href: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+    note: "Explains how predictable random values undermine tokens and one-time codes, which is the same failure mode a biased number generator would introduce here.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Draw unbiased numbers, roll dice or pick winners from a list, using the browser's cryptographic random source with rejection sampling so every outcome is equally likely."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <fieldset class="fieldset">
+          <legend>Mode</legend>
+          <div class="modes" role="tablist" aria-label="Generation mode">
+            <button type="button" class="mode" role="tab" id="tabNumbers" aria-selected="true" aria-controls="panelNumbers" data-mode="numbers">Numbers</button>
+            <button type="button" class="mode" role="tab" id="tabDice" aria-selected="false" aria-controls="panelDice" data-mode="dice">Dice</button>
+            <button type="button" class="mode" role="tab" id="tabList" aria-selected="false" aria-controls="panelList" data-mode="list">Pick from a list</button>
+          </div>
+        </fieldset>
+
+        <div class="pane" id="panelNumbers" role="tabpanel" aria-labelledby="tabNumbers">
+          <div class="field-grid">
+            <div class="field">
+              <label for="minValue">Minimum</label>
+              <input type="number" id="minValue" value="1" step="any" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label for="maxValue">Maximum</label>
+              <input type="number" id="maxValue" value="100" step="any" inputmode="decimal" />
+            </div>
+            <div class="field">
+              <label for="howMany">How many numbers</label>
+              <input type="number" id="howMany" value="6" min="1" max="100" step="1" inputmode="numeric" />
+            </div>
+          </div>
+
+          <fieldset class="fieldset">
+            <legend>Output format</legend>
+            <div class="field-grid">
+              <div class="field">
+                <label for="numKind">Number kind</label>
+                <select id="numKind">
+                  <option value="int" selected>Whole numbers (integers)</option>
+                  <option value="dec">Decimals</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="places">Decimal places</label>
+                <select id="places" disabled>
+                  <option value="1">1 place</option>
+                  <option value="2" selected>2 places</option>
+                  <option value="3">3 places</option>
+                  <option value="4">4 places</option>
+                  <option value="5">5 places</option>
+                  <option value="6">6 places</option>
+                </select>
+              </div>
+            </div>
+            <div class="check-row">
+              <label class="check"><input type="checkbox" id="allowDupes" /> Allow duplicates in the results</label>
+              <label class="check"><input type="checkbox" id="sortResults" /> Sort the results ascending</label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="pane" id="panelDice" role="tabpanel" aria-labelledby="tabDice" hidden>
+          <div class="field-grid">
+            <div class="field">
+              <label for="die">Die</label>
+              <select id="die">
+                <option value="4">D4 (four-sided)</option>
+                <option value="6" selected>D6 (six-sided)</option>
+                <option value="8">D8 (eight-sided)</option>
+                <option value="10">D10 (ten-sided)</option>
+                <option value="12">D12 (twelve-sided)</option>
+                <option value="20">D20 (twenty-sided)</option>
+                <option value="100">D100 (percentile)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="diceCount">How many dice</label>
+              <input type="number" id="diceCount" value="2" min="1" max="100" step="1" inputmode="numeric" />
+            </div>
+          </div>
+          <p class="note">Each die is rolled independently, so the same face can appear on several dice.</p>
+        </div>
+
+        <div class="pane" id="panelList" role="tabpanel" aria-labelledby="tabList" hidden>
+          <div class="field">
+            <label for="listInput">List - one entry per line</label>
+            <textarea id="listInput" rows="7" spellcheck="false" autocapitalize="sentences" placeholder="Amina&#10;Daniel&#10;Priya&#10;Tom&#10;Yusuf"></textarea>
+            <p class="note">Blank lines are ignored. Entries may repeat if the same name is genuinely listed twice.</p>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="listCount">How many winners</label>
+              <input type="number" id="listCount" value="1" min="1" max="100" step="1" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="listState">Entries in the list</label>
+              <output class="readout" id="listState" for="listInput">0</output>
+            </div>
+          </div>
+          <div class="check-row">
+            <label class="check"><input type="checkbox" id="excludeWinners" /> Exclude previous winners from later draws</label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="drawBtn">Generate</button>
+          <button type="button" class="btn btn--soft" id="copyBtn">Copy results</button>
+          <button type="button" class="btn btn--ghost" id="resetBtn">Reset pool</button>
+        </div>
+
+        <div class="alerts">
+          <p class="alert" id="errorMsg" role="alert" hidden></p>
+          <p class="alert alert--info" id="logMsg" hidden></p>
+        </div>
+
+        <div class="field">
+          <span class="label" id="resultLabel">Results</span>
+          <div class="result-box" id="resultBox" tabindex="0" role="region" aria-label="Generated results" aria-labelledby="resultLabel">
+            <p class="empty-state">Choose a mode and press Generate.</p>
+          </div>
+        </div>
+        <p class="visual" id="resultVisual" aria-hidden="true"></p>
+        <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+      </div>
+      <div class="panel__foot">
+        Generated locally with <code>crypto.getRandomValues()</code> and rejection sampling. Nothing is sent to a server,
+        nothing is stored, and the page keeps working offline.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    Every value on this page comes from <code>crypto.getRandomValues()</code>, the API that exposes the operating
+    system's cryptographically secure random number generator to JavaScript. That is the same class of source browsers
+    use for TLS session keys and password resets. The tool deliberately never calls <code>Math.random()</code>, which is
+    a fast pseudo-random generator: its output looks random, but its internal state can be reconstructed from a modest
+    number of observed values, so it is unsuitable for anything where someone might want to predict the result.
+  </p>
+  <p>
+    Secure randomness on its own is not enough, because of a subtle trap called <strong>modulo bias</strong>. The API
+    returns unsigned 32-bit integers, that is, values from 0 to 4,294,967,295. The obvious shortcut is to compute
+    <code>value % range</code>. When <code>range</code> does not divide that total evenly, the lowest
+    <code>4,294,967,296 % range</code> outcomes are produced one extra time each, so they become slightly more likely
+    than the rest. For a six-sided die the bias is about one part in 700 million - invisible in casual use, but real,
+    and exactly the kind of quirk that turns into a scandal when money or selection is involved.
+  </p>
+  <p>
+    This tool uses <strong>rejection sampling</strong> instead. It computes the largest multiple of the requested range
+    that fits inside the 32-bit space, keeps random values below that limit, and throws the rest away to be redrawn.
+    The discarded values are never folded back into the result with a modulo operation, so the remaining values split
+    into exactly equal buckets and every outcome has probability <code>1 / range</code>. On average fewer than two
+    extra draws are needed per value, so the cost is negligible.
+  </p>
+  <p>
+    The precision of a range is capped at 2<sup>32</sup> distinct outcomes - roughly four billion - and at 2<sup>53</sup>
+    for decimal ranges, which is the limit of exact integer arithmetic in JavaScript numbers. That is far more
+    resolution than any real draw needs, but it is the reason the tool warns instead of quietly rounding when you ask
+    for a very fine decimal range across a very wide interval.
+  </p>
+
+  <h2>Accuracy, assumptions and limits</h2>
+  <p>
+    Uniformity is the whole of what this tool claims. It does <em>not</em> claim to be unpredictable to someone who
+    controls your device: the security of the underlying generator belongs to your operating system and browser, and a
+    compromised machine or a malicious extension can observe anything the page can observe. For a high-stakes public
+    draw, software alone never proves fairness - you need witnesses and an auditable process.
+  </p>
+  <ul>
+    <li>
+      <strong>Uniform does not mean evenly spread.</strong> If you generate ten numbers between 1 and 10, seeing 7 twice
+      and 3 not at all is not a bug. It is what genuine randomness usually looks like, and it is the pattern most
+      people mistakenly expect to be "wrong".
+    </li>
+    <li>
+      <strong>No-clone mode needs room.</strong> Drawing without duplicates fails when the range holds fewer distinct
+      values than you asked for, so the tool reports the pool size rather than repeating a value.
+    </li>
+    <li>
+      <strong>Decimal ranges are discrete, not continuous.</strong> "Between 0 and 1 with two decimal places" means 101
+      equally likely values, not an infinite continuum. If the requested precision would exceed the internal sampling
+      limit, the tool says so instead of producing a subtly distorted distribution.
+    </li>
+    <li>
+      <strong>Excluding past winners is independent.</strong> Each press of Generate is a fresh draw from whatever
+      remains. Excluding winners changes the pool, not the odds of any single remaining entry, and there is no memory
+      beyond the current page session.
+    </li>
+  </ul>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      <strong>Numbers.</strong> Set the minimum and maximum, choose how many results you want (1 to 100), then pick
+      whole numbers or decimals. Decimals reveal a decimal-places control; whole numbers ignore it. Tick
+      <em>allow duplicates</em> for independent draws such as simulating a set of measurements, and leave it off when
+      each value must be unique, as in a raffle or a random sample. Tick <em>sort ascending</em> if you want the output
+      ordered for reading or pasting into a spreadsheet.
+    </li>
+    <li>
+      <strong>Dice.</strong> Choose a die from D4 to D100 and how many to roll. The individual faces are listed in the
+      order rolled along with the total, which is what you want for a damage roll or a quick tabletop check. Leave the
+      sorting option off if the order of the dice matters.
+    </li>
+    <li>
+      <strong>Pick from a list.</strong> Paste one entry per line, set how many winners you need, and press Generate.
+      With <em>exclude previous winners</em> enabled, the tool remembers what has already been drawn, so you can press
+      Generate repeatedly to work through a list without repeats; the running log and the remaining count tell you how
+      much of the list is left. <em>Reset pool</em> returns every entry to the hat.
+    </li>
+    <li>
+      <strong>Keep a record if it matters.</strong> Use <em>Copy results</em> to place the current output on your
+      clipboard as plain text. Because nothing is stored anywhere, closing the tab discards both the results and the
+      pool.
+    </li>
+  </ol>
+  <div class="callout">
+    <p>
+      A quick test you can run yourself: generate several thousand numbers between 1 and 6 with duplicates allowed and
+      count the faces. They will land within a fraction of a percent of each other - a distribution you cannot get from
+      <code>Math.random()</code> with a naive modulo step.
+    </p>
+  </div>
+
+  <style is:global>
+    .modes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.35rem;
+    }
+    .mode {
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 650;
+      padding: 0.45rem 0.9rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      background: var(--bg-sunken);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .mode:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+    .mode[aria-selected="true"] {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+    .mode:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .pane {
+      margin-top: 1.25rem;
+    }
+    .pane .field-grid {
+      margin-bottom: 1rem;
+    }
+    .check-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.2rem 1.5rem;
+    }
+    .note {
+      margin: 0.5rem 0 0;
+      font-size: 0.84rem;
+      color: var(--text-faint);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+    .alerts {
+      margin-top: 0.75rem;
+    }
+    .alerts:empty {
+      display: none;
+    }
+    .alert {
+      margin: 0 0 0.5rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      background: var(--danger-soft);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .alert--info {
+      background: var(--bg-soft);
+      color: var(--text-muted);
+      border-color: var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    .result-box {
+      min-height: 4.5rem;
+    }
+    .result-box:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .result-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .result-list li {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 0.25rem 0.7rem;
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+    .result-total {
+      margin: 0.8rem 0 0;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .visual {
+      margin: 0.75rem 0 0;
+      font-size: 1.35rem;
+      letter-spacing: 0.12em;
+      line-height: 1.4;
+      word-break: break-word;
+      color: var(--text);
+    }
+    .visual:empty {
+      display: none;
+    }
+    .empty-state {
+      margin: 0;
+      font-family: var(--font-sans);
+      color: var(--text-faint);
+    }
+
+    @media (max-width: 420px) {
+      .mode {
+        flex: 1 1 100%;
+        text-align: center;
+      }
+      .actions .btn {
+        flex: 1 1 100%;
+      }
+    }
+  </style>
+
+  <script>
+    type Mode = "numbers" | "dice" | "list";
+
+    const MAX_UINT32 = 4294967296;
+    const MAX_U32_RANGE = 10000000;
+
+    const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+    function randomUint32(): number {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0];
+    }
+
+    /** Uniform integer in [0, range) using rejection sampling - never a raw modulo. */
+    function randBelow(range: number): number {
+      if (range <= 1) return 0;
+      const max = Math.min(Math.floor(range), MAX_UINT32);
+      const limit = Math.floor(MAX_UINT32 / max) * max;
+      for (;;) {
+        const x = randomUint32();
+        if (x < limit) return x % max;
+      }
+    }
+
+    /** Uniform decimal in [0, range) without exceeding the safe-integer range. */
+    function randBelowBig(range: number): number {
+      if (range <= MAX_U32_RANGE) return randBelow(range);
+      const hiMax = Math.floor(range / MAX_UINT32);
+      const limit = Math.floor(MAX_UINT32 / hiMax) * hiMax;
+      for (;;) {
+        const hi = randomUint32();
+        if (hi < limit) return (hi % hiMax) * MAX_UINT32 + randomUint32();
+      }
+    }
+
+    function show(id: string, message: string): void {
+      const node = byId<HTMLElement>(id);
+      node.textContent = message;
+      node.hidden = false;
+    }
+
+    function hide(id: string): void {
+      const node = byId<HTMLElement>(id);
+      node.hidden = true;
+      node.textContent = "";
+    }
+
+    function flash(btn: HTMLButtonElement, message: string): void {
+      const original = btn.dataset.label || btn.textContent || "";
+      btn.dataset.label = original;
+      btn.textContent = message;
+      const previous = Number(btn.dataset.timer || 0);
+      if (previous) window.clearTimeout(previous);
+      const timer = window.setTimeout(() => {
+        btn.textContent = original;
+        delete btn.dataset.timer;
+      }, 1600);
+      btn.dataset.timer = String(timer);
+    }
+
+    function legacyCopy(value: string): boolean {
+      const area = document.createElement("textarea");
+      area.value = value;
+      area.setAttribute("readonly", "readonly");
+      area.style.position = "fixed";
+      area.style.top = "-1000px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      area.setSelectionRange(0, value.length);
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      document.body.removeChild(area);
+      return ok;
+    }
+
+    async function copyText(value: string, btn: HTMLButtonElement): Promise<void> {
+      if (!value) return;
+      let done = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          done = true;
+        } else {
+          done = legacyCopy(value);
+        }
+      } catch {
+        done = legacyCopy(value);
+      }
+      flash(btn, done ? "Copied!" : "Copy failed");
+    }
+
+    function formatNumber(value: number, kind: string, places: number): string {
+      if (kind === "int") return String(Math.round(value));
+      return value.toFixed(places);
+    }
+
+    function renderChips(values: string[], extra?: string): void {
+      const box = byId<HTMLElement>("resultBox");
+      box.textContent = "";
+      const list = document.createElement("ul");
+      list.className = "result-list";
+      for (const value of values) {
+        const item = document.createElement("li");
+        item.textContent = value;
+        list.appendChild(item);
+      }
+      box.appendChild(list);
+      if (extra) {
+        const total = document.createElement("p");
+        total.className = "result-total";
+        total.textContent = extra;
+        box.appendChild(total);
+      }
+    }
+
+    function renderMessage(message: string): void {
+      const box = byId<HTMLElement>("resultBox");
+      box.textContent = "";
+      const line = document.createElement("p");
+      line.className = "empty-state";
+      line.textContent = message;
+      box.appendChild(line);
+    }
+
+    interface Outcome {
+      values: string[];
+      plain: string[];
+      visual: string;
+      announced: string;
+      info: string;
+    }
+
+    let currentValues: string[] = [];
+
+    /** Entries already drawn, so later draws can leave them out. */
+    const drawn: string[] = [];
+
+    function readEntries(): string[] {
+      return byId<HTMLTextAreaElement>("listInput")
+        .value.split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+    }
+
+    function mode(): Mode {
+      const active = document.querySelector<HTMLButtonElement>('.mode[aria-selected="true"]');
+      return (active?.dataset.mode as Mode) || "numbers";
+    }
+
+    function runNumbers(): Outcome {
+      const kind = byId<HTMLSelectElement>("numKind").value;
+      const places = Number(byId<HTMLSelectElement>("places").value);
+      const rawMin = Number(byId<HTMLInputElement>("minValue").value);
+      const rawMax = Number(byId<HTMLInputElement>("maxValue").value);
+      const wants = Math.max(1, Math.min(100, Math.floor(Number(byId<HTMLInputElement>("howMany").value) || 1)));
+      const allowDupes = byId<HTMLInputElement>("allowDupes").checked;
+      const sorted = byId<HTMLInputElement>("sortResults").checked;
+
+      if (!isFinite(rawMin) || !isFinite(rawMax)) {
+        return { values: [], plain: [], visual: "", announced: "", info: "Enter a valid minimum and maximum." };
+      }
+      const min = Math.min(rawMin, rawMax);
+      const max = Math.max(rawMin, rawMax);
+
+      let factor = 1;
+      if (kind === "dec") factor = Math.pow(10, places);
+      const minStep = Math.round(min * factor);
+      const maxStep = Math.round(max * factor);
+      const range = maxStep - minStep + 1;
+      if (range < 1) {
+        return {
+          values: [],
+          plain: [],
+          visual: "",
+          announced: "",
+          info: "That range is too narrow for the chosen precision. Widen the minimum and maximum, or use fewer decimal places.",
+        };
+      }
+      if (range > Math.pow(2, 53)) {
+        return {
+          values: [],
+          plain: [],
+          visual: "",
+          announced: "",
+          info: "That range is wider than JavaScript can represent exactly. Narrow the interval or reduce the decimal places.",
+        };
+      }
+      if (!allowDupes && wants > range) {
+        return {
+          values: [],
+          plain: [],
+          visual: "",
+          announced: "",
+          info:
+            "Without duplicates you can draw at most " +
+            range.toLocaleString("en-US") +
+            " distinct value" +
+            (range === 1 ? "" : "s") +
+            " from this range. Lower the count or allow duplicates.",
+        };
+      }
+      if (range > MAX_U32_RANGE && kind === "int") {
+        return {
+          values: [],
+          plain: [],
+          visual: "",
+          announced: "",
+          info: "Integer ranges may span at most 10,000,000 values. Reduce the interval.",
+        };
+      }
+
+      const seen = new Set<number>();
+      const steps: number[] = [];
+      while (steps.length < wants) {
+        const step = kind === "int" ? minStep + randBelow(range) : minStep + randBelowBig(range);
+        if (allowDupes) {
+          steps.push(step);
+        } else if (!seen.has(step)) {
+          seen.add(step);
+          steps.push(step);
+        }
+      }
+      if (sorted) steps.sort((a, b) => a - b);
+
+      const values = steps.map((step) => formatNumber(step / factor, kind, places));
+      const avg = steps.reduce((sum, step) => sum + step / factor, 0) / steps.length;
+      const info =
+        values.length +
+        (kind === "int" ? " random integers" : " random decimals to " + places + " decimal place" + (places === 1 ? "" : "s")) +
+        " between " +
+        min +
+        " and " +
+        max +
+        (allowDupes ? ", duplicates allowed" : ", all distinct") +
+        (sorted ? ", sorted ascending" : "") +
+        ". Mean " +
+        avg.toFixed(kind === "int" ? 2 : places) +
+        ".";
+      return {
+        values,
+        plain: values,
+        visual: "",
+        announced: "Generated " + values.length + " numbers. Mean " + avg.toFixed(kind === "int" ? 2 : places) + ".",
+        info,
+      };
+    }
+
+    function runDice(): Outcome {
+      const sides = Number(byId<HTMLSelectElement>("die").value);
+      const count = Math.max(1, Math.min(100, Math.floor(Number(byId<HTMLInputElement>("diceCount").value) || 1)));
+      const rolls: number[] = [];
+      for (let i = 0; i < count; i++) rolls.push(1 + randBelow(sides));
+      const total = rolls.reduce((sum, value) => sum + value, 0);
+      const values = rolls.map((value) => String(value));
+      const average = total / rolls.length;
+      return {
+        values,
+        plain: values,
+        visual: rolls.map((value) => "D" + sides + ":" + value).join("   "),
+        announced: "Rolled " + rolls.length + " dice for a total of " + total + ".",
+        info:
+          count +
+          " x D" +
+          sides +
+          " gives a total of " +
+          total +
+          ", average " +
+          average.toFixed(2) +
+          " (theoretical " +
+          ((sides + 1) / 2).toFixed(2) +
+          "). Each die is rolled independently.",
+      };
+    }
+
+    /** Entries still in the pool once everything already drawn has been taken out. */
+    function availableEntries(entries: string[], exclude: boolean): { pool: string[]; remaining: number } {
+      if (!exclude) return { pool: entries.slice(), remaining: entries.length };
+      const pool: string[] = [];
+      for (const entry of entries) {
+        const used = drawn.filter((value) => value === entry).length;
+        const total = entries.filter((value) => value === entry).length;
+        if (used < total) pool.push(entry);
+      }
+      return { pool, remaining: pool.length };
+    }
+
+    function runList(): Outcome {
+      const entries = readEntries();
+      const exclude = byId<HTMLInputElement>("excludeWinners").checked;
+      if (entries.length === 0) {
+        return { values: [], plain: [], visual: "", announced: "", info: "Paste at least one entry, one per line." };
+      }
+
+      const wants = Math.max(1, Math.min(100, Math.floor(Number(byId<HTMLInputElement>("listCount").value) || 1)));
+      const available = availableEntries(entries, exclude);
+      const pool = available.pool;
+      if (pool.length === 0) {
+        return {
+          values: [],
+          plain: [],
+          visual: "",
+          announced: "",
+          info: "Every entry has already been drawn. Press Reset pool to put them all back.",
+        };
+      }
+      const drawCount = Math.min(wants, pool.length);
+
+      const working = pool.slice();
+      const winners: string[] = [];
+      for (let i = 0; i < drawCount; i++) {
+        const index = randBelow(working.length);
+        winners.push(working[index]);
+        working.splice(index, 1);
+      }
+
+      if (exclude) drawn.push(...winners);
+
+      let info =
+        winners.length +
+        " of " +
+        entries.length +
+        " entr" +
+        (entries.length === 1 ? "y" : "ies") +
+        " drawn at random" +
+        (exclude ? "." : ", with every entry back in the pool for the next draw.");
+      if (exclude) info += " " + availableEntries(entries, true).remaining + " still available for later draws.";
+      if (wants > pool.length) {
+        info += exclude
+          ? " Only " + pool.length + " entr" + (pool.length === 1 ? "y was" : "ies were") + " left to draw."
+          : " You asked for more winners than the list holds, so every entry was drawn.";
+      }
+
+      return {
+        values: winners,
+        plain: winners,
+        visual: "",
+        announced: "Drew " + winners.length + " winner" + (winners.length === 1 ? "" : "s") + ".",
+        info,
+      };
+    }
+
+    function refreshListState(): void {
+      const entries = readEntries();
+      const exclude = byId<HTMLInputElement>("excludeWinners").checked;
+      const out = byId<HTMLOutputElement>("listState");
+      if (!exclude) {
+        out.textContent = entries.length + " ready (no exclusion)";
+        return;
+      }
+      out.textContent = availableEntries(entries, true).remaining + " of " + entries.length + " still available";
+    }
+
+    function generate(): void {
+      hide("errorMsg");
+      hide("logMsg");
+      const which = mode();
+      const outcome = which === "numbers" ? runNumbers() : which === "dice" ? runDice() : runList();
+
+      if (outcome.values.length === 0) {
+        currentValues = [];
+        renderMessage(outcome.info || "Nothing to show.");
+        byId<HTMLElement>("resultVisual").textContent = "";
+        show("errorMsg", outcome.info || "Nothing to show.");
+        byId<HTMLElement>("liveRegion").textContent = outcome.info || "Nothing to show.";
+        refreshListState();
+        return;
+      }
+
+      currentValues = outcome.plain;
+      const totalText =
+        which === "dice" ? "Total " + outcome.values.reduce((sum, value) => sum + Number(value), 0) : undefined;
+      renderChips(outcome.values, totalText);
+      byId<HTMLElement>("resultVisual").textContent = outcome.visual;
+      show("logMsg", outcome.info);
+      byId<HTMLElement>("liveRegion").textContent = outcome.announced + " " + outcome.info;
+      refreshListState();
+    }
+
+    function selectMode(next: Mode): void {
+      document.querySelectorAll<HTMLButtonElement>(".mode").forEach((btn) => {
+        const active = btn.dataset.mode === next;
+        btn.setAttribute("aria-selected", String(active));
+        btn.tabIndex = active ? 0 : -1;
+      });
+      byId<HTMLElement>("panelNumbers").hidden = next !== "numbers";
+      byId<HTMLElement>("panelDice").hidden = next !== "dice";
+      byId<HTMLElement>("panelList").hidden = next !== "list";
+      byId<HTMLElement>("resultVisual").textContent = "";
+      renderMessage("Choose your options and press Generate.");
+      byId<HTMLElement>("liveRegion").textContent = "";
+      hide("errorMsg");
+      hide("logMsg");
+      refreshListState();
+    }
+
+    function syncControls(): void {
+      const isDec = byId<HTMLSelectElement>("numKind").value === "dec";
+      byId<HTMLSelectElement>("places").disabled = !isDec;
+      for (const id of ["howMany", "diceCount", "listCount"]) {
+        const input = byId<HTMLInputElement>(id);
+        const value = Math.floor(Number(input.value));
+        if (!isFinite(value) || value < 1) input.value = "1";
+        else if (value > 100) input.value = "100";
+      }
+    }
+
+    function init(): void {
+      const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".mode"));
+      tabs.forEach((btn, index) => {
+        btn.tabIndex = btn.getAttribute("aria-selected") === "true" ? 0 : -1;
+        btn.addEventListener("click", () => selectMode((btn.dataset.mode as Mode) || "numbers"));
+        btn.addEventListener("keydown", (event) => {
+          const key = event.key;
+          if (key !== "ArrowRight" && key !== "ArrowLeft") return;
+          event.preventDefault();
+          const step = key === "ArrowRight" ? 1 : -1;
+          const next = tabs[(index + step + tabs.length) % tabs.length];
+          selectMode((next.dataset.mode as Mode) || "numbers");
+          next.focus();
+        });
+      });
+
+      byId<HTMLButtonElement>("drawBtn").addEventListener("click", generate);
+
+      byId<HTMLButtonElement>("copyBtn").addEventListener("click", (event) => {
+        const btn = event.currentTarget as HTMLButtonElement;
+        if (currentValues.length === 0) {
+          flash(btn, "Nothing to copy");
+          return;
+        }
+        void copyText(currentValues.join("\n"), btn);
+      });
+
+      byId<HTMLButtonElement>("resetBtn").addEventListener("click", () => {
+        drawn.length = 0;
+        currentValues = [];
+        hide("errorMsg");
+        show("logMsg", "Pool reset: every entry is available again.");
+        renderMessage("Pool reset. Press Generate for a fresh draw.");
+        byId<HTMLElement>("liveRegion").textContent = "Pool reset.";
+        refreshListState();
+      });
+
+      byId<HTMLSelectElement>("numKind").addEventListener("change", syncControls);
+      byId<HTMLInputElement>("listInput").addEventListener("input", refreshListState);
+      byId<HTMLInputElement>("excludeWinners").addEventListener("change", () => {
+        drawn.length = 0;
+        refreshListState();
+      });
+
+      byId<HTMLButtonElement>("drawBtn").dataset.label = "Generate";
+      byId<HTMLButtonElement>("copyBtn").dataset.label = "Copy results";
+      byId<HTMLButtonElement>("resetBtn").dataset.label = "Reset pool";
+
+      syncControls();
+      refreshListState();
+      renderMessage("Choose a mode and press Generate.");
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  </script>
+</ToolLayout>

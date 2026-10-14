@@ -1,0 +1,1756 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "qr-code-generator")!;
+const faqs = [
+  {
+    q: "Which QR versions and error-correction levels does this page support?",
+    a: "Versions 1 to 40, the complete range defined by ISO/IEC 18004, at all four error-correction levels L, M, Q and H. The page always chooses the smallest version whose data capacity fits your payload at the level you picked, so a short link usually lands on version 2 or 3 while a long Wi-Fi string may need version 10 or more. Anything that will not fit in version 40 at the selected level is reported as too long instead of being encoded into an invalid symbol.",
+  },
+  {
+    q: "Does the payload leave my device, and can the page work offline?",
+    a: "No and yes. The encoder, the Reed–Solomon arithmetic, the mask scoring and the rendering all run as plain JavaScript in this tab, with no network requests, no external scripts, no fonts and no QR library. You can load the page once, switch off Wi-Fi and keep generating codes. The trade-off is that nothing is stored: close or reload the tab and your payload is gone, so keep the downloaded file or the original text if you need it later.",
+  },
+  {
+    q: "Why does a code sometimes fail to scan even though it looks fine on screen?",
+    a: "Most reader failures are optical rather than mathematical. Inverted colours, a foreground and background that are too close in brightness, a quiet zone that is too narrow, a very small print size, a glossy screen, or a camera that is too close and cannot focus all cause a miss. A code with a large module count is also harder to read from a distance than a short one. High error-correction levels tolerate more damage and smudging, but they cannot compensate for a symbol that is simply too small or too low in contrast.",
+  },
+  {
+    q: "What does the self-check indicator actually verify?",
+    a: "After building a matrix, the script reads the 15 format-information modules back out of the finished grid, removes the fixed mask and decodes them, then compares the recovered error-correction level and mask number with the ones it intended to write. If those agree it reports that the self-check passed; if they do not, it says so loudly rather than shipping a silently broken image. That check is a sanity test on the reserved format area, not a full independent scanner, so a standard reader is still the final word.",
+  },
+];
+
+const sources = [
+  {
+    label: "ISO/IEC 18004 — QR Code bar code symbology specification",
+    href: "https://www.iso.org/standard/62021.html",
+    note: "The normative standard this encoder follows: byte-mode encoding, the version 1–40 capacity and block tables, Reed–Solomon error correction, mask evaluation and the format and version information layout.",
+  },
+  {
+    label: "MDN Web Docs — Canvas API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API",
+    note: "Documents the canvas element, 2D context drawing calls and toBlob() used to rasterise the module matrix into the downloadable PNG.",
+  },
+  {
+    label: "MDN Web Docs — SVG: Scalable Vector Graphics",
+    href: "https://developer.mozilla.org/en-US/docs/Web/SVG",
+    note: "Reference for the SVG elements, namespace and viewBox scaling used to build the vector version of the symbol that stays crisp when printed.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Type a link, some text, a Wi-Fi network or an email, and this page encodes a standards-compliant QR symbol in your browser, shows you the version it chose, and exports it as a PNG or a crisp SVG."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body qg">
+        <p class="qg__note" id="qg-prerender">
+          Everything below is generated locally in this tab. The form works without JavaScript, but the
+          QR image itself is produced by the script on this page, so enable JavaScript to see and download
+          a symbol.
+        </p>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="qg-mode">What does the code contain?</label>
+            <select id="qg-mode">
+              <option value="text" selected>Plain text or a link</option>
+              <option value="wifi">Wi-Fi network</option>
+              <option value="email">Email (mailto)</option>
+              <option value="phone">Phone number (tel)</option>
+              <option value="sms">SMS message</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="qg-ec">Error-correction level</label>
+            <select id="qg-ec">
+              <option value="L">L — about 7% recovery</option>
+              <option value="M" selected>M — about 15% recovery</option>
+              <option value="Q">Q — about 25% recovery</option>
+              <option value="H">H — about 30% recovery</option>
+            </select>
+            <p class="qg__help">
+              Higher levels add error-correction codewords, which makes the symbol larger for the same
+              payload but far more tolerant of scratches, glare and smudges.
+            </p>
+          </div>
+        </div>
+
+        <div class="fieldset">
+          <fieldset>
+            <legend>Payload</legend>
+
+            <div class="qg__group" data-qg-group="text">
+              <div class="field">
+                <label for="qg-text">Text or URL</label>
+                <textarea
+                  id="qg-text"
+                  rows="4"
+                  spellcheck="false"
+                  autocomplete="off"
+                  placeholder="https://example.com/page"
+                  aria-describedby="qg-text-help"></textarea>
+                <p class="qg__help" id="qg-text-help">
+                  Encoded as UTF-8 bytes. Accented characters and emoji are fine, but each one costs more
+                  than a single byte of capacity.
+                </p>
+              </div>
+            </div>
+
+            <div class="qg__group" data-qg-group="wifi" hidden>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="qg-wifi-ssid">Network name (SSID)</label>
+                  <input
+                    type="text"
+                    id="qg-wifi-ssid"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="MyNetwork"
+                    aria-describedby="qg-wifi-help" />
+                </div>
+                <div class="field">
+                  <label for="qg-wifi-pass">Password</label>
+                  <input
+                    type="text"
+                    id="qg-wifi-pass"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="Leave empty for an open network"
+                    aria-describedby="qg-wifi-help" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="qg-wifi-auth">Security</label>
+                <select id="qg-wifi-auth">
+                  <option value="WPA" selected>WPA / WPA2 / WPA3 (password)</option>
+                  <option value="WEP">WEP (legacy)</option>
+                  <option value="nopass">Open network (no password)</option>
+                </select>
+              </div>
+              <label class="check">
+                <input type="checkbox" id="qg-wifi-hidden" />
+                The network does not broadcast its SSID
+              </label>
+              <p class="qg__help" id="qg-wifi-help">
+                The result follows the common <code>WIFI:T:…;S:…;P:…;;</code> convention, which stores the
+                password in clear text inside the symbol. Anyone who scans or photographs it can read that
+                password, so do not publish a code for a network you care about.
+              </p>
+            </div>
+
+            <div class="qg__group" data-qg-group="email" hidden>
+              <div class="field">
+                <label for="qg-email-to">To</label>
+                <input type="email" id="qg-email-to" autocomplete="off" placeholder="hello@example.com" />
+              </div>
+              <div class="field">
+                <label for="qg-email-subject">Subject</label>
+                <input type="text" id="qg-email-subject" autocomplete="off" placeholder="Optional subject" />
+              </div>
+              <div class="field">
+                <label for="qg-email-body">Body</label>
+                <textarea
+                  id="qg-email-body"
+                  rows="3"
+                  autocomplete="off"
+                  placeholder="Optional message body"></textarea>
+              </div>
+            </div>
+
+            <div class="qg__group" data-qg-group="phone" hidden>
+              <div class="field">
+                <label for="qg-phone">Phone number</label>
+                <input
+                  type="tel"
+                  id="qg-phone"
+                  autocomplete="off"
+                  placeholder="+1 555 0100"
+                  aria-describedby="qg-phone-help" />
+                <p class="qg__help" id="qg-phone-help">
+                  Keep the leading <code>+</code> and country code for an international number, or use the
+                  local format if the code will only ever be scanned inside one country.
+                </p>
+              </div>
+            </div>
+
+            <div class="qg__group" data-qg-group="sms" hidden>
+              <div class="field">
+                <label for="qg-sms-to">Phone number</label>
+                <input type="tel" id="qg-sms-to" autocomplete="off" placeholder="+1 555 0100" />
+              </div>
+              <div class="field">
+                <label for="qg-sms-body">Message</label>
+                <textarea
+                  id="qg-sms-body"
+                  rows="3"
+                  autocomplete="off"
+                  placeholder="Optional pre-filled message"></textarea>
+              </div>
+              <p class="qg__help">
+                The number and message are packed into one <code>SMSTO:</code> string, so keep the message
+                short if you want to stay on a low version.
+              </p>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="fieldset">
+          <fieldset>
+            <legend>Appearance</legend>
+            <div class="field-grid">
+              <div class="field">
+                <label for="qg-size">Output size (pixels)</label>
+                <input type="number" id="qg-size" min="128" max="1024" step="16" value="320" />
+              </div>
+              <div class="field">
+                <label for="qg-margin">Quiet-zone margin (modules)</label>
+                <input type="number" id="qg-margin" min="0" max="8" step="1" value="4" />
+              </div>
+              <div class="field">
+                <label for="qg-fg">Foreground colour</label>
+                <input type="color" id="qg-fg" value="#101314" />
+              </div>
+              <div class="field">
+                <label for="qg-bg">Background colour</label>
+                <input type="color" id="qg-bg" value="#ffffff" />
+              </div>
+            </div>
+            <p class="qg__help">
+              The specification asks for a light background with dark modules and a margin of at least four
+              modules. Inverting the two, or choosing colours of similar brightness, makes the symbol
+              unreadable for many scanners even though it still looks like a QR code.
+            </p>
+          </fieldset>
+        </div>
+
+        <div class="qg__actions">
+          <button type="button" class="btn btn--primary" id="qg-generate">Generate QR code</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="qg-download-png" disabled>
+            Download PNG
+          </button>
+          <button type="button" class="btn btn--ghost btn--sm" id="qg-download-svg" disabled>
+            Download SVG
+          </button>
+        </div>
+
+        <p class="qg__status" id="qg-status" role="status" aria-live="polite">
+          No code generated yet.
+        </p>
+        <p class="qg__check readout" id="qg-check" role="status" aria-live="polite">
+          Self-check: not run yet.
+        </p>
+      </div>
+
+      <div class="panel__foot">
+        Encoded on this device with no library and no network request — the symbol is built from the raw
+        ISO/IEC 18004 rules, then drawn to both a canvas and an SVG.
+      </div>
+    </div>
+
+    <div class="card qg__out">
+      <h2>Output</h2>
+      <div class="qg__figure">
+        <div class="qg__canvas-wrap" id="qg-canvas-wrap">
+          <canvas
+            id="qg-canvas"
+            width="320"
+            height="320"
+            role="img"
+            aria-label="QR code preview. No code has been generated yet."></canvas>
+          <p class="qg__fallback" id="qg-fallback">
+            The QR image appears here once JavaScript has drawn it.
+          </p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__label">Version</span>
+          <span class="stat__value" id="qg-stat-version">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat__label">Size</span>
+          <span class="stat__value" id="qg-stat-size">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat__label">Mask</span>
+          <span class="stat__value" id="qg-stat-mask">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat__label">Payload</span>
+          <span class="stat__value" id="qg-stat-bytes">—</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="qg-preview-payload">Text carried by this code</label>
+        <textarea id="qg-preview-payload" rows="2" readonly spellcheck="false"></textarea>
+        <p class="qg__help">
+          This is exactly what a reader will receive. For a Wi-Fi payload it includes the password in
+          clear text, so treat the preview like the code itself.
+        </p>
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    A QR code is not an image format, it is a specification for arranging binary data on a square grid.
+    This page implements that specification directly: the same steps a commercial encoder performs, in
+    plain JavaScript, with no library in the middle. Encoding starts by serialising your payload to
+    UTF-8 bytes, writing the four-bit mode indicator for byte mode and a character-count indicator whose
+    width depends on the version. Then it picks the version. Versions 1 to 40 define matrices of
+    21×21 up to 177×177 modules, and each version and error-correction level has a fixed capacity, so the
+    encoder walks the capacity table and takes the first version that fits.
+  </p>
+  <p>
+    The data codewords are split into blocks, and each block gains Reed–Solomon parity codewords computed
+    over GF(256) with the primitive polynomial 0x11d and the standard generator polynomials. The blocks
+    are then interleaved — data codewords first, then parity — so that a scratch or a smear damages a
+    little of every block instead of destroying one whole block. The resulting bit stream is poured into
+    the matrix in the two-module-wide zigzag defined by the standard, skipping the function patterns that
+    were drawn first: the three finder patterns and their separators, the timing patterns, the alignment
+    patterns and the single dark module. Because the character-count indicator and capacity depend on the
+    version, and the version partly depends on the payload length, the smallest-fit search is done before
+    any bits are written.
+  </p>
+  <p>
+    A finished matrix is rarely readable as-is, so a mask is applied. The standard defines eight mask
+    patterns, and the encoder builds all eight candidate matrices and scores each one with four penalty
+    rules: runs of five or more same-coloured modules in a row or column, 2×2 blocks of one colour,
+    finder-like patterns that could confuse a locator, and an imbalance between dark and light modules
+    across the whole symbol. The mask with the lowest total penalty wins. Finally the encoder writes the
+    format information — the error-correction level and mask number, protected by a BCH(15,5) code and
+    XORed with the fixed mask 0x5412 — and for version 7 and above the 18-bit version information, also
+    BCH-protected. Both of those are redundant copies placed in two locations, which is what lets a reader
+    lock on to a symbol that is partly damaged.
+  </p>
+
+  <h2>Accuracy, limits and honest caveats</h2>
+  <p>
+    The encoder is complete for byte mode across the whole standard, and it is deliberately strict about
+    what it will not do. Byte mode encodes UTF-8 text as a sequence of bytes; the numeric and
+    alphanumeric modes that the standard defines for digits and uppercase ASCII are not implemented, so a
+    payload made only of digits takes more room here than a dedicated encoder would use. That is a size
+    difference, never a correctness one — a reader sees a perfectly ordinary byte-mode symbol either way.
+  </p>
+  <ul>
+    <li>
+      <strong>Version 40 is the ceiling.</strong> Version 40 is 177×177 modules and holds 2,953 bytes at
+      level L, 2,331 at M, 1,663 at Q and 1,273 at H. If your payload still does not fit, the page says so
+      and produces nothing rather than emitting a truncated or malformed symbol. In practice this is not a
+      wall you hit often: a very long URL or a whole paragraph of text gets there first, and the honest
+      answer at that point is to shorten the content or split it across codes.
+    </li>
+    <li>
+      <strong>Error correction is not magic.</strong> The percentages are roughly 7, 15, 25 and 30 per
+      cent, and they describe how much of the symbol can be damaged or misread, not how small the symbol
+      can be printed. Choosing H to make a code "safer" also increases the module count for the same
+      payload, which can make the printed result harder to resolve. For a clean screen or a clean label,
+      M is usually the sensible middle.
+    </li>
+    <li>
+      <strong>Colour and contrast decide whether it scans.</strong> Most decoders assume dark modules on a
+      light background, and a colour-inverted code may be rejected outright by older or stricter readers
+      even when a modern phone camera handles it. Low contrast is worse: a pale grey on white, a mid-tone
+      accent on a slightly lighter tint, or a dark red on black all fail the brightness difference the
+      image-processing step relies on. Dark on light, comfortably far apart in luminance, is the rule.
+    </li>
+    <li>
+      <strong>The quiet zone matters more than people expect.</strong> The standard asks for at least four
+      light modules of margin on every side; the default here is four, and you can add more. Shrinking it
+      to zero, or placing the symbol flush against a dark border or another graphic, removes the
+      separation a locator needs and is one of the most common causes of a code that "should work" but
+      does not.
+    </li>
+    <li>
+      <strong>The preview is a preview.</strong> The canvas is scaled to the pixel size you asked for and
+      the SVG is exact, but a very small output size on a high-density screen, or a browser zoom level,
+      can make the on-screen version look softer than the exported file. Judge print quality from the
+      downloaded PNG or SVG, not from the preview.
+    </li>
+    <li>
+      <strong>This is an encoder, not a scanner.</strong> The page builds symbols and verifies its own
+      reserved areas; it does not decode with a camera. Before you print a run of labels, scan the
+      exported file with the reader you expect your audience to use.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Wi-Fi payloads contain the network password in plain text, and a QR code is simply a picture of
+      that string. Anyone who can photograph the code can read the password. Treat a Wi-Fi code the way
+      you would treat a written-down password, and use the guest network for anything you are going to
+      print or post.
+    </p>
+  </div>
+
+  <h2>How to use this tool</h2>
+  <ol>
+    <li>
+      <strong>Choose what the code holds.</strong> Pick plain text or a link, a Wi-Fi network, an email,
+      a phone number or an SMS. The form swaps in the fields that payload needs — for Wi-Fi that is the
+      network name, the password and the security type, and for email it is a recipient, a subject and a
+      body.
+    </li>
+    <li>
+      <strong>Pick the error-correction level.</strong> Levels L, M, Q and H trade capacity for resilience.
+      M is the usual default for screens and clean print; use Q or H when the code will be exposed to wear
+      or partial damage, and expect a larger symbol or a higher version in exchange.
+    </li>
+    <li>
+      <strong>Set the size, margin and colours.</strong> The pixel size drives the PNG; the SVG is
+      resolution-independent, so a modest size is fine for print. Leave the margin at four modules unless
+      you have a reason to change it, and keep a light background with dark modules.
+    </li>
+    <li>
+      <strong>Generate, then read the readouts.</strong> The status line reports the version chosen, the
+      matrix size and the mask number, and the payload preview shows the exact string a scanner will
+      receive. If the payload is too long for version 40 at that level, the message says so — lower the
+      level or shorten the content.
+    </li>
+    <li>
+      <strong>Check the self-check line before you download.</strong> The script re-reads the format
+      information out of its own finished matrix, removes the fixed mask and confirms the decoded
+      error-correction level and mask match the intent. A "self-check passed" line means the reserved
+      areas are internally consistent.
+    </li>
+    <li>
+      <strong>Export the format that suits the job.</strong> PNG is a fixed-size raster, ideal for a
+      screen, a slide or a chat message. SVG is vector, so it stays sharp at any print size and is the
+      better choice for labels, posters and anything that may be enlarged later.
+    </li>
+  </ol>
+  <p>
+    The tests get shorter as the payload gets shorter, but the principle is the same: a plain URL such as
+    <code>https://example.com</code> is only 19 bytes, so at level M the encoder fits it into a small
+    version and produces a chunky, easy-to-scan symbol, while the same text at level H pushes the version
+    up and the modules get finer. If a code is hard to scan in the wild, the fix is almost always to
+    shorten the payload, raise the contrast or increase the printed size — not to change the mask.
+  </p>
+</ToolLayout>
+
+<style is:global>
+  .qg {
+    display: grid;
+    gap: clamp(1.1rem, 2.5vw, 1.75rem);
+  }
+  .qg [hidden] {
+    display: none;
+  }
+  .qg__note,
+  .qg__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .qg__note {
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+  }
+  .qg__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .qg__group {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .qg__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .qg__actions .btn {
+    flex: 0 1 auto;
+  }
+  .qg__status {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .qg__check {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+  }
+  .qg__check--ok {
+    border-color: var(--ok);
+    background: var(--ok-soft);
+    color: var(--text);
+  }
+  .qg__check--bad {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--text);
+  }
+  .qg__out {
+    display: grid;
+    gap: 1rem;
+  }
+  .qg__out h2 {
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  .qg__figure {
+    display: flex;
+    justify-content: center;
+  }
+  .qg__canvas-wrap {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 360px;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .qg__canvas-wrap canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .qg__canvas-wrap svg {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+  }
+  .qg__canvas-wrap--painted canvas {
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .qg__canvas-wrap--painted svg {
+    display: none;
+  }
+  .qg__canvas-wrap--painted .qg__fallback {
+    display: none;
+  }
+  .qg__fallback {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-faint);
+    text-align: center;
+  }
+  .qg__out textarea {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+  @media (max-width: 420px) {
+    .qg__canvas-wrap {
+      padding: 0.6rem;
+    }
+    .qg__actions .btn {
+      flex: 1 1 100%;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    /* ------------------------------------------------------------------ *
+     * Static tables from ISO/IEC 18004.
+     * ------------------------------------------------------------------ */
+
+    // [total codewords, L data, M data, Q data, H data] for versions 1..40.
+    var CAPS = [
+      [26, 19, 16, 13, 9],
+      [44, 34, 28, 22, 16],
+      [70, 55, 44, 34, 26],
+      [100, 80, 64, 48, 36],
+      [134, 108, 86, 62, 46],
+      [172, 136, 108, 76, 60],
+      [196, 156, 124, 88, 66],
+      [242, 194, 154, 110, 86],
+      [292, 232, 182, 132, 100],
+      [346, 274, 216, 154, 122],
+      [404, 324, 254, 180, 140],
+      [466, 370, 290, 206, 158],
+      [532, 428, 334, 244, 180],
+      [581, 461, 365, 261, 197],
+      [655, 523, 415, 295, 223],
+      [733, 589, 453, 325, 253],
+      [815, 647, 507, 367, 283],
+      [901, 721, 563, 397, 313],
+      [991, 795, 627, 445, 341],
+      [1085, 861, 669, 485, 385],
+      [1156, 932, 714, 512, 406],
+      [1258, 1006, 782, 568, 442],
+      [1364, 1094, 860, 614, 464],
+      [1474, 1174, 914, 664, 514],
+      [1588, 1276, 1000, 718, 538],
+      [1706, 1370, 1062, 754, 596],
+      [1828, 1468, 1128, 808, 628],
+      [1921, 1531, 1193, 871, 661],
+      [2051, 1631, 1267, 911, 701],
+      [2185, 1735, 1373, 985, 745],
+      [2323, 1843, 1455, 1033, 793],
+      [2465, 1955, 1541, 1115, 845],
+      [2611, 2071, 1631, 1171, 901],
+      [2761, 2191, 1725, 1231, 961],
+      [2876, 2306, 1812, 1286, 986],
+      [3034, 2434, 1914, 1354, 1054],
+      [3196, 2566, 1992, 1426, 1096],
+      [3362, 2702, 2102, 1502, 1142],
+      [3532, 2812, 2216, 1582, 1222],
+      [3706, 2956, 2334, 1666, 1276],
+    ];
+
+    // Error-correction blocks: version, level -> [ec codewords per block,
+    // blocks in group 1, data codewords in each group-1 block,
+    // blocks in group 2, data codewords in each group-2 block].
+    var RS = [
+      [1, 0, [7, 1, 19, 0, 0]],
+      [1, 1, [10, 1, 16, 0, 0]],
+      [1, 2, [13, 1, 13, 0, 0]],
+      [1, 3, [17, 1, 9, 0, 0]],
+      [2, 0, [10, 1, 34, 0, 0]],
+      [2, 1, [16, 1, 28, 0, 0]],
+      [2, 2, [22, 1, 22, 0, 0]],
+      [2, 3, [28, 1, 16, 0, 0]],
+      [3, 0, [15, 1, 55, 0, 0]],
+      [3, 1, [26, 1, 44, 0, 0]],
+      [3, 2, [18, 2, 17, 0, 0]],
+      [3, 3, [22, 2, 13, 0, 0]],
+      [4, 0, [20, 1, 80, 0, 0]],
+      [4, 1, [18, 2, 32, 0, 0]],
+      [4, 2, [26, 2, 24, 0, 0]],
+      [4, 3, [16, 4, 9, 0, 0]],
+      [5, 0, [26, 1, 108, 0, 0]],
+      [5, 1, [24, 2, 43, 0, 0]],
+      [5, 2, [18, 2, 15, 2, 16]],
+      [5, 3, [22, 2, 11, 2, 12]],
+      [6, 0, [18, 2, 68, 0, 0]],
+      [6, 1, [16, 4, 27, 0, 0]],
+      [6, 2, [24, 4, 19, 0, 0]],
+      [6, 3, [28, 4, 15, 0, 0]],
+      [7, 0, [20, 2, 78, 0, 0]],
+      [7, 1, [18, 4, 31, 0, 0]],
+      [7, 2, [18, 2, 14, 4, 15]],
+      [7, 3, [26, 4, 13, 1, 14]],
+      [8, 0, [24, 2, 97, 0, 0]],
+      [8, 1, [22, 2, 38, 2, 39]],
+      [8, 2, [22, 4, 18, 2, 19]],
+      [8, 3, [26, 4, 14, 2, 15]],
+      [9, 0, [30, 2, 116, 0, 0]],
+      [9, 1, [22, 3, 36, 2, 37]],
+      [9, 2, [20, 4, 16, 4, 17]],
+      [9, 3, [24, 4, 12, 4, 13]],
+      [10, 0, [18, 2, 68, 2, 69]],
+      [10, 1, [26, 4, 43, 1, 44]],
+      [10, 2, [24, 6, 19, 2, 20]],
+      [10, 3, [28, 6, 15, 2, 16]],
+      [11, 0, [20, 4, 81, 0, 0]],
+      [11, 1, [30, 1, 50, 4, 51]],
+      [11, 2, [28, 4, 22, 4, 23]],
+      [11, 3, [24, 3, 12, 8, 13]],
+      [12, 0, [24, 2, 92, 2, 93]],
+      [12, 1, [22, 6, 36, 2, 37]],
+      [12, 2, [26, 4, 20, 6, 21]],
+      [12, 3, [28, 7, 14, 4, 15]],
+      [13, 0, [26, 4, 107, 0, 0]],
+      [13, 1, [22, 8, 37, 1, 38]],
+      [13, 2, [24, 8, 20, 4, 21]],
+      [13, 3, [22, 12, 11, 4, 12]],
+      [14, 0, [30, 3, 115, 1, 116]],
+      [14, 1, [24, 4, 40, 5, 41]],
+      [14, 2, [20, 11, 16, 5, 17]],
+      [14, 3, [24, 11, 12, 5, 13]],
+      [15, 0, [22, 5, 87, 1, 88]],
+      [15, 1, [24, 5, 41, 5, 42]],
+      [15, 2, [30, 5, 24, 7, 25]],
+      [15, 3, [24, 11, 12, 7, 13]],
+      [16, 0, [24, 5, 98, 1, 99]],
+      [16, 1, [28, 7, 45, 3, 46]],
+      [16, 2, [24, 15, 19, 2, 20]],
+      [16, 3, [30, 3, 15, 13, 16]],
+      [17, 0, [28, 1, 107, 5, 108]],
+      [17, 1, [28, 10, 46, 1, 47]],
+      [17, 2, [28, 1, 22, 15, 23]],
+      [17, 3, [28, 2, 14, 17, 15]],
+      [18, 0, [30, 5, 120, 1, 121]],
+      [18, 1, [26, 9, 43, 4, 44]],
+      [18, 2, [28, 17, 22, 1, 23]],
+      [18, 3, [28, 2, 14, 19, 15]],
+      [19, 0, [28, 3, 113, 4, 114]],
+      [19, 1, [26, 3, 44, 11, 45]],
+      [19, 2, [26, 17, 21, 4, 22]],
+      [19, 3, [26, 9, 13, 16, 14]],
+      [20, 0, [28, 3, 107, 5, 108]],
+      [20, 1, [26, 3, 41, 13, 42]],
+      [20, 2, [30, 15, 24, 5, 25]],
+      [20, 3, [28, 15, 15, 10, 16]],
+      [21, 0, [28, 4, 116, 4, 117]],
+      [21, 1, [26, 17, 42, 0, 0]],
+      [21, 2, [28, 17, 22, 6, 23]],
+      [21, 3, [30, 19, 16, 6, 17]],
+      [22, 0, [28, 2, 111, 7, 112]],
+      [22, 1, [28, 17, 46, 0, 0]],
+      [22, 2, [30, 7, 24, 16, 25]],
+      [22, 3, [24, 34, 13, 0, 0]],
+      [23, 0, [30, 4, 121, 5, 122]],
+      [23, 1, [28, 4, 47, 14, 48]],
+      [23, 2, [30, 11, 24, 14, 25]],
+      [23, 3, [30, 16, 15, 14, 16]],
+      [24, 0, [30, 6, 117, 4, 118]],
+      [24, 1, [28, 6, 45, 14, 46]],
+      [24, 2, [30, 11, 24, 16, 25]],
+      [24, 3, [30, 30, 16, 2, 17]],
+      [25, 0, [26, 8, 106, 4, 107]],
+      [25, 1, [28, 8, 47, 13, 48]],
+      [25, 2, [30, 7, 24, 22, 25]],
+      [25, 3, [30, 22, 15, 13, 16]],
+      [26, 0, [28, 10, 114, 2, 115]],
+      [26, 1, [28, 19, 46, 4, 47]],
+      [26, 2, [28, 28, 22, 6, 23]],
+      [26, 3, [30, 33, 16, 4, 17]],
+      [27, 0, [30, 8, 122, 4, 123]],
+      [27, 1, [28, 22, 45, 3, 46]],
+      [27, 2, [30, 8, 23, 26, 24]],
+      [27, 3, [30, 12, 15, 28, 16]],
+      [28, 0, [30, 3, 117, 10, 118]],
+      [28, 1, [28, 3, 45, 23, 46]],
+      [28, 2, [30, 4, 24, 31, 25]],
+      [28, 3, [30, 11, 15, 31, 16]],
+      [29, 0, [30, 7, 116, 7, 117]],
+      [29, 1, [28, 21, 45, 7, 46]],
+      [29, 2, [30, 1, 23, 37, 24]],
+      [29, 3, [30, 19, 15, 26, 16]],
+      [30, 0, [30, 5, 115, 10, 116]],
+      [30, 1, [28, 19, 47, 10, 48]],
+      [30, 2, [30, 15, 24, 25, 25]],
+      [30, 3, [30, 23, 15, 25, 16]],
+      [31, 0, [30, 13, 115, 3, 116]],
+      [31, 1, [28, 2, 46, 29, 47]],
+      [31, 2, [30, 42, 24, 1, 25]],
+      [31, 3, [30, 23, 15, 28, 16]],
+      [32, 0, [30, 17, 115, 0, 0]],
+      [32, 1, [28, 10, 46, 23, 47]],
+      [32, 2, [30, 10, 24, 35, 25]],
+      [32, 3, [30, 19, 15, 35, 16]],
+      [33, 0, [30, 17, 115, 1, 116]],
+      [33, 1, [28, 14, 46, 21, 47]],
+      [33, 2, [30, 29, 24, 19, 25]],
+      [33, 3, [30, 11, 15, 46, 16]],
+      [34, 0, [30, 13, 115, 6, 116]],
+      [34, 1, [28, 14, 46, 23, 47]],
+      [34, 2, [30, 44, 24, 7, 25]],
+      [34, 3, [30, 59, 16, 1, 17]],
+      [35, 0, [30, 12, 121, 7, 122]],
+      [35, 1, [28, 12, 47, 26, 48]],
+      [35, 2, [30, 39, 24, 14, 25]],
+      [35, 3, [30, 22, 15, 41, 16]],
+      [36, 0, [30, 6, 121, 14, 122]],
+      [36, 1, [28, 6, 47, 34, 48]],
+      [36, 2, [30, 46, 24, 10, 25]],
+      [36, 3, [30, 2, 15, 64, 16]],
+      [37, 0, [30, 17, 122, 4, 123]],
+      [37, 1, [28, 29, 46, 14, 47]],
+      [37, 2, [30, 49, 24, 10, 25]],
+      [37, 3, [30, 24, 15, 46, 16]],
+      [38, 0, [30, 4, 122, 18, 123]],
+      [38, 1, [28, 13, 46, 32, 47]],
+      [38, 2, [30, 48, 24, 14, 25]],
+      [38, 3, [30, 42, 15, 32, 16]],
+      [39, 0, [30, 20, 117, 4, 118]],
+      [39, 1, [28, 40, 47, 7, 48]],
+      [39, 2, [30, 43, 24, 22, 25]],
+      [39, 3, [30, 10, 15, 67, 16]],
+      [40, 0, [30, 19, 118, 6, 119]],
+      [40, 1, [28, 18, 47, 31, 48]],
+      [40, 2, [30, 34, 24, 34, 25]],
+      [40, 3, [30, 20, 15, 61, 16]],
+    ];
+
+    // Alignment pattern centre coordinates for versions 2..40.
+    var ALIGN = [
+      [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42],
+      [6, 26, 46], [6, 28, 50], [6, 30, 54], [6, 32, 58], [6, 34, 62],
+      [6, 26, 46, 66], [6, 26, 48, 70], [6, 26, 50, 74], [6, 30, 54, 78],
+      [6, 30, 56, 82], [6, 30, 58, 86], [6, 34, 62, 90], [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98], [6, 30, 54, 78, 102], [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110], [6, 30, 58, 86, 114], [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122], [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130], [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138], [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146], [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154], [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162], [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170],
+    ];
+
+    // EC level name -> index in the capacity and block tables (L M Q H).
+    var LEVEL_INDEX = { L: 0, M: 1, Q: 2, H: 3 };
+    // EC level name -> the two format bits, most significant first.
+    var LEVEL_BITS = { L: [0, 1], M: [0, 0], Q: [1, 1], H: [1, 0] };
+    var FORMAT_MASK = 0x5412;
+
+    /* ------------------------------------------------------------------ *
+     * Galois field arithmetic for Reed-Solomon over GF(256).
+     * ------------------------------------------------------------------ */
+
+    var EXP = new Uint8Array(512);
+    var LOG = new Uint8Array(256);
+
+    (function buildTables() {
+      var x = 1;
+      for (var i = 0; i < 255; i++) {
+        EXP[i] = x;
+        LOG[x] = i;
+        x <<= 1;
+        if (x & 0x100) x ^= 0x11d;
+      }
+      for (var j = 255; j < 512; j++) EXP[j] = EXP[j - 255];
+    })();
+
+    function gfMul(a, b) {
+      if (a === 0 || b === 0) return 0;
+      return EXP[LOG[a] + LOG[b]];
+    }
+
+    function rsGenerator(degree) {
+      var poly = [1];
+      for (var i = 0; i < degree; i++) {
+        var next = new Array(poly.length + 1);
+        for (var k = 0; k < next.length; k++) next[k] = 0;
+        for (var j = 0; j < poly.length; j++) {
+          next[j] ^= poly[j];
+          next[j + 1] ^= gfMul(poly[j], EXP[i]);
+        }
+        poly = next;
+      }
+      return poly;
+    }
+
+    function rsEncode(data, ecLen) {
+      var gen = rsGenerator(ecLen);
+      var rem = new Uint8Array(ecLen);
+      for (var i = 0; i < data.length; i++) {
+        var factor = data[i] ^ rem[0];
+        rem.copyWithin(0, 1);
+        rem[ecLen - 1] = 0;
+        if (factor !== 0) {
+          for (var j = 0; j < ecLen; j++) {
+            rem[j] ^= gfMul(gen[j + 1], factor);
+          }
+        }
+      }
+      return rem;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Bit stream helpers.
+     * ------------------------------------------------------------------ */
+
+    function BitBuffer() {
+      this.bytes = [];
+      this.length = 0;
+    }
+
+    BitBuffer.prototype.put = function (value, bits) {
+      for (var i = bits - 1; i >= 0; i--) {
+        var bit = (value >>> i) & 1;
+        if (this.length % 8 === 0) this.bytes.push(0);
+        if (bit) this.bytes[this.bytes.length - 1] |= 1 << (7 - (this.length % 8));
+        this.length++;
+      }
+      return this;
+    };
+
+    /* ------------------------------------------------------------------ *
+     * Encoding.
+     * ------------------------------------------------------------------ */
+
+    function findRsBlock(version, levelIndex) {
+      for (var i = 0; i < RS.length; i++) {
+        if (RS[i][0] === version && RS[i][1] === levelIndex) return RS[i][2];
+      }
+      return null;
+    }
+
+    function dataCapacityBytes(version, levelIndex) {
+      return CAPS[version - 1][levelIndex + 1];
+    }
+
+    /** Smallest version that fits `byteLength` payload bytes, or -1. */
+    function chooseVersion(byteLength, levelIndex) {
+      for (var version = 1; version <= 40; version++) {
+        var header = version < 10 ? 12 : 20; // 4-bit mode + 8- or 16-bit count
+        var capacityBits = dataCapacityBytes(version, levelIndex) * 8;
+        if (header + byteLength * 8 <= capacityBits) return version;
+      }
+      return -1;
+    }
+
+    function makeCodewords(bytes, version, levelIndex) {
+      var capacity = dataCapacityBytes(version, levelIndex);
+      var countBits = version < 10 ? 8 : 16;
+
+      var buffer = new BitBuffer();
+      buffer.put(4, 4); // byte mode indicator 0100
+      buffer.put(bytes.length, countBits);
+      for (var i = 0; i < bytes.length; i++) buffer.put(bytes[i], 8);
+
+      // Terminator, up to four zero bits, then pad to a byte boundary.
+      buffer.put(0, Math.min(4, capacity * 8 - buffer.length));
+      while (buffer.length % 8 !== 0) buffer.put(0, 1);
+
+      // Fill the remaining capacity with the standard alternating pad bytes.
+      var pad = [0xec, 0x11];
+      var padIndex = 0;
+      while (buffer.bytes.length < capacity) {
+        buffer.put(pad[padIndex], 8);
+        padIndex = padIndex === 0 ? 1 : 0;
+      }
+
+      var spec = findRsBlock(version, levelIndex);
+      var ecLen = spec[0];
+      var groups = [
+        { blocks: spec[1], size: spec[2] },
+        { blocks: spec[3], size: spec[4] },
+      ];
+
+      var dataBlocks = [];
+      var ecBlocks = [];
+      var offset = 0;
+      for (var g = 0; g < groups.length; g++) {
+        for (var b = 0; b < groups[g].blocks; b++) {
+          var block = buffer.bytes.slice(offset, offset + groups[g].size);
+          offset += groups[g].size;
+          dataBlocks.push(block);
+          ecBlocks.push(rsEncode(Uint8Array.from(block), ecLen));
+        }
+      }
+
+      var out = [];
+      var maxData = Math.max(groups[0].size, groups[1].size);
+      for (var c = 0; c < maxData; c++) {
+        for (var d = 0; d < dataBlocks.length; d++) {
+          if (c < dataBlocks[d].length) out.push(dataBlocks[d][c]);
+        }
+      }
+      for (var e = 0; e < ecLen; e++) {
+        for (var f = 0; f < ecBlocks.length; f++) out.push(ecBlocks[f][e]);
+      }
+
+      var expected = CAPS[version - 1][0];
+      if (out.length !== expected) {
+        throw new Error(
+          "internal codeword count mismatch: built " + out.length + ", expected " + expected
+        );
+      }
+      return out;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Matrix construction.
+     * ------------------------------------------------------------------ */
+
+    function blankGrid(size) {
+      var grid = new Array(size);
+      for (var i = 0; i < size; i++) grid[i] = new Uint8Array(size);
+      return grid;
+    }
+
+    function placeFinder(grid, reserved, row0, col0) {
+      var size = grid.length;
+      for (var r = -1; r <= 7; r++) {
+        for (var c = -1; c <= 7; c++) {
+          var rr = row0 + r;
+          var cc = col0 + c;
+          if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
+          var inRing = r >= 0 && r <= 6 && (c === 0 || c === 6);
+          var inBand = c >= 0 && c <= 6 && (r === 0 || r === 6);
+          var inCore = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+          grid[rr][cc] = inRing || inBand || inCore ? 1 : 0;
+          reserved[rr][cc] = 1;
+        }
+      }
+    }
+
+    function placeAlignment(grid, reserved, row, col) {
+      for (var r = -2; r <= 2; r++) {
+        for (var c = -2; c <= 2; c++) {
+          var dark = Math.max(Math.abs(r), Math.abs(c)) !== 1;
+          grid[row + r][col + c] = dark ? 1 : 0;
+          reserved[row + r][col + c] = 1;
+        }
+      }
+    }
+
+    /**
+     * The two sets of format-information modules, each listed most-significant
+     * bit first. Copy one starts beside the top-left finder on row 8 and turns
+     * up column 8; copy two starts above the bottom-left finder and runs along
+     * row 8 up to the top-right finder. Copy two has only 14 writable modules
+     * because bit 7 is the always-dark module at (size - 8, 8).
+     */
+    function formatInfoCells(size) {
+      var first = [];
+      var second = [];
+      var i;
+      for (i = 0; i <= 5; i++) first.push([8, i]);
+      first.push([8, 7]);
+      first.push([8, 8]);
+      first.push([7, 8]);
+      for (i = 9; i < 15; i++) first.push([23 - i, 8]);
+      for (i = 0; i < 7; i++) second.push([size - 1 - i, 8]);
+      for (i = 8; i < 15; i++) second.push([8, size - 15 + i]);
+      return [first, second];
+    }
+
+    function placeFunctionPatterns(grid, reserved, version) {
+      var size = grid.length;
+
+      placeFinder(grid, reserved, 0, 0);
+      placeFinder(grid, reserved, 0, size - 7);
+      placeFinder(grid, reserved, size - 7, 0);
+
+      // Timing patterns.
+      for (var i = 8; i < size - 8; i++) {
+        var bit = i % 2 === 0 ? 1 : 0;
+        grid[6][i] = bit;
+        reserved[6][i] = 1;
+        grid[i][6] = bit;
+        reserved[i][6] = 1;
+      }
+
+      // Alignment patterns, skipping the three finder corners.
+      if (version >= 2) {
+        var centres = ALIGN[version - 2];
+        for (var a = 0; a < centres.length; a++) {
+          for (var b = 0; b < centres.length; b++) {
+            var row = centres[a];
+            var col = centres[b];
+            var onTopFinder = row === 6 && (col === 6 || col === centres[centres.length - 1]);
+            var onBottomFinder = row === centres[centres.length - 1] && col === 6;
+            if (onTopFinder || onBottomFinder) continue;
+            placeAlignment(grid, reserved, row, col);
+          }
+        }
+      }
+
+      // The dark module sits just above the bottom-left finder.
+      grid[size - 8][8] = 1;
+      reserved[size - 8][8] = 1;
+
+      // Reserve exactly the 30 modules that carry the two copies of the format
+      // information, so the zigzag data placement never overwrites them.
+      var formatGroups = formatInfoCells(size);
+      for (var g = 0; g < formatGroups.length; g++) {
+        for (var f = 0; f < formatGroups[g].length; f++) {
+          reserved[formatGroups[g][f][0]][formatGroups[g][f][1]] = 1;
+        }
+      }
+
+      // Reserve the version information blocks from version 7 upwards.
+      if (version >= 7) {
+        for (var v = 0; v < 18; v++) {
+          var vr = Math.floor(v / 3);
+          var vc = v % 3;
+          reserved[size - 11 + vc][vr] = 1;
+          reserved[vr][size - 11 + vc] = 1;
+        }
+      }
+    }
+
+    function placeData(grid, reserved, codewords) {
+      var size = grid.length;
+      var total = codewords.length * 8;
+      var index = 0;
+      var upward = true;
+
+      for (var right = size - 1; right >= 1; right -= 2) {
+        if (right === 6) right = 5;
+        for (var step = 0; step < size; step++) {
+          var row = upward ? size - 1 - step : step;
+          for (var k = 0; k < 2; k++) {
+            var col = right - k;
+            if (reserved[row][col]) continue;
+            var bit = 0;
+            if (index < total) {
+              bit = (codewords[index >> 3] >> (7 - (index & 7))) & 1;
+            }
+            grid[row][col] = bit;
+            index++;
+          }
+        }
+        upward = !upward;
+      }
+    }
+
+    var MASK_RULES = [
+      function (r, c) {
+        return (r + c) % 2 === 0;
+      },
+      function (r) {
+        return r % 2 === 0;
+      },
+      function (r, c) {
+        return c % 3 === 0;
+      },
+      function (r, c) {
+        return (r + c) % 3 === 0;
+      },
+      function (r, c) {
+        return (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0;
+      },
+      function (r, c) {
+        var p = (r * c) % 2;
+        var q = (r * c) % 3;
+        return p + q === 0;
+      },
+      function (r, c) {
+        var p = (r * c) % 2;
+        var q = (r * c) % 3;
+        return ((p + q) % 2) === 0;
+      },
+      function (r, c) {
+        var p = (r + c) % 2;
+        var q = (r * c) % 3;
+        return ((p + q) % 2) === 0;
+      },
+    ];
+
+    // BCH(15,5) with generator 0b10100110111, then the fixed XOR mask.
+    function formatBits(levelName, mask) {
+      var lv = LEVEL_BITS[levelName];
+      var data = (lv[0] << 4) | (lv[1] << 3) | mask;
+      var rem = data << 10;
+      for (var i = 4; i >= 0; i--) {
+        if (rem & (1 << (i + 10))) rem ^= 0x537 << i;
+      }
+      return ((data << 10) | rem) ^ FORMAT_MASK;
+    }
+
+    // BCH(18,6) with generator 0b1111100100101.
+    function versionBits(version) {
+      var rem = version << 12;
+      for (var i = 5; i >= 0; i--) {
+        if (rem & (1 << (i + 12))) rem ^= 0x1f25 << i;
+      }
+      return (version << 12) | rem;
+    }
+
+    function drawFormat(grid, levelName, mask) {
+      var groups = formatInfoCells(grid.length);
+      var bits = formatBits(levelName, mask);
+      var i;
+      for (i = 0; i < 15; i++) {
+        grid[groups[0][i][0]][groups[0][i][1]] = (bits >> i) & 1;
+      }
+      // Copy two: bits 0-6 down the bottom-left column, then bits 8-14 along the
+      // row above the top-right finder. Bit 7 is the always-dark module.
+      for (i = 0; i < 7; i++) {
+        grid[groups[1][i][0]][groups[1][i][1]] = (bits >> i) & 1;
+      }
+      for (i = 8; i < 15; i++) {
+        grid[groups[1][i - 1][0]][groups[1][i - 1][1]] = (bits >> i) & 1;
+      }
+    }
+
+    function drawVersionInfo(grid, version) {
+      var size = grid.length;
+      var bits = versionBits(version);
+      for (var i = 0; i < 18; i++) {
+        var bit = (bits >> i) & 1;
+        var row = Math.floor(i / 3);
+        var col = i % 3;
+        grid[size - 11 + col][row] = bit;
+        grid[row][size - 11 + col] = bit;
+      }
+    }
+
+    function finderLike(bits) {
+      var a = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0];
+      var b = [0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1];
+      var matchA = true;
+      var matchB = true;
+      for (var i = 0; i < 11; i++) {
+        if (bits[i] !== a[i]) matchA = false;
+        if (bits[i] !== b[i]) matchB = false;
+      }
+      return matchA || matchB;
+    }
+
+    function computePenalty(grid) {
+      var size = grid.length;
+      var score = 0;
+      var i;
+      var j;
+      var k;
+
+      // Rule 1: runs of five or more identical modules.
+      for (i = 0; i < size; i++) {
+        for (j = 0; j < size; j++) {
+          if (i === 0 || grid[i][j] !== grid[i - 1][j]) {
+            var runV = 1;
+            while (i + runV < size && grid[i + runV][j] === grid[i][j]) runV++;
+            if (runV >= 5) score += 3 + (runV - 5);
+          }
+          if (j === 0 || grid[i][j] !== grid[i][j - 1]) {
+            var runH = 1;
+            while (j + runH < size && grid[i][j + runH] === grid[i][j]) runH++;
+            if (runH >= 5) score += 3 + (runH - 5);
+          }
+        }
+      }
+
+      // Rule 2: 2x2 blocks of one colour.
+      for (i = 0; i < size - 1; i++) {
+        for (j = 0; j < size - 1; j++) {
+          var v = grid[i][j];
+          if (v === grid[i][j + 1] && v === grid[i + 1][j] && v === grid[i + 1][j + 1]) score += 3;
+        }
+      }
+
+      // Rule 3: finder-like 1:1:3:1:1 patterns with a four-module light run.
+      for (i = 0; i < size; i++) {
+        for (j = 0; j + 11 <= size; j++) {
+          var rowBits = [];
+          var colBits = [];
+          for (k = 0; k < 11; k++) {
+            rowBits.push(grid[i][j + k]);
+            colBits.push(grid[j + k][i]);
+          }
+          if (finderLike(rowBits)) score += 40;
+          if (finderLike(colBits)) score += 40;
+        }
+      }
+
+      // Rule 4: deviation of the dark-module share from 50%.
+      var dark = 0;
+      for (i = 0; i < size; i++) {
+        for (j = 0; j < size; j++) dark += grid[i][j];
+      }
+      var total = size * size;
+      var percent = (dark * 100) / total;
+      var step = Math.floor(Math.abs(percent - 50) / 5);
+      score += step * 10;
+
+      return score;
+    }
+
+    function buildMatrix(bytes, version, levelName, levelIndex) {
+      var size = version * 4 + 17;
+      var base = blankGrid(size);
+      var reserved = blankGrid(size);
+      placeFunctionPatterns(base, reserved, version);
+
+      var codewords = makeCodewords(bytes, version, levelIndex);
+      var data = blankGrid(size);
+      placeData(data, reserved, codewords);
+
+      var best = null;
+      for (var mask = 0; mask < 8; mask++) {
+        var candidate = new Array(size);
+        for (var r = 0; r < size; r++) {
+          var row = new Uint8Array(size);
+          for (var c = 0; c < size; c++) {
+            var value = base[r][c];
+            if (!reserved[r][c]) {
+              value = data[r][c] ^ (MASK_RULES[mask](r, c) ? 1 : 0);
+            }
+            row[c] = value;
+          }
+          candidate[r] = row;
+        }
+        drawFormat(candidate, levelName, mask);
+        if (version >= 7) drawVersionInfo(candidate, version);
+
+        var penalty = computePenalty(candidate);
+        if (!best || penalty < best.penalty) {
+          best = { grid: candidate, mask: mask, penalty: penalty };
+        }
+      }
+
+      return { grid: best.grid, mask: best.mask, size: size, version: version, penalty: best.penalty };
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Self-check: read the format information back out of the matrix.
+     * ------------------------------------------------------------------ */
+
+    function readFormat(grid) {
+      var groups = formatInfoCells(grid.length);
+      var raw = 0;
+      var second = 0;
+      var i;
+
+      // Both copies are stored most-significant bit first. Copy two has no cell
+      // for bit 7, which is the always-dark module, so read it in two runs.
+      for (i = 0; i < 7; i++) {
+        raw = (raw << 1) | grid[groups[0][i][0]][groups[0][i][1]];
+        second = (second << 1) | grid[groups[1][i][0]][groups[1][i][1]];
+      }
+      for (i = 7; i < 15; i++) {
+        raw = (raw << 1) | grid[groups[0][i][0]][groups[0][i][1]];
+        if (i > 7) second = (second << 1) | grid[groups[1][i - 1][0]][groups[1][i - 1][1]];
+      }
+
+      var unmasked = raw ^ FORMAT_MASK;
+      var data = unmasked >> 10;
+      var levelBits = (data >> 3) & 3;
+      var mask = data & 7;
+
+      var level = null;
+      for (var name in LEVEL_BITS) {
+        if ((LEVEL_BITS[name][0] << 1 | LEVEL_BITS[name][1]) === levelBits) level = name;
+      }
+
+      return {
+        raw: raw,
+        second: second,
+        level: level,
+        mask: mask,
+        copiesAgree: raw === second,
+      };
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Payload building.
+     * ------------------------------------------------------------------ */
+
+    function escapeWifi(value) {
+      return String(value).replace(/([\\;,:"])/g, "\\$1");
+    }
+
+    function element(id) {
+      return document.getElementById(id);
+    }
+
+    function currentMode() {
+      return element("qg-mode").value;
+    }
+
+    function buildPayload() {
+      var mode = currentMode();
+
+      if (mode === "wifi") {
+        var ssid = element("qg-wifi-ssid").value.trim();
+        if (ssid === "") return { error: "Enter the network name (SSID) before generating a code." };
+        var auth = element("qg-wifi-auth").value;
+        var out = "WIFI:T:" + auth + ";S:" + escapeWifi(ssid) + ";";
+        if (auth !== "nopass") {
+          var pass = element("qg-wifi-pass").value;
+          if (pass === "") return { error: "Enter the network password, or choose the open-network security type." };
+          out += "P:" + escapeWifi(pass) + ";";
+        }
+        if (element("qg-wifi-hidden").checked) out += "H:true;";
+        out += ";";
+        return { text: out };
+      }
+
+      if (mode === "email") {
+        var to = element("qg-email-to").value.trim();
+        if (to === "") return { error: "Enter a recipient address before generating a code." };
+        var subject = element("qg-email-subject").value;
+        var body = element("qg-email-body").value;
+        var params = [];
+        if (subject !== "") params.push("subject=" + encodeURIComponent(subject));
+        if (body !== "") params.push("body=" + encodeURIComponent(body));
+        var mailto = "mailto:" + to;
+        if (params.length) mailto += "?" + params.join("&");
+        return { text: mailto };
+      }
+
+      if (mode === "phone") {
+        var number = element("qg-phone").value.trim();
+        if (number === "") return { error: "Enter a phone number before generating a code." };
+        return { text: "tel:" + number.replace(/[\s().-]/g, "") };
+      }
+
+      if (mode === "sms") {
+        var smsTo = element("qg-sms-to").value.trim();
+        if (smsTo === "") return { error: "Enter a phone number before generating a code." };
+        var message = element("qg-sms-body").value;
+        return { text: "SMSTO:" + smsTo.replace(/[\s().-]/g, "") + (message === "" ? "" : ":" + message) };
+      }
+
+      var text = element("qg-text").value;
+      if (text === "") return { error: "Type some text or a URL before generating a code." };
+      return { text: text };
+    }
+
+    function toUtf8(text) {
+      if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(text);
+      var out = [];
+      for (var i = 0; i < text.length; i++) {
+        var code = text.charCodeAt(i);
+        if (code < 0x80) out.push(code);
+        else if (code < 0x800) out.push(0xc0 | (code >> 6), 0x80 | (code & 63));
+        else out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63));
+      }
+      return Uint8Array.from(out);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Rendering.
+     * ------------------------------------------------------------------ */
+
+    var SVG_NS = "http://www.w3.org/2000/svg";
+    var last = null;
+
+    function clampNumber(value, min, max, fallback) {
+      var n = Number(value);
+      if (!isFinite(n)) return fallback;
+      if (n < min) return min;
+      if (n > max) return max;
+      return n;
+    }
+
+    function safeColor(value, fallback) {
+      return /^#[0-9a-fA-F]{6}$/.test(String(value)) ? String(value) : fallback;
+    }
+
+    function renderSvg(svg, matrix, margin, fg, bg) {
+      var size = matrix.length;
+      var span = size + margin * 2;
+
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      var title = document.createElementNS(SVG_NS, "title");
+      title.textContent =
+        "QR code, version " +
+        last.version +
+        ", error-correction level " +
+        last.level +
+        ", mask " +
+        last.mask +
+        ", " +
+        size +
+        " by " +
+        size +
+        " modules.";
+      svg.appendChild(title);
+
+      var bgRect = document.createElementNS(SVG_NS, "rect");
+      bgRect.setAttribute("x", "0");
+      bgRect.setAttribute("y", "0");
+      bgRect.setAttribute("width", String(span));
+      bgRect.setAttribute("height", String(span));
+      bgRect.setAttribute("fill", bg);
+      svg.appendChild(bgRect);
+
+      var parts = [];
+      for (var r = 0; r < size; r++) {
+        for (var c = 0; c < size; c++) {
+          if (!matrix[r][c]) continue;
+          parts.push("M" + (c + margin) + " " + (r + margin) + "h1v1h-1z");
+        }
+      }
+      var path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", parts.join(""));
+      path.setAttribute("fill", fg);
+      path.setAttribute("shape-rendering", "crispEdges");
+      svg.appendChild(path);
+
+      svg.setAttribute("xmlns", SVG_NS);
+      svg.setAttribute("viewBox", "0 0 " + span + " " + span);
+      svg.setAttribute("width", String(span * 8));
+      svg.setAttribute("height", String(span * 8));
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", title.textContent);
+      svg.setAttribute(
+        "aria-describedby",
+        "qg-fallback qg-preview-payload"
+      );
+    }
+
+    function renderCanvas(canvas, matrix, margin, sizePx, fg, bg) {
+      var size = matrix.length;
+      var span = size + margin * 2;
+      var scale = Math.max(1, Math.round(sizePx / span));
+      var total = scale * span;
+
+      canvas.width = total;
+      canvas.height = total;
+
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, total, total);
+      ctx.fillStyle = fg;
+      for (var r = 0; r < size; r++) {
+        for (var c = 0; c < size; c++) {
+          if (!matrix[r][c]) continue;
+          ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
+        }
+      }
+    }
+
+    function paintStats(info) {
+      element("qg-stat-version").textContent = info.version + " / 40";
+      element("qg-stat-size").textContent = info.size + " × " + info.size;
+      element("qg-stat-mask").textContent = String(info.mask);
+      element("qg-stat-bytes").textContent = info.bytes.length + " bytes";
+    }
+
+    function clearCheck(kind, text) {
+      var node = element("qg-check");
+      node.textContent = text;
+      node.classList.remove("qg__check--ok", "qg__check--bad");
+      if (kind === "ok") node.classList.add("qg__check--ok");
+      if (kind === "bad") node.classList.add("qg__check--bad");
+    }
+
+    function setStatPlaceholder() {
+      element("qg-stat-version").textContent = "—";
+      element("qg-stat-size").textContent = "—";
+      element("qg-stat-mask").textContent = "—";
+      element("qg-stat-bytes").textContent = "—";
+    }
+
+    function generate() {
+      var status = element("qg-status");
+      var payload = buildPayload();
+      if (payload.error) {
+        status.textContent = payload.error;
+        return;
+      }
+
+      var levelName = element("qg-ec").value;
+      var levelIndex = LEVEL_INDEX[levelName];
+      var bytes = toUtf8(payload.text);
+      var version = chooseVersion(bytes.length, levelIndex);
+
+      if (version === -1) {
+        var maxBytes = dataCapacityBytes(40, levelIndex) - (40 < 10 ? 2 : 3);
+        status.textContent =
+          "That payload is " +
+          bytes.length +
+          " bytes, which is more than version 40 can hold at level " +
+          levelName +
+          " (about " +
+          maxBytes +
+          " bytes). Shorten the content or choose a lower error-correction level.";
+        clearCheck("bad", "Self-check: not run — no symbol was produced.");
+        setStatPlaceholder();
+        return;
+      }
+
+      var info;
+      try {
+        info = buildMatrix(bytes, version, levelName, levelIndex);
+      } catch (err) {
+        status.textContent =
+          "The encoder stopped: " + (err && err.message ? err.message : "unknown error") + ".";
+        clearCheck("bad", "Self-check: not run — encoding failed.");
+        setStatPlaceholder();
+        return;
+      }
+
+      info.level = levelName;
+      info.bytes = bytes;
+      last = info;
+
+      var fg = safeColor(element("qg-fg").value, "#000000");
+      var bg = safeColor(element("qg-bg").value, "#ffffff");
+      var margin = Math.round(clampNumber(element("qg-margin").value, 0, 8, 4));
+      var sizePx = Math.round(clampNumber(element("qg-size").value, 128, 1024, 320));
+
+      var wrap = element("qg-canvas-wrap");
+      var canvas = element("qg-canvas");
+      var svg = document.getElementById("qg-svg");
+      if (!svg) {
+        svg = document.createElementNS(SVG_NS, "svg");
+        svg.id = "qg-svg";
+        wrap.insertBefore(svg, element("qg-fallback"));
+      }
+
+      renderSvg(svg, info.grid, margin, fg, bg);
+      renderCanvas(canvas, info.grid, margin, sizePx, fg, bg);
+
+      var label =
+        "QR code representing the payload in the field below. Version " +
+        info.version +
+        ", " +
+        info.size +
+        " by " +
+        info.size +
+        " modules, error-correction level " +
+        info.level +
+        ", mask " +
+        info.mask +
+        ".";
+      canvas.setAttribute("aria-label", label);
+
+      wrap.classList.remove("qg__canvas-wrap--painted");
+      element("qg-fallback").textContent = label;
+
+      var preview = element("qg-preview-payload");
+      preview.value = payload.text;
+
+      paintStats(info);
+
+      status.textContent =
+        "Generated a version " +
+        info.version +
+        " symbol (" +
+        info.size +
+        " × " +
+        info.size +
+        " modules, mask " +
+        info.mask +
+        ", level " +
+        info.level +
+        ", " +
+        bytes.length +
+        " payload bytes).";
+
+      element("qg-download-png").disabled = false;
+      element("qg-download-svg").disabled = false;
+
+      // Read the format information back out of our own finished matrix.
+      var check = readFormat(info.grid);
+      if (check.level === levelName && check.mask === info.mask && check.copiesAgree) {
+        clearCheck(
+          "ok",
+          "Self-check passed — the format information decoded from the matrix reads level " +
+            check.level +
+            " and mask " +
+            check.mask +
+            ", matching the intent, and both copies agree."
+        );
+      } else {
+        clearCheck(
+          "bad",
+          "Self-check FAILED — the matrix decodes as level " +
+            (check.level || "unknown") +
+            " and mask " +
+            check.mask +
+            ", but level " +
+            levelName +
+            " and mask " +
+            info.mask +
+            " were intended. Do not use this code."
+        );
+      }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Downloads.
+     * ------------------------------------------------------------------ */
+
+    function saveBlob(blob, filename) {
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 4000);
+    }
+
+    function downloadPng() {
+      if (!last) return;
+      var canvas = element("qg-canvas");
+      var name = "qr-code-v" + last.version + ".png";
+      var status = element("qg-status");
+      if (canvas.toBlob) {
+        canvas.toBlob(function (blob) {
+          if (blob) {
+            saveBlob(blob, name);
+            status.textContent = "Downloaded " + name + ".";
+          } else {
+            status.textContent = "The browser could not encode the PNG. Try the SVG download instead.";
+          }
+        }, "image/png");
+      } else {
+        status.textContent = "This browser cannot export a PNG here. Use the SVG download instead.";
+      }
+    }
+
+    function downloadSvg() {
+      if (!last) return;
+      var svg = document.getElementById("qg-svg");
+      if (!svg) return;
+      var source = new XMLSerializer().serializeToString(svg);
+      if (source.indexOf("xmlns=") === -1) {
+        source = source.replace("<svg", '<svg xmlns="' + SVG_NS + '"');
+      }
+      var blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + source], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      var name = "qr-code-v" + last.version + ".svg";
+      saveBlob(blob, name);
+      element("qg-status").textContent = "Downloaded " + name + ".";
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Wiring.
+     * ------------------------------------------------------------------ */
+
+    function syncGroups() {
+      var mode = currentMode();
+      var groups = document.querySelectorAll("[data-qg-group]");
+      for (var i = 0; i < groups.length; i++) {
+        var group = groups[i];
+        var on = group.getAttribute("data-qg-group") === mode;
+        if (on) group.removeAttribute("hidden");
+        else group.setAttribute("hidden", "");
+      }
+    }
+
+    function markStale() {
+      element("qg-status").textContent = "Input changed — press Generate QR code to refresh the symbol.";
+    }
+
+    function init() {
+      syncGroups();
+
+      element("qg-mode").addEventListener("change", function () {
+        syncGroups();
+        markStale();
+      });
+      element("qg-generate").addEventListener("click", generate);
+      element("qg-download-png").addEventListener("click", downloadPng);
+      element("qg-download-svg").addEventListener("click", downloadSvg);
+
+      var controls = ["qg-ec", "qg-size", "qg-margin", "qg-fg", "qg-bg"];
+      for (var i = 0; i < controls.length; i++) {
+        element(controls[i]).addEventListener("change", generate);
+      }
+
+      var fields = document.querySelectorAll(".qg input, .qg textarea, .qg select");
+      for (var j = 0; j < fields.length; j++) {
+        if (fields[j].id === "qg-preview-payload") continue;
+        fields[j].addEventListener("input", markStale);
+      }
+
+      generate();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

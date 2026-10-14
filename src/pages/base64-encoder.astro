@@ -1,0 +1,756 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "base64-encoder")!;
+
+const faqs = [
+  {
+    q: "Is Base64 encryption?",
+    a: "No. Base64 is a reversible transport encoding, not encryption. Anyone who has the string can decode it with the same public algorithm, so it hides nothing. If you need confidentiality, encrypt the data first with a real cipher and keep the key secret — Base64 only makes binary bytes safe to paste into text-only channels.",
+  },
+  {
+    q: "Why does btoa() fail on accented or emoji text?",
+    a: "btoa() was defined for binary strings and throws an InvalidCharacterError on any code unit above U+00FF, so \"café\" or a single emoji breaks the naive call. The fix, used here, is to convert the text to UTF-8 bytes with new TextEncoder().encode(text) first and then Base64-encode those bytes; decoding reverses the process with new TextDecoder().decode(bytes).",
+  },
+  {
+    q: "What is the URL-safe alphabet and why drop the padding?",
+    a: "Standard Base64 uses \"+\" and \"/\", which have reserved meanings inside a URL path or query string, so the URL-safe variant defined in RFC 4648 section 5 substitutes \"-\" and \"_\" and commonly strips the trailing \"=\" characters. This tool accepts either alphabet on input and re-adds padding automatically when you decode, so mismatched padding is never a hard failure.",
+  },
+  {
+    q: "How much larger is Base64 than the original data?",
+    a: "Base64 packs three bytes into four characters, so the encoded text is about 33% larger than the source, plus a little more for line breaks or a Data URL header. A 300 KB image becomes roughly 400 KB of text. That overhead is why Base64 is for embedding and transport, not for storing large files.",
+  },
+];
+
+const sources = [
+  {
+    label: "RFC 4648 — The Base16, Base32 and Base64 Data Encodings",
+    href: "https://www.rfc-editor.org/rfc/rfc4648",
+    note: "The normative definition of the standard alphabet, the padding rules, and the URL- and filename-safe variant using \"-\" and \"_\".",
+  },
+  {
+    label: "MDN Web Docs — Base64 encoding and decoding",
+    href: "https://developer.mozilla.org/en-US/docs/Glossary/Base64",
+    note: "Explains why btoa() throws on non-Latin-1 text and documents the TextEncoder/TextDecoder workaround this tool relies on.",
+  },
+  {
+    label: "WHATWG Encoding Standard — TextEncoder and TextDecoder",
+    href: "https://encoding.spec.whatwg.org/",
+    note: "Defines the UTF-8 encode and decode steps, including that invalid byte sequences are replaced rather than thrown, which is why corrupt input can decode to placeholder characters.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Convert text or a whole file to and from Base64 — handling UTF-8 and emoji correctly, with a URL-safe option, byte-size readouts, a data-URL preview and copy or download buttons."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body b64">
+        <div class="b64__grid">
+          <div class="field b64__pane">
+            <label for="b64-in">Text or Base64 input</label>
+            <textarea
+              id="b64-in"
+              class="b64__ta"
+              rows="8"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder="Paste text you want to encode, or a Base64 string you want to decode…"
+            ></textarea>
+          </div>
+
+          <div class="field b64__pane">
+            <label for="b64-out">Result</label>
+            <textarea
+              id="b64-out"
+              class="b64__ta"
+              rows="8"
+              readonly
+              spellcheck="false"
+              aria-live="polite"
+              aria-atomic="true"
+              placeholder="The encoded or decoded result appears here."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="b64__actions">
+          <button type="button" class="btn btn--primary" id="b64-encode">Encode</button>
+          <button type="button" class="btn btn--ghost" id="b64-decode">Decode</button>
+          <button type="button" class="btn btn--soft" id="b64-copy">Copy result</button>
+          <button type="button" class="btn btn--soft" id="b64-download">Download result as .txt</button>
+          <button type="button" class="btn btn--ghost" id="b64-clear">Clear</button>
+        </div>
+
+        <div class="b64__opts">
+          <label class="check">
+            <input type="checkbox" id="b64-urlsafe" />
+            <span>URL-safe alphabet (<code>-</code> and <code>_</code>, no padding)</span>
+          </label>
+        </div>
+
+        <div class="fieldset b64__file">
+          <legend>Or encode a file</legend>
+          <div class="b64__drop" id="b64-drop" tabindex="0" role="button" aria-describedby="b64-drop-help">
+            <span class="b64__drop-title">Drop a file here</span>
+            <span class="b64__drop-sub">…or press Enter to choose one. Read locally as an ArrayBuffer — nothing is uploaded.</span>
+          </div>
+          <label class="sr-only" for="b64-file">Choose a file to encode as Base64</label>
+          <input type="file" id="b64-file" class="b64__file-input" />
+          <p class="b64__help" id="b64-drop-help">
+            Choose any file — an image, a PDF, a small archive. It is read in your browser and never leaves the page.
+          </p>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat__label">Input size</div>
+            <div class="stat__value" id="b64-size"><small>—</small></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Result length</div>
+            <div class="stat__value" id="b64-len"><small>—</small></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Output</div>
+            <div class="stat__value" id="b64-growth"><small>—</small></div>
+          </div>
+        </div>
+
+        <div class="b64__preview" id="b64-preview" hidden>
+          <p class="b64__preview-label" id="b64-preview-label">Image preview</p>
+          <img id="b64-preview-img" class="b64__preview-img" alt="Preview of the encoded image" />
+        </div>
+
+        <p class="b64__error" id="b64-error" role="alert" aria-live="assertive" hidden></p>
+
+        <div class="b64__status" aria-live="polite">
+          <span id="b64-status">Ready — type or paste text, or choose a file.</span>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Everything runs locally. Encoding and decoding are the public Base64 algorithms — they hide nothing, so never treat the output as a secret.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How Base64 encoding works</h2>
+  <p>
+    Base64 exists to move binary data through channels that only tolerate text: JSON fields, XML
+    documents, email bodies, HTTP headers and data URLs. The algorithm takes the raw bytes, groups
+    them into sets of three, and rewrites each 24-bit group as four 6-bit numbers. A 6-bit number has
+    64 possible values, so each one maps to a single printable character — the 62 letters and digits
+    <code>A–Z</code>, <code>a–z</code> and <code>0–9</code>, plus <code>+</code> and <code>/</code>.
+  </p>
+  <p>
+    That three-bytes-to-four-characters ratio is the whole trick, and it is also the whole cost: the
+    encoded text is roughly 33% larger than the source. If the input length is not a multiple of three,
+    the final group is short and is padded with <code>=</code> characters so the length always lands on
+    a multiple of four. Those <code>=</code> signs carry no data — they are a checksum-free way of
+    telling a decoder how many bytes the last group really contains.
+  </p>
+  <p>
+    The subtle part in a browser is text. JavaScript strings are sequences of UTF-16 code units, and the
+    legacy <code>btoa()</code> function rejects anything above U+00FF with an
+    <em>InvalidCharacterError</em>. So <code>btoa("café")</code> and any string containing an emoji both
+    throw. The correct route, and the one this tool takes, is to turn the text into UTF-8 bytes first
+    with <code>new TextEncoder().encode(text)</code>, Base64-encode those bytes, and on the way back
+    decode to bytes and run them through <code>new TextDecoder().decode(bytes)</code>. That round-trip
+    is lossless for every character the Unicode standard defines, accents and emoji included.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Input</th>
+          <th scope="col">UTF-8 bytes</th>
+          <th scope="col">Standard Base64</th>
+          <th scope="col">URL-safe Base64</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Man</code></td>
+          <td>3</td>
+          <td><code>TWFu</code></td>
+          <td><code>TWFu</code></td>
+        </tr>
+        <tr>
+          <td><code>Ma</code></td>
+          <td>2</td>
+          <td><code>TWE=</code></td>
+          <td><code>TWE</code></td>
+        </tr>
+        <tr>
+          <td><code>café</code></td>
+          <td>5</td>
+          <td><code>Y2Fmw6k=</code></td>
+          <td><code>Y2Fmw6k</code></td>
+        </tr>
+        <tr>
+          <td><code>~?</code></td>
+          <td>2</td>
+          <td><code>fj8=</code></td>
+          <td><code>fj8</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Accuracy, limits and honest caveats</h2>
+  <p>
+    Base64 is a bijection over byte strings, so for well-formed input the round-trip here is exact. The
+    honest limitations are about <em>ill-formed</em> input, and about what Base64 is not for.
+  </p>
+  <ul>
+    <li>
+      <strong>Invalid input is reported, never guessed.</strong> If the string contains characters
+      outside the Base64 alphabet, or its length is impossible once padding is considered, the tool says
+      so instead of returning empty output. It deliberately does not invent characters to force a
+      decode.
+    </li>
+    <li>
+      <strong>Padding and whitespace are tolerated.</strong> Missing <code>=</code> at the end is fine —
+      it is re-added automatically, because the length already tells the decoder what is missing. Line
+      breaks from MIME-encoded data are stripped too, which matters for Base64 copied out of email.
+    </li>
+    <li>
+      <strong>Bytes are not always text.</strong> Decoding a Base64 string that really contains an image
+      or a compressed archive produces replacement characters, because those bytes were never valid
+      UTF-8. Nothing is lost — the file input pane is the right way to look at binary data — but the
+      text pane will look like noise.
+    </li>
+    <li>
+      <strong>Base64 is not compression and not security.</strong> It adds about a third to the size, and
+      it protects nothing: it is a public, keyless transform. Treating Base64 as obfuscation is a common
+      and costly mistake.
+    </li>
+    <li>
+      <strong>Large files stay in memory.</strong> Everything happens on the main thread, so a
+      multi-megabyte file will pause the page briefly while the string is built. For very large payloads
+      a chunked streaming encoder is a better fit than a single-page tool.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      A Data URL is Base64 plus a media type, for example
+      <code>data:image/png;base64,iVBORw0…</code>. It is perfect for small inline icons, but the browser
+      cannot cache it separately and it inflates the HTML, so keep it for payloads of a few kilobytes.
+    </p>
+  </div>
+
+  <h2>How to use this tool</h2>
+  <ol>
+    <li>
+      <strong>Encode text.</strong> Type or paste into the left pane — the output updates as you type,
+      so there is no need to press anything. Accents and emoji are handled through UTF-8 and never
+      throw.
+    </li>
+    <li>
+      <strong>Decode a string.</strong> Paste the Base64 into the same left pane and press
+      <em>Decode</em>. Both alphabets are accepted: a value containing <code>-</code> or <code>_</code>
+      is read as URL-safe automatically, and missing padding is repaired.
+    </li>
+    <li>
+      <strong>Switch to the URL-safe alphabet.</strong> Tick the box before encoding when the result
+      will travel inside a URL, a filename or a JWT-style token. The encoded string updates immediately,
+      with <code>+</code> and <code>/</code> replaced and the padding removed.
+    </li>
+    <li>
+      <strong>Encode a file.</strong> Drop a file onto the dashed area, or press Enter there to pick one.
+      It is read as an ArrayBuffer and converted to Base64, and the readouts show the original byte size
+      next to the encoded character count.
+    </li>
+    <li>
+      <strong>Preview images.</strong> When the file is an image, a data-URL preview appears so you can
+      confirm you encoded the file you meant. The browser renders the preview itself; nothing is
+      uploaded.
+    </li>
+    <li>
+      <strong>Take the result away.</strong> <em>Copy result</em> puts the string on the clipboard and
+      <em>Download result as .txt</em> saves it to a file, ready to paste into a config value, an API
+      payload or an <code>img</code> tag.
+    </li>
+  </ol>
+  <p>
+    Because the page is a single static document with no network calls, it keeps working on a plane, on
+    a locked-down machine, or anywhere an online encoder would be a bad idea for the data you are
+    handling.
+  </p>
+</ToolLayout>
+
+<style>
+  .b64 {
+    display: grid;
+    gap: 1.1rem;
+  }
+  .b64__grid {
+    display: grid;
+    gap: 1rem;
+  }
+  @media (min-width: 780px) {
+    .b64__grid {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+  }
+  .b64__pane {
+    min-width: 0;
+  }
+  .b64__ta {
+    min-height: 11rem;
+    resize: vertical;
+    line-height: 1.5;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+  }
+  .b64__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .b64__opts {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .b64__opts code,
+  .b64__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .b64__file {
+    display: grid;
+    gap: 0.7rem;
+  }
+  .b64__drop {
+    display: grid;
+    gap: 0.2rem;
+    padding: 1.1rem 1rem;
+    text-align: center;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    cursor: pointer;
+    color: var(--text-muted);
+  }
+  .b64__drop:hover,
+  .b64__drop:focus-visible {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+    outline: none;
+  }
+  .b64__drop--over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  .b64__drop-title {
+    font-weight: 650;
+    color: var(--text);
+  }
+  .b64__drop-sub {
+    font-size: 0.85rem;
+  }
+  .b64__file-input {
+    display: none;
+  }
+  .b64__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .b64__preview {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .b64__preview-label {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .b64__preview-img {
+    display: block;
+    max-width: 100%;
+    max-height: 260px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+  }
+  .b64__error {
+    margin: 0;
+    padding: 0.75rem 0.95rem;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-inline-start: 3px solid var(--danger);
+    font-size: 0.92rem;
+  }
+  .b64__status {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var input = document.getElementById("b64-in");
+    var out = document.getElementById("b64-out");
+    var urlSafeBox = document.getElementById("b64-urlsafe");
+    var fileInput = document.getElementById("b64-file");
+    var dropZone = document.getElementById("b64-drop");
+    var errorBox = document.getElementById("b64-error");
+    var statusEl = document.getElementById("b64-status");
+    var sizeEl = document.getElementById("b64-size");
+    var lenEl = document.getElementById("b64-len");
+    var growthEl = document.getElementById("b64-growth");
+    var preview = document.getElementById("b64-preview");
+    var previewImg = document.getElementById("b64-preview-img");
+    var previewLabel = document.getElementById("b64-preview-label");
+
+    var lastMode = "";
+    var objectUrlTimer = null;
+
+    var INVALID = "That is not valid base64 — check for missing padding or stray characters";
+
+    function bytesToBinary(bytes) {
+      var chunk = 0x8000;
+      var parts = [];
+      for (var i = 0; i < bytes.length; i += chunk) {
+        parts.push(String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length))));
+      }
+      return parts.join("");
+    }
+
+    function encodeBytes(bytes) {
+      var b64 = btoa(bytesToBinary(bytes));
+      if (!urlSafeBox.checked) return b64;
+      return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function decodeToBytes(raw) {
+      var cleaned = String(raw).replace(/\s+/g, "");
+      if (cleaned === "") {
+        return { error: "There is nothing to decode yet — paste a Base64 string first." };
+      }
+      var standard = cleaned.replace(/-/g, "+").replace(/_/g, "/");
+      if (standard.indexOf("=") !== -1 && !/^[A-Za-z0-9+/]*={0,2}$/.test(standard)) {
+        return { error: INVALID };
+      }
+      var core = standard.replace(/=+$/g, "");
+      if (!/^[A-Za-z0-9+/]*$/.test(core) || core.length % 4 === 1) {
+        return { error: INVALID };
+      }
+      var pad = core.length % 4 === 0 ? 0 : 4 - (core.length % 4);
+      var binary;
+      try {
+        binary = atob(core + "==".slice(0, pad));
+      } catch (err) {
+        return { error: INVALID };
+      }
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return { bytes: bytes };
+    }
+
+    function decodeToText(raw) {
+      var result = decodeToBytes(raw);
+      if (result.error) return result;
+      try {
+        return { text: new TextDecoder("utf-8").decode(result.bytes) };
+      } catch (err) {
+        return { text: new TextDecoder().decode(result.bytes) };
+      }
+    }
+
+    function sizeText(bytes) {
+      if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return bytes + (bytes === 1 ? " byte" : " bytes");
+    }
+
+    function clearError() {
+      errorBox.hidden = true;
+      errorBox.textContent = "";
+    }
+
+    function showError(message) {
+      errorBox.hidden = false;
+      errorBox.textContent = message;
+      out.value = "";
+      lastMode = "";
+      sizeEl.textContent = "—";
+      lenEl.textContent = "—";
+      growthEl.textContent = "—";
+      statusEl.textContent = "Decoding failed.";
+    }
+
+    function hidePreview() {
+      preview.hidden = true;
+      previewImg.removeAttribute("src");
+    }
+
+    function setGrowth(encodedLength, byteLength) {
+      if (!byteLength) {
+        growthEl.textContent = "—";
+        return;
+      }
+      var pct = Math.round((encodedLength / byteLength) * 100);
+      growthEl.textContent = "+" + Math.max(0, pct - 100) + "%";
+    }
+
+    /* ---------- actions ---------- */
+
+    function encodePane(live) {
+      clearError();
+      hidePreview();
+      var text = input.value;
+      if (text === "") {
+        out.value = "";
+        lastMode = "";
+        sizeEl.textContent = "—";
+        lenEl.textContent = "—";
+        growthEl.textContent = "—";
+        statusEl.textContent = "Nothing to encode yet — type some text.";
+        return;
+      }
+      var bytes = new TextEncoder().encode(text);
+      out.value = encodeBytes(bytes);
+      lastMode = "base64";
+      sizeEl.textContent = sizeText(bytes.length);
+      lenEl.textContent = out.value.length + " chars";
+      setGrowth(out.value.length, bytes.length);
+      if (live) {
+        statusEl.textContent = urlSafeBox.checked
+          ? "Encoding as you type — URL-safe alphabet."
+          : "Encoding as you type.";
+      } else {
+        statusEl.textContent = urlSafeBox.checked
+          ? "Encoded to URL-safe Base64 (padding removed)."
+          : "Encoded to standard Base64.";
+      }
+    }
+
+    function decodePane() {
+      clearError();
+      hidePreview();
+      var text = input.value;
+      if (text === "") {
+        out.value = "";
+        lastMode = "";
+        sizeEl.textContent = "—";
+        lenEl.textContent = "—";
+        growthEl.textContent = "—";
+        statusEl.textContent = "Nothing to decode yet — paste a Base64 string.";
+        return;
+      }
+      var result = decodeToText(text);
+      if (result.error) {
+        showError(result.error);
+        return;
+      }
+      var converted = decodeToBytes(text);
+      var byteLength = converted.error ? 0 : converted.bytes.length;
+      out.value = result.text;
+      lastMode = "text";
+      sizeEl.textContent = sizeText(byteLength);
+      lenEl.textContent = result.text.length + " chars";
+      growthEl.textContent = "text";
+      statusEl.textContent = "Decoded " + sizeText(byteLength) + " of input.";
+    }
+
+    /* ---------- file input ---------- */
+
+    function mimeFromBase64(base64) {
+      if (/^iVBOR/.test(base64)) return "image/png";
+      if (/^\/9j\//.test(base64)) return "image/jpeg";
+      if (/^R0lGOD/.test(base64)) return "image/gif";
+      if (/^UklGR/.test(base64)) return "image/webp";
+      if (/^PHN2Zy/.test(base64)) return "image/svg+xml";
+      return "";
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      clearError();
+      hidePreview();
+      var reader = new FileReader();
+      reader.onload = function () {
+        var bytes = new Uint8Array(reader.result);
+        var encoded = encodeBytes(bytes);
+        out.value = encoded;
+        lastMode = "base64";
+        sizeEl.textContent = sizeText(bytes.length);
+        lenEl.textContent = encoded.length + " chars";
+        setGrowth(encoded.length, bytes.length);
+        statusEl.textContent =
+          "Encoded " + file.name + " — " + sizeText(bytes.length) + " read locally, nothing uploaded.";
+        var mime = file.type && file.type.indexOf("image/") === 0 ? file.type : mimeFromBase64(encoded);
+        if (mime && bytes.length > 0) {
+          previewImg.src = "data:" + mime + ";base64," + encoded;
+          previewLabel.textContent = "Image preview — " + mime + " (" + file.name + ")";
+          preview.hidden = false;
+        }
+      };
+      reader.onerror = function () {
+        showError("That file could not be read — it may have been moved, or you may not have permission to open it.");
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function openPicker() {
+      fileInput.click();
+    }
+
+    /* ---------- clipboard and download ---------- */
+
+    function fallbackCopy(text) {
+      var helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.top = "-1000px";
+      document.body.appendChild(helper);
+      helper.select();
+      var ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(helper);
+      return ok;
+    }
+
+    function copyResult() {
+      if (!out.value) {
+        statusEl.textContent = "There is nothing to copy yet — encode or decode something first.";
+        return;
+      }
+      var text = out.value;
+      var done = function (ok) {
+        statusEl.textContent = ok
+          ? "Result copied to the clipboard."
+          : "Copying was blocked — select the text and press Ctrl+C.";
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            done(true);
+          },
+          function () {
+            done(fallbackCopy(text));
+          }
+        );
+      } else {
+        done(fallbackCopy(text));
+      }
+    }
+
+    function downloadResult() {
+      if (!out.value) {
+        statusEl.textContent = "There is nothing to download yet — encode or decode something first.";
+        return;
+      }
+      var name = lastMode === "text" ? "decoded.txt" : "base64.txt";
+      var blob = new Blob([out.value], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      if (objectUrlTimer) clearTimeout(objectUrlTimer);
+      objectUrlTimer = setTimeout(function () {
+        URL.revokeObjectURL(url);
+        objectUrlTimer = null;
+      }, 1000);
+      statusEl.textContent = "Saved " + name + " to your downloads.";
+    }
+
+    function resetAll() {
+      input.value = "";
+      out.value = "";
+      fileInput.value = "";
+      lastMode = "";
+      clearError();
+      hidePreview();
+      sizeEl.textContent = "—";
+      lenEl.textContent = "—";
+      growthEl.textContent = "—";
+      statusEl.textContent = "Cleared. Start again whenever you like.";
+      input.focus();
+    }
+
+    /* ---------- wiring ---------- */
+
+    function init() {
+      document.getElementById("b64-encode").addEventListener("click", function () {
+        encodePane(false);
+      });
+      document.getElementById("b64-decode").addEventListener("click", decodePane);
+      document.getElementById("b64-copy").addEventListener("click", copyResult);
+      document.getElementById("b64-download").addEventListener("click", downloadResult);
+      document.getElementById("b64-clear").addEventListener("click", resetAll);
+
+      /* Encoding stays live while typing; the Decode button always wins. */
+      input.addEventListener("input", function () {
+        if (fileInput.files && fileInput.files.length) fileInput.value = "";
+        encodePane(true);
+      });
+
+      urlSafeBox.addEventListener("change", function () {
+        if (input.value) encodePane(false);
+      });
+
+      fileInput.addEventListener("change", function () {
+        if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+      });
+
+      dropZone.addEventListener("click", openPicker);
+      dropZone.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+          event.preventDefault();
+          openPicker();
+        }
+      });
+      ["dragenter", "dragover"].forEach(function (type) {
+        dropZone.addEventListener(type, function (event) {
+          event.preventDefault();
+          dropZone.classList.add("b64__drop--over");
+        });
+      });
+      ["dragleave", "drop"].forEach(function (type) {
+        dropZone.addEventListener(type, function (event) {
+          event.preventDefault();
+          dropZone.classList.remove("b64__drop--over");
+        });
+      });
+      dropZone.addEventListener("drop", function (event) {
+        var dt = event.dataTransfer;
+        if (dt && dt.files && dt.files[0]) handleFile(dt.files[0]);
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

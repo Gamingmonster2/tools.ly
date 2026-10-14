@@ -1,0 +1,504 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "bmi-calculator")!;
+
+const faqs = [
+  {
+    q: "Is BMI a good measure of my health?",
+    a: "It is a useful screening number and a poor individual diagnosis. Body mass index was designed to compare populations, and it only relates weight to height — it cannot tell muscle from fat, it says nothing about where fat sits, and it ignores fitness, blood pressure, blood glucose and family history. Use it as one input to a conversation with a clinician, not as a verdict on your body.",
+  },
+  {
+    q: "Why does my BMI say overweight when I am clearly fit?",
+    a: "Because muscle is denser than fat. A trained athlete can carry enough muscle to be classified as overweight or even obese while having a low body-fat percentage and excellent metabolic markers. In that case the waist measurement and how you perform matter far more than the BMI band.",
+  },
+  {
+    q: "Do the same thresholds apply to everyone?",
+    a: "No. Several health bodies use lower action points for people of South Asian, Chinese and other Asian populations, where the risk of type 2 diabetes and cardiovascular disease rises at a lower BMI — often 23 rather than 25. Some guidelines also adjust for age, since older adults tend to carry more fat at the same BMI.",
+  },
+  {
+    q: "When should I not use this at all?",
+    a: "During pregnancy, for children and teenagers (who need age- and sex-specific growth charts), for people with significant fluid retention or amputations, and for anyone whose clinician has told them that BMI is unreliable in their case. In those situations, ask a professional instead of reading a number off a web page.",
+  },
+];
+
+const sources = [
+  {
+    label: "WHO — Body mass index (BMI)",
+    href: "https://www.who.int/data/gho/data/themes/topics/topic-details/GHO/body-mass-index",
+    note: "the source of the 18.5 / 25 / 30 category boundaries used here",
+  },
+  {
+    label: "WHO Expert Consultation — Appropriate body-mass index for Asian populations",
+    href: "https://www.who.int/publications/i/item/9789241594288",
+    note: "the report behind the lower action points for South Asian and other Asian populations",
+  },
+  {
+    label: "NHS — Obesity and BMI",
+    href: "https://www.nhs.uk/conditions/obesity/",
+    note: "a patient-facing explanation of what BMI does and does not tell you",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+
+const bands = [
+  { id: "under", label: "Underweight", from: 0, to: 18.5, className: "bmi-band--under" },
+  { id: "healthy", label: "Healthy", from: 18.5, to: 25, className: "bmi-band--healthy" },
+  { id: "over", label: "Overweight", from: 25, to: 30, className: "bmi-band--over" },
+  { id: "obese1", label: "Obese I", from: 30, to: 35, className: "bmi-band--obese" },
+  { id: "obese2", label: "Obese II", from: 35, to: 40, className: "bmi-band--obese" },
+  { id: "obese3", label: "Obese III", from: 40, to: 60, className: "bmi-band--obese" },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Enter your height and weight to get your body mass index, the WHO category it falls into, and the weight range that would put you in the healthy band."
+  faqs={faqs}
+  sources={sources}
+  notice="Estimates for information only. BMI cannot distinguish muscle from fat and is not valid in pregnancy or for children. It is not medical advice."
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <form id="bmi-form" novalidate>
+          <fieldset class="fieldset">
+            <legend>Units</legend>
+            <div class="bmi-toggle" role="radiogroup" aria-label="Unit system">
+              <label class="bmi-toggle__opt">
+                <input type="radio" name="bmi-units" value="metric" checked />
+                <span>Metric (cm, kg)</span>
+              </label>
+              <label class="bmi-toggle__opt">
+                <input type="radio" name="bmi-units" value="imperial" />
+                <span>Imperial (ft/in, lb)</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field-grid" style="margin-top:1rem">
+            <div class="field" data-bmi-units="metric">
+              <label for="bmi-height-cm">Height (cm)</label>
+              <input id="bmi-height-cm" type="number" min="100" max="250" step="0.5" value="175" inputmode="decimal" />
+            </div>
+
+            <div data-bmi-units="imperial" hidden>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="bmi-height-ft">Height (ft)</label>
+                  <input id="bmi-height-ft" type="number" min="3" max="8" step="1" value="5" inputmode="numeric" />
+                </div>
+                <div class="field">
+                  <label for="bmi-height-in">(in)</label>
+                  <input id="bmi-height-in" type="number" min="0" max="11.9" step="0.5" value="9" inputmode="decimal" />
+                </div>
+              </div>
+            </div>
+
+            <div class="field" data-bmi-units="metric">
+              <label for="bmi-weight-kg">Weight (kg)</label>
+              <input id="bmi-weight-kg" type="number" min="20" max="400" step="0.1" value="80" inputmode="decimal" />
+            </div>
+
+            <div class="field" data-bmi-units="imperial" hidden>
+              <label for="bmi-weight-lb">Weight (lb)</label>
+              <input id="bmi-weight-lb" type="number" min="44" max="880" step="0.1" value="176" inputmode="decimal" />
+            </div>
+
+            <div class="field">
+              <label for="bmi-sex">Sex (for the waist thresholds)</label>
+              <select id="bmi-sex">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="bmi-waist">Waist (optional, cm)</label>
+              <input id="bmi-waist" type="number" min="40" max="200" step="0.5" placeholder="Flags central fat risk" />
+            </div>
+          </div>
+
+          <div style="margin-top:1.25rem">
+            <button class="btn btn--primary" type="submit">Calculate my BMI</button>
+          </div>
+        </form>
+
+        <p class="bmi-error" id="bmi-error" role="alert" hidden></p>
+
+        <div id="bmi-results" hidden aria-live="polite">
+          <div class="stat-grid" style="margin-top:1.5rem">
+            <div class="stat">
+              <div class="stat__label">Your BMI</div>
+              <div class="stat__value" id="bmi-value">—</div>
+              <div class="stat__label" id="bmi-category" style="margin-top:0.3rem"></div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Healthy weight range</div>
+              <div class="stat__value" style="font-size:1.2rem" id="bmi-range">—</div>
+              <div class="stat__label" style="margin-top:0.3rem">BMI 18.5 – 24.9</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Distance to healthy range</div>
+              <div class="stat__value" style="font-size:1.2rem" id="bmi-delta">—</div>
+              <div class="stat__label" style="margin-top:0.3rem">how much to lose or gain</div>
+            </div>
+          </div>
+
+          <div class="bmi-scale" role="img" aria-labelledby="bmi-scale-caption">
+            <div class="bmi-scale__track">
+              {
+                bands.map((band) => (
+                  <span class={`bmi-band ${band.className}`} style={`flex:${band.to - band.from}`} title={`${band.label}: ${band.from} – ${band.to}`} />
+                ))
+              }
+              <span class="bmi-scale__marker" id="bmi-marker" title="Your BMI"></span>
+            </div>
+            <div class="bmi-scale__labels">
+              <span>15</span>
+              <span class="bmi-scale__mid">18.5</span>
+              <span class="bmi-scale__mid">25</span>
+              <span class="bmi-scale__mid">30</span>
+              <span>40+</span>
+            </div>
+          </div>
+          <p class="bmi-caption" id="bmi-scale-caption" aria-live="polite"></p>
+
+          <div class="bmi-legend">
+            <span><i class="bmi-dot bmi-dot--under"></i> Underweight &lt; 18.5</span>
+            <span><i class="bmi-dot bmi-dot--healthy"></i> Healthy 18.5–24.9</span>
+            <span><i class="bmi-dot bmi-dot--over"></i> Overweight 25–29.9</span>
+            <span><i class="bmi-dot bmi-dot--obese"></i> Obese 30+</span>
+          </div>
+
+          <p class="bmi-waist" id="bmi-waist-note" hidden></p>
+
+          <p class="bmi-next">
+            Want a range rather than a single number? The
+            <a href="/find-your-perfect-fit-use-our-ideal-weight-calculator-to-know-your-healthy-weight-range/">
+              ideal weight calculator
+            </a>
+            shows four published formulas side by side and explains why they disagree.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Body mass index uses the WHO category boundaries. The healthy weight range is the weight at
+        which your height gives a BMI between 18.5 and 24.9.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>What BMI is, and what it is not</h2>
+  <p>
+    Body mass index is a single division: your weight in kilograms divided by the square of your
+    height in metres. It was devised in the nineteenth century by Adolphe Quetelet as a way of
+    describing populations, and it is still used that way today — to compare groups, track trends
+    and triage large numbers of people cheaply. It was never designed to describe an individual
+    body, and that is the source of most of the frustration it causes.
+  </p>
+  <p>
+    What it captures is weight relative to height. What it cannot capture is composition. A
+    kilogram of muscle and a kilogram of fat weigh the same, so a rugby forward with 12 % body fat
+    and a sedentary person with 32 % body fat can share the same BMI. The tool above therefore
+    reports the number and the range, and then stops short of telling you what to do about it.
+  </p>
+
+  <h2>Reading the bands</h2>
+  <p>
+    The World Health Organization defines underweight as below 18.5, a healthy weight as 18.5 to
+    24.9, overweight as 25 to 29.9, and obesity in three classes from 30 upward. Those numbers come
+    from population studies of risk, not from any property of an individual. They describe where
+    average risk begins to rise, which is why they are used as action points rather than as targets.
+  </p>
+  <p>
+    The healthy weight range shown above is the honest translation of the healthy band for your
+    height: the weights at which your BMI would sit between 18.5 and 24.9. Notice how wide it is —
+    usually around fifteen to twenty kilograms at adult heights. Two people at the opposite ends of
+    that range can both be healthy, and the space between them is where most of the disagreement
+    about "ideal weight" lives.
+  </p>
+
+  <h2>Waist measurement matters more than you would think</h2>
+  <p>
+    Where fat sits is a stronger predictor of metabolic risk than how much of it there is. Fat
+    stored around the abdominal organs — visceral fat — is associated with insulin resistance,
+    type 2 diabetes and cardiovascular disease in a way that fat stored on the hips and thighs is
+    not. That is why the tool accepts an optional waist measurement and flags it separately from
+    the BMI result.
+  </p>
+  <p>
+    The usual action levels are 94 cm for men and 80 cm for women, with substantially increased
+    risk at 102 cm and 88 cm respectively. Measure at the midpoint between the lowest rib and the
+    top of the hip bone, at the end of a normal breath out, without pulling the tape tight. A waist
+    that falls while your weight stays flat usually means fat is being replaced by muscle — a good
+    outcome that a scale alone would hide.
+  </p>
+
+  <h2>Where BMI genuinely misleads</h2>
+  <ul>
+    <li><strong>Trained muscle.</strong> Athletes and regular lifters are routinely misclassified as overweight.</li>
+    <li><strong>Older adults.</strong> Muscle is lost with age, so a normal BMI can hide a high body-fat percentage.</li>
+    <li><strong>South Asian and other Asian populations.</strong> Risk rises at a lower BMI; many guidelines use 23 rather than 25 as the first action point.</li>
+    <li><strong>Pregnancy.</strong> The calculation has no meaning at all.</li>
+    <li><strong>Children and teenagers.</strong> They need age- and sex-specific percentile charts, not adult bands.</li>
+    <li><strong>Amputations and fluid retention.</strong> Both change the relationship between weight and body size drastically.</li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Weight is one measurement among many. Blood pressure, blood glucose, waist circumference,
+      sleep, strength and how you actually feel tell a fuller story than any single number on this
+      page. If you are considering a significant change to how you eat or train, talk to a doctor or
+      registered dietitian first.
+    </p>
+  </div>
+</ToolLayout>
+
+<style>
+  .bmi-toggle { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .bmi-toggle__opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.85rem;
+    font-size: 0.92rem;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .bmi-toggle__opt:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 650;
+  }
+
+  .bmi-scale { margin-top: 1.75rem; }
+  .bmi-scale__track {
+    position: relative;
+    display: flex;
+    height: 16px;
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .bmi-band { display: block; height: 100%; }
+  .bmi-band--under { background: #9ec5ff; }
+  .bmi-band--healthy { background: #7fd3a5; }
+  .bmi-band--over { background: #f3c969; }
+  .bmi-band--obese { background: #ef8f7e; }
+
+  .bmi-scale__marker {
+    position: absolute;
+    top: -5px;
+    width: 3px;
+    height: 26px;
+    background: var(--text);
+    border-radius: 2px;
+    transform: translateX(-50%);
+    transition: left 0.25s ease;
+  }
+
+  .bmi-scale__labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.76rem;
+    color: var(--text-faint);
+    margin-top: 0.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .bmi-scale__mid { display: none; }
+  @media (min-width: 520px) { .bmi-scale__mid { display: inline; } }
+
+  .bmi-caption { margin-top: 0.9rem; font-size: 0.98rem; }
+
+  .bmi-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.1rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .bmi-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    margin-inline-end: 0.35rem;
+  }
+  .bmi-dot--under { background: #9ec5ff; }
+  .bmi-dot--healthy { background: #7fd3a5; }
+  .bmi-dot--over { background: #f3c969; }
+  .bmi-dot--obese { background: #ef8f7e; }
+
+  .bmi-waist {
+    margin-top: 1rem;
+    border-inline-start: 3px solid var(--warn);
+    background: var(--warn-soft);
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+  }
+
+  .bmi-next { margin-top: 1.25rem; font-size: 0.95rem; color: var(--text-muted); }
+  .bmi-error { margin-top: 1rem; color: var(--danger); font-size: 0.92rem; }
+</style>
+
+<script>
+  const form = document.getElementById("bmi-form") as HTMLFormElement;
+  const results = document.getElementById("bmi-results")!;
+  const errorBox = document.getElementById("bmi-error")!;
+
+  const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const CM_PER_IN = 2.54;
+  const KG_PER_LB = 0.45359237;
+  const SCALE_MIN = 15;
+  const SCALE_MAX = 40;
+
+  const units = (): "metric" | "imperial" =>
+    (form.querySelector('input[name="bmi-units"]:checked') as HTMLInputElement).value as
+      | "metric"
+      | "imperial";
+
+  const setUnitVisibility = () => {
+    const current = units();
+    for (const node of Array.from(document.querySelectorAll<HTMLElement>("[data-bmi-units]"))) {
+      node.hidden = node.dataset.bmiUnits !== current;
+    }
+  };
+
+  const heightCm = (): number => {
+    if (units() === "metric") return Number(el<HTMLInputElement>("bmi-height-cm").value);
+    const ft = Number(el<HTMLInputElement>("bmi-height-ft").value) || 0;
+    const inches = Number(el<HTMLInputElement>("bmi-height-in").value) || 0;
+    return (ft * 12 + inches) * CM_PER_IN;
+  };
+
+  const weightKg = (): number => {
+    if (units() === "metric") return Number(el<HTMLInputElement>("bmi-weight-kg").value);
+    return (Number(el<HTMLInputElement>("bmi-weight-lb").value) || 0) * KG_PER_LB;
+  };
+
+  const showWeight = (kg: number): string =>
+    units() === "metric"
+      ? `${kg.toFixed(1)} kg`
+      : `${(kg / KG_PER_LB).toFixed(1)} lb`;
+
+  const categoryOf = (bmi: number): { label: string; tone: string } => {
+    if (bmi < 16) return { label: "Severely underweight", tone: "var(--danger)" };
+    if (bmi < 18.5) return { label: "Underweight", tone: "var(--warn)" };
+    if (bmi < 25) return { label: "Healthy range", tone: "var(--ok)" };
+    if (bmi < 30) return { label: "Overweight", tone: "var(--warn)" };
+    if (bmi < 35) return { label: "Obese class I", tone: "var(--danger)" };
+    if (bmi < 40) return { label: "Obese class II", tone: "var(--danger)" };
+    return { label: "Obese class III", tone: "var(--danger)" };
+  };
+
+  const calculate = () => {
+    const h = heightCm();
+    const w = weightKg();
+
+    if (!Number.isFinite(h) || h < 100 || h > 250) {
+      errorBox.textContent = "Please enter a height between 100 cm and 250 cm (about 3 ft 3 in to 8 ft 2 in).";
+      errorBox.hidden = false;
+      results.hidden = true;
+      return;
+    }
+    if (!Number.isFinite(w) || w < 20 || w > 400) {
+      errorBox.textContent = "Please enter a weight between 20 kg and 400 kg (about 44 lb to 880 lb).";
+      errorBox.hidden = false;
+      results.hidden = true;
+      return;
+    }
+    errorBox.hidden = true;
+
+    const m = h / 100;
+    const bmi = w / (m * m);
+    const healthyMin = 18.5 * m * m;
+    const healthyMax = 24.9 * m * m;
+
+    el("bmi-value").textContent = bmi.toFixed(1);
+    const category = categoryOf(bmi);
+    const catEl = el("bmi-category");
+    catEl.textContent = category.label;
+    catEl.style.color = category.tone;
+
+    el("bmi-range").textContent = `${showWeight(healthyMin)} – ${showWeight(healthyMax)}`;
+
+    const delta = w > healthyMax ? w - healthyMax : w < healthyMin ? healthyMin - w : 0;
+    el("bmi-delta").textContent =
+      delta === 0
+        ? "Already inside"
+        : w > healthyMax
+          ? `${showWeight(delta)} above`
+          : `${showWeight(delta)} below`;
+
+    const clamped = Math.min(SCALE_MAX, Math.max(SCALE_MIN, bmi));
+    const pct = ((clamped - SCALE_MIN) / (SCALE_MAX - SCALE_MIN)) * 100;
+    el("bmi-marker").style.left = `${pct}%`;
+
+    const caption = el("bmi-scale-caption");
+    if (delta === 0) {
+      caption.textContent = `A BMI of ${bmi.toFixed(1)} puts you inside the healthy band for your height. No weight change is indicated by this number alone.`;
+    } else if (w > healthyMax) {
+      caption.textContent = `A BMI of ${bmi.toFixed(1)} is above the healthy band. Reaching the top of the range would mean losing about ${showWeight(delta)}. Aiming for the top of the range rather than its midpoint is usually the more realistic first goal.`;
+    } else {
+      caption.textContent = `A BMI of ${bmi.toFixed(1)} is below the healthy band. Reaching the bottom of the range would mean gaining about ${showWeight(delta)}. Being underweight carries its own risks, so this is worth raising with a clinician rather than managing alone.`;
+    }
+
+    // Waist flag, using the usual action levels for central obesity.
+    const waistNote = el("bmi-waist-note");
+    const waist = Number(el<HTMLInputElement>("bmi-waist").value);
+    const sex = el<HTMLSelectElement>("bmi-sex").value;
+    if (Number.isFinite(waist) && waist > 0) {
+      const watch = sex === "male" ? 94 : 80;
+      const high = sex === "male" ? 102 : 88;
+      const who = sex === "male" ? "men" : "women";
+      if (waist >= high) {
+        waistNote.textContent = `A waist of ${waist} cm is in the substantially increased risk band for ${who} (${high} cm or more). This is worth discussing with a doctor even when the BMI looks acceptable.`;
+      } else if (waist >= watch) {
+        waistNote.textContent = `A waist of ${waist} cm is above the usual action level for ${who} (${watch} cm). Central fat predicts metabolic risk better than total weight, so it is a useful number to track alongside the scale.`;
+      } else {
+        waistNote.textContent = `A waist of ${waist} cm is below the usual action level for ${who} (${watch} cm).`;
+      }
+      waistNote.hidden = false;
+    } else {
+      waistNote.hidden = true;
+    }
+
+    results.hidden = false;
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    calculate();
+  });
+
+  form.querySelectorAll('input[name="bmi-units"]').forEach((radio) =>
+    radio.addEventListener("change", () => {
+      setUnitVisibility();
+      if (!results.hidden) calculate();
+    })
+  );
+
+  for (const id of ["bmi-height-cm", "bmi-height-ft", "bmi-height-in", "bmi-weight-kg", "bmi-weight-lb", "bmi-waist", "bmi-sex"]) {
+    el(id).addEventListener("change", () => {
+      if (!results.hidden) calculate();
+    });
+  }
+
+  setUnitVisibility();
+</script>

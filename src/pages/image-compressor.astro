@@ -1,0 +1,610 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "image-compressor")!;
+
+const faqs = [
+  {
+    q: "Are my photos uploaded to a server?",
+    a: "No. The file is read with the browser's File API, drawn onto a canvas and re-encoded by your own device. Nothing crosses the network. You can prove it by opening your browser's network panel while compressing — there will be no upload request — or by disconnecting from the internet after the page has loaded, which changes nothing.",
+  },
+  {
+    q: "Why did my PNG get larger when I compressed it?",
+    a: "The quality slider only applies to lossy formats (JPEG and WebP). A PNG is re-encoded losslessly, so it cannot be told to 'try harder'. If a PNG becomes bigger it is usually because the original was already optimised with a specialised tool, or because it was a photograph — photographs compress far better as JPEG or WebP than as PNG.",
+  },
+  {
+    q: "What quality setting should I use?",
+    a: "For photographs on the web, 70–80 is usually indistinguishable from the original at normal viewing size while cutting the file size dramatically. Below about 60 you start to see blocking around sharp edges and banding in smooth gradients such as skies. For images with text, screenshots or line art, keep the quality high or use PNG, because lossy formats blur hard edges first.",
+  },
+  {
+    q: "Does resizing lose more quality than compressing?",
+    a: "They are different operations. Resizing discards pixels permanently, so the image can never be enlarged back to its original detail. Compressing re-encodes the existing pixels with less precision. If you need a smaller file for the web, doing both — resizing to the largest size you will actually display, then compressing — is far more effective than either alone.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Canvas API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API",
+    note: "the drawing surface used to re-encode every image here",
+  },
+  {
+    label: "MDN — HTMLCanvasElement.toBlob()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toBlob",
+    note: "the call that performs the actual format conversion and quality setting",
+  },
+  {
+    label: "web.dev — Serve responsive images",
+    href: "https://web.dev/articles/serve-responsive-images",
+    note: "why resizing to the displayed size saves more than compression alone",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Shrink JPEG, PNG and WebP images without uploading them anywhere. Drag in a batch, set a quality and a maximum size, and download the results."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="imc-drop" id="imc-drop">
+          <p class="imc-drop__title">Drop images here</p>
+          <p class="imc-drop__hint">JPEG, PNG, WebP or GIF — several at once is fine.</p>
+          <label class="btn btn--primary" for="imc-input">Choose files</label>
+          <input id="imc-input" type="file" accept="image/*" multiple class="sr-only" />
+        </div>
+
+        <div class="imc-controls">
+          <div class="field">
+            <label for="imc-quality">Quality — <output id="imc-quality-out">75</output>%</label>
+            <input id="imc-quality" type="range" min="10" max="100" step="1" value="75" />
+            <small class="imc-note">Applies to JPEG and WebP only.</small>
+          </div>
+
+          <div class="field">
+            <label for="imc-max">Longest side at most (px)</label>
+            <input id="imc-max" type="number" min="0" max="10000" step="50" value="0" inputmode="numeric" />
+            <small class="imc-note">0 means keep the original dimensions.</small>
+          </div>
+
+          <div class="field">
+            <label for="imc-format">Output format</label>
+            <select id="imc-format">
+              <option value="auto">Keep the original format</option>
+              <option value="image/jpeg">JPEG — smallest for photos</option>
+              <option value="image/webp">WebP — smaller with transparency</option>
+              <option value="image/png">PNG — lossless, keeps sharp edges</option>
+            </select>
+          </div>
+
+          <div class="field" style="justify-content:flex-end">
+            <button class="btn btn--ghost" type="button" id="imc-clear">Clear all</button>
+          </div>
+        </div>
+
+        <p class="imc-status" id="imc-status" role="status" aria-live="polite"></p>
+        <p class="imc-error" id="imc-error" role="alert" hidden></p>
+
+        <ul class="imc-list" id="imc-list"></ul>
+
+        <p class="imc-total" id="imc-total" hidden></p>
+
+        <div class="imc-actions" id="imc-actions" hidden>
+          <button class="btn btn--soft" type="button" id="imc-download-all">Download all</button>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Files never leave your device. Re-encoding uses your browser's own image codecs, so the exact
+        output size depends on your browser and operating system.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How this compressor works</h2>
+  <p>
+    When you drop a file in, the browser reads it into memory with the File API and decodes it with
+    <code>createImageBitmap</code>. The decoded image is drawn onto a
+    <code>&lt;canvas&gt;</code> — scaled down first if you asked for a maximum dimension — and then
+    re-encoded by <code>canvas.toBlob()</code> using the format and quality you chose. The result is
+    a brand-new file that exists only in your browser tab until you download it. No byte of your
+    photo is transmitted anywhere.
+  </p>
+  <p>
+    That also explains why the outcome depends on your device. Each browser ships its own JPEG and
+    WebP encoders, so the same source file at the same quality setting can come out a few percent
+    larger or smaller on Chrome than on Safari, and a 75 % quality JPEG from one engine is not
+    bit-identical to a 75 % quality JPEG from another. The number in the quality box is an input to
+    an encoder, not a guarantee about the output.
+  </p>
+
+  <h2>Choosing a format</h2>
+  <div class="table-wrap" style="margin:1rem 0">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Format</th>
+          <th scope="col">Best for</th>
+          <th scope="col">Watch out for</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">JPEG</th>
+          <td>Photographs, gradients, anything with millions of colours</td>
+          <td>No transparency; blurs text and sharp edges first</td>
+        </tr>
+        <tr>
+          <th scope="row">WebP</th>
+          <td>Both photographs and graphics; supports transparency</td>
+          <td>Very old browsers and some desktop applications cannot open it</td>
+        </tr>
+        <tr>
+          <th scope="row">PNG</th>
+          <td>Screenshots, logos, icons, line art, anything with transparency</td>
+          <td>Lossless, so photographs stay large; the quality slider has no effect</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What you are giving up</h2>
+  <p>
+    Compression is lossy and irreversible. Once a photograph has been saved at 60 % quality, the
+    discarded detail is gone; re-saving it later does not bring it back, and editing and re-encoding
+    the same file repeatedly compounds the damage. If an image matters, keep the original somewhere
+    safe and compress a copy.
+  </p>
+  <p>
+    Resizing is even more decisive. Pixels that are thrown away cannot be recovered by enlarging the
+    result — you get a bigger file with the same amount of detail, plus interpolation blur. For the
+    web, the most effective single thing you can do is resize an image to the largest size it will
+    actually be displayed at, and only then compress it.
+  </p>
+  <div class="callout">
+    <p>
+      <strong>A realistic workflow:</strong> keep the camera original, export a copy at
+      1600–2000 px on the longest side, compress that copy at 75–80 % as WebP or JPEG, and check the
+      result at 100 % zoom on the areas with the most detail — faces, text and fine texture.
+    </p>
+  </div>
+</ToolLayout>
+
+<style>
+  .imc-drop {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    padding: clamp(1.25rem, 4vw, 2.25rem);
+    text-align: center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .imc-drop[data-over="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .imc-drop__title { font-weight: 700; margin: 0 0 0.25rem; }
+  .imc-drop__hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1rem; }
+
+  .imc-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+    align-items: start;
+    margin-top: 1.25rem;
+  }
+  .imc-note { color: var(--text-faint); font-size: 0.78rem; }
+  .imc-controls output { font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  .imc-status { margin: 1rem 0 0; font-size: 0.9rem; color: var(--text-muted); min-height: 1.2em; }
+  .imc-error { margin: 1rem 0 0; font-size: 0.9rem; color: var(--danger); }
+  .imc-total { margin: 1rem 0 0; font-weight: 650; }
+</style>
+
+<style is:global>
+  /* The results list is built at runtime, so these rules cannot be scoped. */
+  .imc-list {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.85rem;
+  }
+  .imc-item {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: 0.9rem;
+    align-items: start;
+  }
+  @media (max-width: 560px) {
+    .imc-item { grid-template-columns: minmax(0, 1fr); }
+  }
+  .imc-item__figure {
+    margin: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background:
+      repeating-conic-gradient(var(--bg-sunken) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+  }
+  .imc-item__figure img { display: block; width: 100%; height: auto; }
+  .imc-item__name {
+    font-weight: 680;
+    font-size: 0.95rem;
+    overflow-wrap: anywhere;
+    margin-bottom: 0.35rem;
+  }
+  .imc-item__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .imc-item__saving { font-weight: 700; }
+  .imc-item__saving[data-good="true"] { color: var(--ok); }
+  .imc-item__saving[data-good="false"] { color: var(--warn); }
+  .imc-item__actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; flex-wrap: wrap; }
+  .imc-actions { margin-top: 1.25rem; }
+</style>
+
+<script>
+  type Item = {
+    id: string;
+    file: File;
+    sourceUrl: string;
+    outputUrl: string | null;
+    outputBlob: Blob | null;
+    width: number;
+    height: number;
+    outWidth: number;
+    outHeight: number;
+    node: HTMLLIElement;
+  };
+
+  const drop = document.getElementById("imc-drop")!;
+  const input = document.getElementById("imc-input") as HTMLInputElement;
+  const quality = document.getElementById("imc-quality") as HTMLInputElement;
+  const qualityOut = document.getElementById("imc-quality-out")!;
+  const maxSideInput = document.getElementById("imc-max") as HTMLInputElement;
+  const formatSelect = document.getElementById("imc-format") as HTMLSelectElement;
+  const list = document.getElementById("imc-list")!;
+  const status = document.getElementById("imc-status")!;
+  const errorBox = document.getElementById("imc-error")!;
+  const totalBox = document.getElementById("imc-total")!;
+  const actions = document.getElementById("imc-actions")!;
+
+  const items: Item[] = [];
+  let counter = 0;
+
+  const humanSize = (bytes: number) =>
+    bytes < 1024
+      ? `${bytes} B`
+      : bytes < 1024 * 1024
+        ? `${(bytes / 1024).toFixed(1)} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  const say = (text: string) => {
+    status.textContent = text;
+  };
+
+  const fail = (text: string) => {
+    errorBox.textContent = text;
+    errorBox.hidden = false;
+  };
+
+  const clearError = () => {
+    errorBox.hidden = true;
+    errorBox.textContent = "";
+  };
+
+  const mimeFor = (item: Item): string => {
+    const chosen = formatSelect.value;
+    if (chosen !== "auto") return chosen;
+    return item.file.type === "image/png" ? "image/png" : item.file.type || "image/jpeg";
+  };
+
+  const targetSize = (width: number, height: number) => {
+    const max = Number(maxSideInput.value) || 0;
+    const longest = Math.max(width, height);
+    if (max <= 0 || longest <= max) return { width, height };
+    const scale = max / longest;
+    return { width: Math.round(width * scale), height: Math.round(height * scale) };
+  };
+
+  const encode = (item: Item) =>
+    new Promise<void>((resolve) => {
+      const mime = mimeFor(item);
+      const { width, height } = targetSize(item.width, item.height);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        fail("This browser refused to give the tool a drawing context, so images cannot be re-encoded.");
+        resolve();
+        return;
+      }
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      createImageBitmap(item.file)
+        .then((bitmap) => {
+          ctx.drawImage(bitmap, 0, 0, width, height);
+          bitmap.close?.();
+
+          const lossy = mime === "image/jpeg" || mime === "image/webp";
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                fail(`The browser could not re-encode ${item.file.name}. Try a different output format.`);
+                resolve();
+                return;
+              }
+              if (item.outputUrl) URL.revokeObjectURL(item.outputUrl);
+              item.outputBlob = blob;
+              item.outputUrl = URL.createObjectURL(blob);
+              item.outWidth = width;
+              item.outHeight = height;
+              resolve();
+            },
+            mime,
+            lossy ? Number(quality.value) / 100 : undefined
+          );
+        })
+        .catch(() => {
+          fail(`${item.file.name} could not be decoded. It may be corrupt, or not an image this browser can read.`);
+          resolve();
+        });
+    });
+
+  const render = (item: Item) => {
+    const node = item.node;
+    node.textContent = "";
+
+    const figure = document.createElement("figure");
+    figure.className = "imc-item__figure";
+    const img = document.createElement("img");
+    img.alt = `Preview of ${item.file.name}`;
+    img.loading = "lazy";
+    img.src = item.outputUrl ?? item.sourceUrl;
+    figure.append(img);
+
+    const body = document.createElement("div");
+
+    const name = document.createElement("div");
+    name.className = "imc-item__name";
+    name.textContent = item.file.name;
+
+    const facts = document.createElement("div");
+    facts.className = "imc-item__facts";
+
+    const original = document.createElement("span");
+    original.textContent = `Original ${humanSize(item.file.size)} · ${item.width}×${item.height}`;
+    facts.append(original);
+
+    if (item.outputBlob) {
+      const reduced = document.createElement("span");
+      const before = item.file.size;
+      const after = item.outputBlob.size;
+      const saved = before > 0 ? Math.round(((before - after) / before) * 100) : 0;
+
+      const saving = document.createElement("span");
+      saving.className = "imc-item__saving";
+      saving.dataset.good = String(after < before);
+      saving.textContent =
+        after < before ? `${saved}% smaller` : after === before ? "same size" : `${Math.abs(saved)}% bigger`;
+
+      const result = document.createElement("span");
+      result.textContent = `${humanSize(after)} · ${item.outWidth}×${item.outHeight} · ${mimeFor(item).replace("image/", "").toUpperCase()}`;
+
+      facts.append(result, saving);
+    } else {
+      const pending = document.createElement("span");
+      pending.textContent = "processing…";
+      facts.append(pending);
+    }
+
+    body.append(name, facts);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "imc-item__actions";
+
+    if (item.outputUrl && item.outputBlob) {
+      const link = document.createElement("a");
+      link.className = "btn btn--soft btn--sm";
+      link.href = item.outputUrl;
+      const base = item.file.name.replace(/\.[^.]+$/, "");
+      const ext = mimeFor(item) === "image/png" ? "png" : mimeFor(item) === "image/webp" ? "webp" : "jpg";
+      link.download = `${base}-compressed.${ext}`;
+      link.textContent = "Download";
+      actionsRow.append(link);
+    }
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn btn--ghost btn--sm";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      if (item.outputUrl) URL.revokeObjectURL(item.outputUrl);
+      URL.revokeObjectURL(item.sourceUrl);
+      const index = items.indexOf(item);
+      if (index >= 0) items.splice(index, 1);
+      node.remove();
+      updateTotals();
+    });
+    actionsRow.append(remove);
+
+    body.append(actionsRow);
+    node.append(figure, body);
+  };
+
+  const updateTotals = () => {
+    const done = items.filter((item) => item.outputBlob);
+    if (items.length === 0) {
+      totalBox.hidden = true;
+      actions.hidden = true;
+      say("");
+      return;
+    }
+
+    const before = items.reduce((sum, item) => sum + item.file.size, 0);
+    const after = done.reduce((sum, item) => sum + (item.outputBlob?.size ?? 0), 0);
+
+    totalBox.hidden = false;
+    if (done.length === items.length) {
+      const saved = before > 0 ? Math.round(((before - after) / before) * 100) : 0;
+      totalBox.textContent = `${items.length} image${items.length === 1 ? "" : "s"}: ${humanSize(before)} → ${humanSize(after)} (${saved}% smaller)`;
+    } else {
+      totalBox.textContent = `${done.length} of ${items.length} processed…`;
+    }
+    actions.hidden = done.length === 0;
+  };
+
+  const reprocessAll = async () => {
+    if (items.length === 0) return;
+    say("Re-encoding…");
+    clearError();
+    await Promise.all(items.map(async (item) => {
+      await encode(item);
+      render(item);
+    }));
+    say("Done. Download any result, or all of them together.");
+    updateTotals();
+  };
+
+  const addFiles = async (files: FileList | File[]) => {
+    clearError();
+    const images = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (images.length === 0) {
+      fail("None of those files look like images this browser can read. Try JPEG, PNG, WebP or GIF.");
+      return;
+    }
+
+    for (const file of images) {
+      const node = document.createElement("li");
+      node.className = "imc-item";
+      list.append(node);
+
+      const item: Item = {
+        id: `imc-${++counter}`,
+        file,
+        sourceUrl: URL.createObjectURL(file),
+        outputUrl: null,
+        outputBlob: null,
+        width: 0,
+        height: 0,
+        outWidth: 0,
+        outHeight: 0,
+        node,
+      };
+
+      try {
+        const bitmap = await createImageBitmap(file);
+        item.width = bitmap.width;
+        item.height = bitmap.height;
+        bitmap.close?.();
+      } catch {
+        fail(`${file.name} could not be opened as an image.`);
+        node.remove();
+        URL.revokeObjectURL(item.sourceUrl);
+        continue;
+      }
+
+      items.push(item);
+      render(item);
+    }
+
+    say("Re-encoding…");
+    await Promise.all(items.map(async (item) => {
+      if (!item.outputBlob) {
+        await encode(item);
+        render(item);
+      }
+    }));
+    say("Done. Download any result, or all of them together.");
+    updateTotals();
+  };
+
+  // Drag and drop
+  for (const event of ["dragenter", "dragover"]) {
+    drop.addEventListener(event, (e) => {
+      e.preventDefault();
+      drop.dataset.over = "true";
+    });
+  }
+  for (const event of ["dragleave", "drop"]) {
+    drop.addEventListener(event, (e) => {
+      e.preventDefault();
+      drop.dataset.over = "false";
+    });
+  }
+  drop.addEventListener("drop", (e) => {
+    const files = (e as DragEvent).dataTransfer?.files;
+    if (files && files.length) void addFiles(files);
+  });
+
+  input.addEventListener("change", () => {
+    if (input.files && input.files.length) void addFiles(input.files);
+    input.value = "";
+  });
+
+  quality.addEventListener("input", () => {
+    qualityOut.textContent = quality.value;
+  });
+  quality.addEventListener("change", () => void reprocessAll());
+  maxSideInput.addEventListener("change", () => void reprocessAll());
+  formatSelect.addEventListener("change", () => void reprocessAll());
+
+  document.getElementById("imc-clear")?.addEventListener("click", () => {
+    for (const item of items) {
+      if (item.outputUrl) URL.revokeObjectURL(item.outputUrl);
+      URL.revokeObjectURL(item.sourceUrl);
+    }
+    items.length = 0;
+    list.textContent = "";
+    clearError();
+    say("");
+    updateTotals();
+  });
+
+  document.getElementById("imc-download-all")?.addEventListener("click", () => {
+    const done = items.filter((item) => item.outputUrl && item.outputBlob);
+    if (done.length === 0) return;
+    // Browsers throttle rapid programmatic downloads; stagger them slightly.
+    done.forEach((item, index) => {
+      setTimeout(() => {
+        const link = document.createElement("a");
+        const base = item.file.name.replace(/\.[^.]+$/, "");
+        const ext = mimeFor(item) === "image/png" ? "png" : mimeFor(item) === "image/webp" ? "webp" : "jpg";
+        link.href = item.outputUrl!;
+        link.download = `${base}-compressed.${ext}`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+      }, index * 350);
+    });
+  });
+</script>

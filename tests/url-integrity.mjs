@@ -113,7 +113,7 @@ if (!existsSync(sitemapPath)) {
 // No page may pull a third-party script, stylesheet or font: the whole point is that
 // a tool works offline and does not hand a visit to an ad or analytics network.
 const pagesDir = join(dist);
-const walk = (dir) => {
+function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
@@ -121,7 +121,24 @@ const walk = (dir) => {
     else if (name.endsWith(".html")) out.push(full);
   }
   return out;
-};
+}
+
+// Rendered-output checks: whatever the source looks like, the built page must have exactly
+// one <h1> and carry a canonical URL and a lang attribute, or it is not shippable.
+for (const file of walk(pagesDir)) {
+  const html = readFileSync(file, "utf8");
+  const rel = relative(dist, file);
+  const h1Count = (html.match(/<h1[\s>]/gi) ?? []).length;
+  if (h1Count !== 1) {
+    problems.push(`${rel} has ${h1Count} <h1> elements; every page must have exactly one`);
+  }
+  if (!html.includes('rel="canonical"')) {
+    problems.push(`${rel} has no canonical link`);
+  }
+  if (!html.includes('lang="')) {
+    problems.push(`${rel} has no lang attribute on <html>`);
+  }
+}
 
 for (const file of walk(pagesDir)) {
   const html = readFileSync(file, "utf8");
@@ -138,6 +155,21 @@ for (const file of walk(pagesDir)) {
   ].map((m) => m[1]);
   if (external.length) {
     problems.push(`${rel} loads external asset(s): ${[...new Set(external)].join(", ")}`);
+  }
+}
+
+/**
+ * Every URL the sitemap advertises must exist as a real built page. This catches the
+ * most embarrassing possible failure — a tool marked "live" in the registry that never
+ * got a page, or a page whose filename drifted from its slug.
+ */
+if (existsSync(sitemapPath)) {
+  const sitemap = readFileSync(sitemapPath, "utf8");
+  for (const [, loc] of sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    const pathname = new URL(loc).pathname;
+    if (!existsSync(fileFor(pathname))) {
+      problems.push(`sitemap advertises ${pathname} but no page was built for it`);
+    }
   }
 }
 
@@ -160,6 +192,20 @@ for (const name of readdirSync(srcPages)) {
     scopingNotes.push(
       `${name}: creates elements at runtime with a scoped <style>. Confirm those nodes need no class-based styling, or move the rules into a namespaced <style is:global>.`
     );
+  }
+}
+
+// ToolLayout owns the page's single <h1>, the header and the footer. A page that adds its
+// own would ship two competing H1s, which is both an accessibility and an SEO defect.
+for (const name of readdirSync(srcPages)) {
+  if (!name.endsWith(".astro")) continue;
+  const source = readFileSync(join(srcPages, name), "utf8");
+  if (!source.includes("ToolLayout")) continue;
+  if (/<h1[\s>]/i.test(source)) {
+    problems.push(`${name} renders its own <h1>; ToolLayout already provides one`);
+  }
+  if (!source.includes("faqs") || !source.includes("sources")) {
+    problems.push(`${name} does not pass both faqs and sources to ToolLayout`);
   }
 }
 

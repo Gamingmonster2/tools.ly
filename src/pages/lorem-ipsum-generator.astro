@@ -1,0 +1,483 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "lorem-ipsum-generator")!;
+
+const faqs = [
+  {
+    q: "Is lorem ipsum a real language?",
+    a: "No. It is deliberately scrambled Latin, derived from a passage of Cicero's De finibus bonorum et malorum that has been cut up and rearranged. Individual words are genuine Latin, but the sentences are not grammatical and carry no coherent meaning, which is exactly why the text works as a neutral placeholder — readers stop trying to understand it and judge the layout instead.",
+  },
+  {
+    q: "How many words should I generate for a design mock-up?",
+    a: "Match the amount of text the finished layout will actually hold, not more. A short card of a few lines is better tested with 30 to 50 words; a full article view needs several hundred. Overfilling a mock-up hides the real problem, which is what happens when the copy is shorter than the space it was designed for.",
+  },
+  {
+    q: "Can I use lorem ipsum in a live page?",
+    a: "It should never reach production. Real visitors, and search engines, will see meaningless Latin where your product description or call to action should be. Treat generated filler as scaffolding: it is fine in a wireframe or a staging environment, and it should be removed before the page is published.",
+  },
+  {
+    q: "Does this generator send anything to a server?",
+    a: "No. The word pool is embedded in the page itself, so the text is assembled in your browser and works with the network switched off. Nothing you generate or copy leaves your device, and there is no account or usage limit.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Intl.Segmenter",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter",
+    note: "how browsers segment text into words using Unicode rules rather than splitting on spaces",
+  },
+  {
+    label: "Unicode — UAX #29, Text Segmentation",
+    href: "https://www.unicode.org/reports/tr29/",
+    note: "the word and sentence boundary rules behind the word counts shown here",
+  },
+  {
+    label: "W3C — WCAG 2.2, Understanding Success Criterion 1.1.1 (Non-text Content)",
+    href: "https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html",
+    note: "why placeholder alternatives should be meaningful and how filler text affects assistive technology",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Generate classic lorem ipsum as paragraphs, sentences or an exact word count — with the canonical opening line and optional paragraph tags, entirely offline."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="field-grid">
+          <fieldset class="fieldset">
+            <legend>Generate</legend>
+            <div class="field">
+              <label for="li-unit">Unit</label>
+              <select id="li-unit">
+                <option value="paragraphs" selected>Paragraphs</option>
+                <option value="sentences">Sentences</option>
+                <option value="words">Words</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="li-count">Amount — <output id="li-count-out">3</output></label>
+              <input id="li-count" type="number" min="1" max="20" step="1" value="3" inputmode="numeric" />
+            </div>
+
+            <p class="readout" id="li-limit" style="margin:0.35rem 0 0">Allowed range: 1–20 paragraphs.</p>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Options</legend>
+            <label class="check" for="li-canonical">
+              <input type="checkbox" id="li-canonical" checked />
+              Start with “Lorem ipsum dolor sit amet, consectetur adipiscing elit”
+            </label>
+            <label class="check" for="li-capitalise">
+              <input type="checkbox" id="li-capitalise" checked />
+              Capitalise the start of each sentence
+            </label>
+            <label class="check" for="li-paragraphs">
+              <input type="checkbox" id="li-paragraphs" checked />
+              Wrap paragraphs in &lt;p&gt;…&lt;/p&gt; tags
+            </label>
+          </fieldset>
+        </div>
+
+        <div class="stat-grid" style="margin-top:1.25rem">
+          <div class="stat">
+            <div class="stat__label">Paragraphs</div>
+            <div class="stat__value" id="li-stat-para">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Sentences</div>
+            <div class="stat__value" id="li-stat-sent">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Words</div>
+            <div class="stat__value" id="li-stat-word">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Characters</div>
+            <div class="stat__value" id="li-stat-char">0</div>
+          </div>
+        </div>
+
+        <div style="margin-top:1.25rem">
+          <label class="sr-only" for="li-output">Generated filler text</label>
+          <div class="result-box" id="li-output" role="status" aria-live="polite" tabindex="0">—</div>
+        </div>
+
+        <div class="tag-row" style="margin-top:1rem">
+          <button class="btn btn--primary" type="button" id="li-generate">Generate</button>
+          <button class="btn btn--soft" type="button" id="li-copy">Copy text</button>
+          <button class="btn btn--ghost" type="button" id="li-download">Download .html</button>
+          <button class="btn btn--ghost" type="button" id="li-txt">Download .txt</button>
+        </div>
+
+        <p class="readout" id="li-status" role="status" aria-live="polite" style="margin-top:0.75rem">—</p>
+      </div>
+
+      <div class="panel__foot">
+        The Latin word pool ships inside this page, so generation works with no network at all.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    The generator keeps a pool of classic lorem ipsum vocabulary inside the page — the same Latin
+    words that have appeared in dummy text since the 1500s — and assembles sentences from them at
+    random, avoiding an immediate repetition of the same word. It then arranges those sentences into
+    paragraphs, or cuts the text to your requested number of sentences or words. Because the pool is
+    embedded in the markup, nothing is fetched and nothing is looked up online.
+  </p>
+  <p>
+    The three units behave slightly differently, on purpose. <strong>Paragraphs</strong> gives you
+    exactly the number you ask for, each one containing a random four to seven sentences sized to
+    look plausible. <strong>Sentences</strong> gives exactly that many sentences in a single block or,
+    if paragraph tags are on, spread over paragraphs that you can break up yourself.
+    <strong>Words</strong> keeps adding sentences until it reaches the target and trims the final
+    sentence on a word boundary, so the word count is exact rather than approximate — which is what
+    you want when testing a headline field with a hard character or word limit.
+  </p>
+  <p>
+    The canonical opening, “Lorem ipsum dolor sit amet, consectetur adipiscing elit”, is the familiar
+    first line of the standard passage. Leaving it on makes generated text instantly recognisable, so
+    nobody mistakes a mock-up for finished copy. Turning it off produces pure random filler, which is
+    useful when you specifically want to test how a layout reads without the emphasis the famous
+    opening creates.
+  </p>
+
+  <h2>Accuracy, meaning and the honest limits</h2>
+  <p>
+    This text is filler and it has no meaning. The words are Latin, but the sentences are not
+    grammatical Latin and they do not say anything — a reader who knows the language will find them
+    nonsensical rather than merely old-fashioned. Word and character counts reflect the generated
+    string exactly as you see it; the counters exclude the <code>&lt;p&gt;</code> tags themselves, so
+    turning the tags on does not inflate the numbers.
+  </p>
+  <p>
+    The main practical risk is accidental shipping. Lorem ipsum has a habit of surviving into
+    production because it looks like text at a glance: it passes a visual skim, it fills the space,
+    and nobody re-reads it. A placeholder headline is especially dangerous, because search engines
+    index it and screen-reader users hear it. Generate filler for wireframes and layout tests, then
+    search the codebase before release — the word <code>lorem</code> is trivially greppable.
+  </p>
+  <p>
+    Accessibility is the second concern. A screen reader will happily read Latin filler aloud, letter
+    patterns and all, because it has no way to know the text is meaningless; the listener gets a
+    stream of nonsense instead of an explanation of the page. Decorative placeholder blocks are one
+    thing, but any text that a visitor is expected to understand should eventually be real. Many
+    teams now prefer meaningful placeholder copy — a short real sentence describing the module — or
+    genuinely marked-up filler, so that assistive technology and translators see something coherent.
+    Where the text is purely decorative, hiding it from assistive technology with
+    <code>aria-hidden="true"</code> is a better answer than reading Latin.
+  </p>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>Pick a unit. Paragraphs for a page mock-up, sentences for a single component, words for testing a field with a hard limit.</li>
+    <li>Set the amount with the number field: 1–20 paragraphs, 1–50 sentences or 1–500 words. The field clamps anything outside the range and the hint underneath tells you the current limit.</li>
+    <li>Decide whether you want the canonical opening line, capitalised sentence starts, and HTML paragraph tags. The tag option is what you want when pasting straight into a CMS or an HTML file; switch it off for plain text.</li>
+    <li>Use <strong>Generate</strong> to roll a new random passage, then <strong>Copy text</strong> for the clipboard, or download the result as <code>.html</code> or <code>.txt</code>.</li>
+    <li>Read back what you pasted, and delete it before the page goes live.</li>
+  </ol>
+</ToolLayout>
+
+<style>
+  .result-box {
+    max-height: 22rem;
+    overflow: auto;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.6;
+  }
+  .result-box p {
+    margin: 0 0 0.8em;
+  }
+  .result-box p:last-child {
+    margin-bottom: 0;
+  }
+</style>
+
+<script>
+  const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+  // Classic lorem ipsum vocabulary, embedded so the tool never needs the network.
+  const WORDS = [
+    "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit",
+    "sed", "do", "eiusmod", "tempor", "incididunt", "ut", "labore", "et", "dolore",
+    "magna", "aliqua", "enim", "ad", "minim", "veniam", "quis", "nostrud",
+    "exercitation", "ullamco", "laboris", "nisi", "aliquip", "ex", "ea", "commodo",
+    "consequat", "duis", "aute", "irure", "in", "reprehenderit", "voluptate",
+    "velit", "esse", "cillum", "eu", "fugiat", "nulla", "pariatur", "excepteur",
+    "sint", "occaecat", "cupidatat", "non", "proident", "sunt", "culpa", "qui",
+    "officia", "deserunt", "mollit", "anim", "id", "est", "laborum", "curabitur",
+    "pretium", "tincidunt", "lacus", "nulla", "facilisi", "cras", "ornare", "arcu",
+    "dui", "vivamus", "suspendisse", "faucibus", "ornare", "suscipit", "nibh",
+    "nunc", "mi", "ipsum", "primis", "faucibus", "orci", "luctus", "ultrices",
+    "posuere", "cubilia", "curae", "donec", "massa", "sapien", "faucibus",
+    "molestie", "ac", "feugiat", "varius", "morbi", "blandit", "cursus", "risus",
+    "at", "ultrices", "sagittis", "purus", "gravida", "quis", "blandit", "turpis",
+    "malesuada", "proin", "libero", "nunc", "consequat", "interdum", "varius",
+    "quam", "pharetra", "convallis", "posuere", "morbi", "leo", "urna", "molestie",
+    "vitae", "elementum", "tempus", "egestas", "integer", "eget", "aliquet",
+    "fermentum", "dui", "accumsan", "lacus", "vel", "facilisis", "volutpat", "tellus",
+    "rutrum", "auctor", "neque", "viverra", "justo", "nec", "ultrices", "dui",
+    "sapien", "nec", "sagittis", "aliquam", "malesuada", "bibendum", "arcu", "vitae",
+    "elementum", "semper", "nisl", "aenean", "vel", "tellus", "in", "metus",
+    "vulputate", "euismod", "pellentesque", "massa", "placerat", "duis", "ultricies",
+    "lacus", "sed", "turpis", "tincidunt", "id", "aliquet", "risus", "feugiat",
+    "amet", "cursus", "sit", "amet", "dictum", "sit", "amet", "venenatis", "urna",
+    "cursus", "eget", "nunc", "scelerisque", "viverra", "mauris", "in", "aliquam",
+    "sem", "fringilla", "ut", "morbi", "tincidunt", "ornare", "lectus", "vestibulum",
+    "rhoncus", "est", "pellentesque", "elit", "ullamcorper", "dignissim", "cras",
+    "tincidunt", "lobortis", "feugiat", "vivamus", "elementum", "sagittis", "vitae",
+    "et", "leo", "duis", "ut", "diam", "quam", "nulla", "porttitor", "massa",
+    "id", "neque", "aliquam", "vestibulum", "morbi",
+  ];
+
+  const CANONICAL = "Lorem ipsum dolor sit amet, consectetur adipiscing elit";
+
+  const unitSelect = byId<HTMLSelectElement>("li-unit");
+  const countInput = byId<HTMLInputElement>("li-count");
+  const countOut = byId("li-count-out");
+  const limitHint = byId("li-limit");
+  const canonicalOpt = byId<HTMLInputElement>("li-canonical");
+  const capitaliseOpt = byId<HTMLInputElement>("li-capitalise");
+  const paragraphsOpt = byId<HTMLInputElement>("li-paragraphs");
+  const output = byId("li-output");
+  const status = byId("li-status");
+
+  const LIMITS = {
+    paragraphs: { min: 1, max: 20, label: "paragraphs" },
+    sentences: { min: 1, max: 50, label: "sentences" },
+    words: { min: 1, max: 500, label: "words" },
+  } as const;
+
+  type Unit = keyof typeof LIMITS;
+
+  // A single generate produces the raw sentence text; the render step only
+  // decides how it is displayed and counted.
+  let currentText = "";
+
+  const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+  const clampCount = (): number => {
+    const limits = LIMITS[unitSelect.value as Unit];
+    let value = Number.parseInt(countInput.value, 10);
+    if (!Number.isFinite(value) || Number.isNaN(value)) value = limits.min;
+    return Math.min(limits.max, Math.max(limits.min, value));
+  };
+
+  const canonicalWords = CANONICAL.replace(/[.,]/g, "").split(/\s+/);
+
+  const pickWords = (count: number): string[] => {
+    const out: string[] = [];
+    let previous = "";
+    for (let i = 0; i < count; i += 1) {
+      let word = WORDS[randomInt(0, WORDS.length - 1)];
+      let guard = 0;
+      while (word === previous && guard < 8) {
+        word = WORDS[randomInt(0, WORDS.length - 1)];
+        guard += 1;
+      }
+      previous = word;
+      out.push(word);
+    }
+    return out;
+  };
+
+  /** One random sentence, capitalised and terminated when that option is on. */
+  const makeSentence = (): string => {
+    const words = pickWords(randomInt(7, 14));
+    const body = words.join(" ");
+    const cased = capitaliseOpt.checked ? body.charAt(0).toUpperCase() + body.slice(1) : body;
+    return cased + ".";
+  };
+
+  const sentenceCount = (text: string): number => {
+    const matches = text.match(/[^.!?]+[.!?]+/g);
+    if (matches) return matches.length;
+    return text.trim() === "" ? 0 : 1;
+  };
+
+  const build = (): string => {
+    const unit = unitSelect.value as Unit;
+    const amount = clampCount();
+
+    // Words: keep drawing sentences until the exact target is reached, then cut
+    // the last one on a word boundary.
+    if (unit === "words") {
+      const words: string[] = [];
+      if (canonicalOpt.checked) {
+        for (const word of canonicalWords) {
+          if (words.length < amount) words.push(word);
+        }
+      }
+      while (words.length < amount) {
+        for (const word of makeSentence().replace(/\.$/, "").split(" ")) {
+          if (words.length < amount) words.push(word);
+        }
+      }
+      const joined = words.join(" ").replace(/[.,;:]+$/, "");
+      return capitaliseOpt.checked ? joined.charAt(0).toUpperCase() + joined.slice(1) : joined;
+    }
+
+    if (unit === "sentences") {
+      const sentences: string[] = [];
+      if (canonicalOpt.checked) sentences.push(CANONICAL + ".");
+      while (sentences.length < amount) sentences.push(makeSentence());
+      return sentences.slice(0, amount).join(" ");
+    }
+
+    // Paragraphs: exactly the requested number, each four to seven sentences.
+    const paragraphs: string[] = [];
+    for (let p = 0; p < amount; p += 1) {
+      const size = randomInt(4, 7);
+      const sentences: string[] = [];
+      if (p === 0 && canonicalOpt.checked) sentences.push(CANONICAL + ".");
+      while (sentences.length < size) sentences.push(makeSentence());
+      paragraphs.push(sentences.join(" "));
+    }
+    return paragraphs.join("\n\n");
+  };
+
+  const toParagraphMarkup = (text: string): string =>
+    text
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => p !== "")
+      .map((p) => "<p>" + p + "</p>")
+      .join("\n");
+
+  const countWords = (text: string): number => {
+    const cleaned = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return cleaned === "" ? 0 : cleaned.split(" ").length;
+  };
+
+  const render = (text: string) => {
+    currentText = text;
+    const blocks = text.split(/\n{2,}/).filter((p) => p.trim() !== "");
+    const charCount = text.replace(/\n/g, "").length;
+
+    byId("li-stat-para").textContent = String(blocks.length);
+    byId("li-stat-sent").textContent = String(sentenceCount(text));
+    byId("li-stat-word").textContent = String(countWords(text));
+    byId("li-stat-char").textContent = String(charCount);
+
+    if (text.trim() === "") {
+      output.textContent = "—";
+      return;
+    }
+    if (paragraphsOpt.checked) {
+      // Safe: this markup is assembled here from the fixed Latin word list in
+      // this file, never from anything the user typed.
+      output.innerHTML = toParagraphMarkup(text);
+    } else {
+      output.textContent = text;
+    }
+  };
+
+  const applyLimits = () => {
+    const unit = unitSelect.value as Unit;
+    const limits = LIMITS[unit];
+    countInput.min = String(limits.min);
+    countInput.max = String(limits.max);
+    limitHint.textContent = `Allowed range: ${limits.min}–${limits.max} ${limits.label}.`;
+    const clamped = clampCount();
+    countInput.value = String(clamped);
+    countOut.textContent = String(clamped);
+  };
+
+  const generate = () => {
+    applyLimits();
+    const text = build();
+    render(text);
+  };
+
+  const flash = (message: string) => {
+    status.textContent = message;
+    window.setTimeout(() => {
+      if (status.textContent === message) status.textContent = "—";
+    }, 2600);
+  };
+
+  const copyText = async (text: string) => {
+    if (text.trim() === "") {
+      flash("Generate some text first.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      flash("Text copied to your clipboard.");
+    } catch {
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
+      const ok = document.execCommand("copy");
+      helper.remove();
+      flash(ok ? "Text copied to your clipboard." : "Copying was blocked by the browser.");
+    }
+  };
+
+  const download = (text: string, filename: string, type: string) => {
+    if (text.trim() === "") {
+      flash("Generate some text first.");
+      return;
+    }
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    flash("Download started.");
+  };
+
+  const downloadHtml = () =>
+    download(
+      paragraphsOpt.checked ? toParagraphMarkup(currentText) : currentText.replace(/\n\n/g, "\n"),
+      "lorem-ipsum.html",
+      "text/html;charset=utf-8",
+    );
+
+  const downloadTxt = () =>
+    download(currentText, "lorem-ipsum.txt", "text/plain;charset=utf-8");
+
+  unitSelect.addEventListener("change", () => {
+    // Each unit has its own sensible default within its own range.
+    const defaults: Record<Unit, number> = { paragraphs: 3, sentences: 5, words: 50 };
+    countInput.value = String(defaults[unitSelect.value as Unit]);
+    generate();
+  });
+  countInput.addEventListener("input", () => {
+    const clamped = clampCount();
+    countOut.textContent = String(clamped);
+  });
+  countInput.addEventListener("change", generate);
+  canonicalOpt.addEventListener("change", generate);
+  capitaliseOpt.addEventListener("change", generate);
+  paragraphsOpt.addEventListener("change", () => render(currentText));
+
+  byId("li-generate").addEventListener("click", () => {
+    generate();
+    flash("New filler text generated.");
+  });
+  byId("li-copy").addEventListener("click", () => void copyText(currentText));
+  byId("li-download").addEventListener("click", downloadHtml);
+  byId("li-txt").addEventListener("click", downloadTxt);
+
+  generate();
+</script>

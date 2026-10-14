@@ -1,0 +1,1342 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "json-formatter")!;
+
+const faqs = [
+  {
+    q: "Is my JSON uploaded anywhere?",
+    a: "No. The textarea is read with JavaScript in this tab and parsed with the browser's own JSON.parse. There is no request, no worker on someone else's server and no analytics on the payload, so the page keeps working with the network disconnected. If you are handling credentials or personal data, you can confirm this by switching off Wi-Fi and using the tool again.",
+  },
+  {
+    q: "The JSON looks correct, so why does the parser reject it?",
+    a: "Almost always because it is JavaScript rather than JSON. Trailing commas before a closing brace or bracket, single-quoted strings, unquoted property names, // or /* */ comments, undefined, NaN and Infinity, and the curly quotes that word processors insert are all invalid in standard JSON. The error panel above names the position and explains what the parser probably tripped over.",
+  },
+  {
+    q: "Does formatting change my data?",
+    a: "Whitespace-only changes are safe: pretty-printing and minifying move spaces and line breaks between tokens and never touch values. Two operations do change the text in ways you should review. Sorting keys reorders object members alphabetically — the meaning is unchanged, but diffs and signatures will change. And every value is re-serialised by JSON.stringify, so number literals are normalised (1.0 becomes 1, 1e2 becomes 100), and integers beyond ±2^53 can lose precision.",
+  },
+  {
+    q: "What do the depth statistic and the truncated tree mean?",
+    a: "Nesting depth counts how many levels of objects and arrays are inside one another — the deepest container counts as one, and an object whose values are all primitives has depth 1. Some parsers in other languages cap nesting low, so the number is worth knowing before you ship a payload. The tree view stops after a few thousand nodes to keep the page responsive; the text and the statistics are unaffected by that limit.",
+  },
+];
+
+const sources = [
+  {
+    label: "RFC 8259 — The JavaScript Object Notation (JSON) Data Interchange Format",
+    href: "https://www.rfc-editor.org/rfc/rfc8259.html",
+    note: "The current standard. Section 2 defines the grammar, section 6 the number format and section 4 the rule that object member names must be unique — the authority behind every message this page shows.",
+  },
+  {
+    label: "MDN Web Docs — JSON.parse()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse",
+    note: "Documents the exact function used for validation, including the SyntaxError it throws and the reviver argument that is deliberately unused here.",
+  },
+  {
+    label: "Introducing JSON — json.org",
+    href: "https://www.json.org/json-en.html",
+    note: "The original, very short definition of the format: the diagram of six value types that explains why comments, trailing commas and single quotes are not part of it.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Paste JSON to validate it with a precise line and column report, pretty-print or minify it, sort keys recursively, inspect the structure as a tree and download the result — all without the text leaving this tab."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body jf">
+        <section class="jf__block" aria-labelledby="jf-input-h">
+          <h2 class="jf__h" id="jf-input-h">1. Paste or type your JSON</h2>
+
+          <div class="field">
+            <label for="jf-input">JSON input</label>
+            <textarea
+              id="jf-input"
+              rows="12"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              wrap="off"
+              placeholder="Paste JSON here, for example an API response or a configuration file…"
+              aria-describedby="jf-input-help"></textarea>
+            <p class="jf__help" id="jf-input-help">
+              Validated as you type, and rewritten in place when you format it. The text never leaves the
+              browser.
+            </p>
+          </div>
+
+          <div class="jf__controls">
+            <div class="field">
+              <label for="jf-indent">Indent for pretty-printing</label>
+              <select id="jf-indent">
+                <option value="2" selected>2 spaces</option>
+                <option value="4">4 spaces</option>
+                <option value="tab">Tab</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="jf__actions">
+            <button type="button" class="btn btn--primary" id="jf-pretty">Pretty-print</button>
+            <button type="button" class="btn btn--soft" id="jf-minify">Minify</button>
+            <button type="button" class="btn btn--soft" id="jf-sort">Sort keys</button>
+            <button type="button" class="btn btn--ghost" id="jf-clear">Clear</button>
+          </div>
+
+          <div class="jf__actions">
+            <button type="button" class="btn btn--ghost btn--sm" id="jf-copy">Copy</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="jf-download">Download as .json</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="jf-sample">Load a sample</button>
+          </div>
+
+          <p class="jf__status" id="jf-status" role="status" aria-live="polite">
+            Waiting for input.
+          </p>
+
+          <div class="jf__error" id="jf-error" hidden aria-live="polite">
+            <p class="jf__error-title" id="jf-error-title"></p>
+            <p class="jf__error-body" id="jf-error-body"></p>
+            <p class="readout jf__error-char" id="jf-error-char"></p>
+            <pre
+              class="jf__excerpt"
+              id="jf-excerpt"
+              tabindex="0"
+              aria-label="A few lines of your input, with the reported error position marked"></pre>
+            <p class="jf__help">
+              A copy of the lines around the problem, with the position marked. Your text above is left
+              exactly as you typed it.
+            </p>
+          </div>
+        </section>
+
+        <section class="jf__block" aria-labelledby="jf-stats-h">
+          <h2 class="jf__h" id="jf-stats-h">2. Statistics</h2>
+          <div class="stat-grid" id="jf-stats" aria-live="polite">
+            <div class="stat">
+              <div class="stat__label">Characters</div>
+              <div class="stat__value" id="jf-stat-chars">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Lines</div>
+              <div class="stat__value" id="jf-stat-lines">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Top-level keys</div>
+              <div class="stat__value" id="jf-stat-keys">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Max nesting depth</div>
+              <div class="stat__value" id="jf-stat-depth">—</div>
+            </div>
+          </div>
+          <p class="jf__help" id="jf-size">The text box is empty.</p>
+        </section>
+
+        <section class="jf__block" aria-labelledby="jf-tree-h">
+          <h2 class="jf__h" id="jf-tree-h">3. Tree view</h2>
+          <details class="jf__details" id="jf-tree-details">
+            <summary>Show the parsed structure as a collapsible tree</summary>
+            <div class="jf__tree" id="jf-tree">
+              <p class="jf__help">
+                When the text parses, the structure appears here as nested objects and arrays with their
+                values. Open the sections you care about.
+              </p>
+            </div>
+          </details>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Parsing and formatting use the browser's own <code>JSON.parse</code> and
+        <code>JSON.stringify</code> — your data is never uploaded, logged or sent to an API.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    Validation is delegated to <code>JSON.parse</code>, the same strict parser used by every JavaScript
+    engine, so a document that passes here is accepted by browsers, bundlers and runtime libraries alike.
+    When the parser throws, this page reads the position out of the error message and turns it into a line
+    and column in your own text. The message itself varies between engines, so the panel also inspects
+    what is actually sitting at that position — a closing brace, a single quote, a curly quote, a bare
+    word such as <code>undefined</code> — and adds a plain-language explanation plus a short excerpt with
+    the character marked.
+  </p>
+  <p>
+    The three transformations are straightforward string operations once the value is parsed.
+    <em>Pretty-print</em> re-serialises with <code>JSON.stringify(value, null, indent)</code> using the
+    indent you chose — two spaces, four spaces or a tab. <em>Minify</em> re-serialises with no whitespace
+    at all, which is what you want when pasting JSON into a query parameter, an environment variable or a
+    compact storage key. <em>Sort keys</em> walks the whole structure — nested objects included, inside
+    arrays too — and rebuilds every object with its keys in ascending string order, which makes two
+    structurally identical payloads produce identical text and keeps version-control diffs readable.
+  </p>
+  <p>
+    The statistics are counted from the parsed value rather than from the text, so they describe the data
+    instead of the formatting: the number of characters and lines on one side, and the count of top-level
+    members plus the maximum nesting depth on the other. The tree view is generated on demand from the
+    same parsed value. It is built entirely with DOM calls and text nodes, one collapsible
+    <code>&lt;details&gt;</code> element per object or array, and it is capped at a few thousand nodes so
+    that a multi-megabyte document cannot lock up the tab.
+  </p>
+
+  <h2>Accuracy, and where this tool stops</h2>
+  <p>
+    Everything here reflects a real parse, so there are no "looks valid" guesses: either
+    <code>JSON.parse</code> accepted the text or it did not. Within that, four honest limits are worth
+    knowing.
+  </p>
+  <ul>
+    <li>
+      <strong>Error positions are the engine's best effort.</strong> Chrome, Firefox and Safari word their
+      <code>SyntaxError</code> messages differently, and some report only a line and column while others
+      report a character offset. Where the engine gives no position at all, the excerpt falls back to the
+      end of your input and says so rather than inventing a location. The character shown is where parsing
+      stopped, which for a missing comma or an unfinished string can be a token or two past the real
+      mistake.
+    </li>
+    <li>
+      <strong>Formatting is not byte-for-byte preservation.</strong> Numbers are re-serialised by
+      JavaScript, so <code>1.0</code> becomes <code>1</code>, <code>1e2</code> becomes
+      <code>100</code>, and integers outside the safe range of ±2<sup>53</sup>−1 can lose precision
+      because they are held as IEEE-754 doubles. Leading zeros and other non-standard number spellings are
+      rejected by the parser in the first place.
+    </li>
+    <li>
+      <strong>Duplicate keys are silently collapsed.</strong> The specification says member names should be
+      unique. If a document repeats one, <code>JSON.parse</code> keeps the last occurrence and the earlier
+      ones disappear from the output. Nothing warns you, so a duplicate key is worth hunting for by hand
+      in generated payloads.
+    </li>
+    <li>
+      <strong>Sorting keys changes the text, not just the layout.</strong> The order of object members is
+      not significant to JSON consumers, but it <em>is</em> significant to anything that hashes or signs
+      the serialised bytes. Sort before you sign, not after, and expect diffs to move.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Do not use this page to paste secrets you would not type into a browser tab. It never transmits
+      anything, but the text still lives in the page, in your clipboard history and possibly in the
+      browser's session restore — as it would in any editor.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      <strong>Paste and watch the status line.</strong> Validation runs about a fifth of a second after you
+      stop typing. A green result describes the shape of the document; a red one opens the error panel
+      with the line, the column, the offending character and the excerpt.
+    </li>
+    <li>
+      <strong>Fix the first error, then look again.</strong> A parser stops at the first problem, so it
+      reports one issue at a time. Repair the marked position, and the next error — if there is one — will
+      be reported in the same way. Trailing commas are the most common cause and the easiest to spot.
+    </li>
+    <li>
+      <strong>Choose an indent, then pretty-print.</strong> Two spaces suit most APIs and codebases, four
+      spaces match older style guides, and tabs let each reader set their own width. Changing the indent
+      re-formats the current text immediately, so you can compare the three options.
+    </li>
+    <li>
+      <strong>Minify or sort when you need to.</strong> Minify removes every optional space and line break.
+      Sort keys rebuilds each object alphabetically, recursively, which is the usual way to make two
+      documents comparable with a plain text diff.
+    </li>
+    <li>
+      <strong>Inspect, then take the result away.</strong> Open the tree view to confirm the shape and
+      drill into a nested value, then use <em>Copy</em> for the clipboard or <em>Download as .json</em> to
+      save the current text as a file. <em>Clear</em> empties the box and the tree in one click.
+    </li>
+  </ol>
+  <p>
+    The <em>Load a sample</em> button drops in a small document with nested objects and an array, which is
+    a quick way to see what the error panel, the statistics and the tree view look like before you paste
+    your own data.
+  </p>
+</ToolLayout>
+
+<style>
+  .jf {
+    display: grid;
+    gap: clamp(1.1rem, 2.5vw, 1.75rem);
+  }
+  .jf__block {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .jf__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0;
+  }
+  /* A declared display value outranks the browser's [hidden] rule, so make sure
+     the error panel really disappears when it says it is hidden. */
+  [hidden] {
+    display: none;
+  }
+  .jf__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .jf__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .jf__controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.85rem;
+  }
+  .jf__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .jf__status {
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .jf__status--ok {
+    border-color: var(--ok);
+    background: var(--ok-soft);
+    color: var(--text);
+  }
+  .jf__status--bad {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--text);
+  }
+  .jf__error {
+    display: grid;
+    gap: 0.6rem;
+    border: 1px solid var(--danger);
+    background: var(--danger-soft);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+  }
+  .jf__error-title {
+    margin: 0;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .jf__error-body {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--text);
+  }
+  .jf__error-char {
+    margin: 0;
+    font-size: 0.85rem;
+  }
+  .jf__excerpt {
+    margin: 0;
+    padding: 0.75rem 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text);
+  }
+
+  /* The tree and the excerpt are created after load, so every rule that targets
+     those nodes has to live inside :global() — scoped selectors only match the
+     markup that Astro rendered. */
+  .jf__details > summary {
+    cursor: pointer;
+    font-weight: 650;
+    padding: 0.35rem 0;
+  }
+  .jf__tree {
+    margin-top: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: 0.75rem 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.65;
+    max-height: 30rem;
+    overflow: auto;
+  }
+  :global(.jf-t-list) {
+    list-style: none;
+    margin: 0;
+    padding-inline-start: 1.1rem;
+    border-inline-start: 1px dashed var(--border-strong);
+  }
+  :global(.jf-t-item) {
+    margin: 0.1rem 0;
+  }
+  :global(.jf-t-branch) {
+    display: block;
+  }
+  :global(.jf-t-branch > summary) {
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+  :global(.jf-t-branch > summary:hover) {
+    color: var(--accent);
+  }
+  :global(.jf-t-key) {
+    color: var(--accent);
+  }
+  :global(.jf-t-tag) {
+    color: var(--text-faint);
+    font-size: 0.75rem;
+  }
+  :global(.jf-t-preview) {
+    color: var(--text-muted);
+  }
+  :global(.jf-t-index) {
+    color: var(--text-faint);
+  }
+  :global(.jf-t-str) {
+    color: var(--ok);
+  }
+  :global(.jf-t-num) {
+    color: var(--warn);
+  }
+  :global(.jf-t-bool) {
+    color: var(--accent);
+  }
+  :global(.jf-t-null) {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+  :global(.jf-t-note) {
+    color: var(--warn);
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+  }
+  :global(.jf-x-line) {
+    display: block;
+    white-space: pre;
+  }
+  :global(.jf-x-line--err) {
+    background: var(--warn-soft);
+  }
+  :global(.jf-x-num) {
+    color: var(--text-faint);
+  }
+  :global(.jf-x-hit) {
+    background: var(--danger);
+    color: var(--danger-soft);
+    border-radius: 3px;
+    padding: 0 1px;
+    font-weight: 700;
+  }
+  :global(.jf-x-mark) {
+    color: var(--danger);
+    font-weight: 700;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var $ = function (id) {
+      return document.getElementById(id);
+    };
+
+    var MAX_TREE_NODES = 4000;
+    var MAX_TREE_DEPTH = 40;
+
+    var SAMPLE = [
+      "{",
+      '  "name": "tools.ly",',
+      '  "offline": true,',
+      '  "toolCount": 24,',
+      '  "nested": { "zeta": 1, "alpha": [1, 2, 3], "meta": null },',
+      '  "tags": ["json", "validator", "formatter"]',
+      "}",
+    ].join("\n");
+
+    var state = {
+      hasValue: false,
+      value: null,
+      treeDirty: true,
+    };
+
+    /* ---------- parsing ---------- */
+
+    function tryParse(text) {
+      try {
+        return { ok: true, value: JSON.parse(text) };
+      } catch (err) {
+        return { ok: false, error: err };
+      }
+    }
+
+    function indentString() {
+      var choice = $("jf-indent").value;
+      if (choice === "tab") return "\t";
+      return choice === "4" ? "    " : "  ";
+    }
+
+    function indentLabel() {
+      var choice = $("jf-indent").value;
+      if (choice === "tab") return "tab";
+      return choice === "4" ? "four spaces" : "two spaces";
+    }
+
+    function sortDeep(value) {
+      if (Array.isArray(value)) {
+        return value.map(sortDeep);
+      }
+      if (value !== null && typeof value === "object") {
+        var out = Object.create(null);
+        Object.keys(value)
+          .sort(function (a, b) {
+            return a < b ? -1 : a > b ? 1 : 0;
+          })
+          .forEach(function (key) {
+            out[key] = sortDeep(value[key]);
+          });
+        return out;
+      }
+      return value;
+    }
+
+    /* ---------- error reporting ---------- */
+
+    function lineColAt(text, pos) {
+      var limit = Math.max(0, Math.min(pos, text.length));
+      var line = 1;
+      var lineStart = 0;
+      for (var i = 0; i < limit; i++) {
+        if (text.charCodeAt(i) === 10) {
+          line += 1;
+          lineStart = i + 1;
+        }
+      }
+      return { line: line, col: limit - lineStart + 1 };
+    }
+
+    function posAtLineCol(text, line, col) {
+      var idx = 0;
+      var current = 1;
+      while (current < line) {
+        var nl = text.indexOf("\n", idx);
+        if (nl === -1) return text.length;
+        idx = nl + 1;
+        current += 1;
+      }
+      return Math.max(0, Math.min(idx + col - 1, text.length));
+    }
+
+    function charLabel(ch) {
+      if (ch === "") return "the end of the input";
+      var code = ch.charCodeAt(0).toString(16).toUpperCase();
+      while (code.length < 4) code = "0" + code;
+      var shown = ch === "\n" ? "\\n" : ch === "\t" ? "\\t" : ch;
+      return "'" + shown + "' (U+" + code + ")";
+    }
+
+    /**
+     * Walk the text as a string-aware scanner and return the first local anomaly.
+     * Used only when the engine's message carries no position — Chrome's newer
+     * "Unexpected token '}', ... is not valid JSON" form, for instance, which is
+     * exactly what a trailing comma produces. Never a substitute for JSON.parse:
+     * the real parser still decides whether the document is valid.
+     */
+    function scanStringLiteral(text, start) {
+      var i = start + 1;
+      var n = text.length;
+      while (i < n) {
+        var c = text.charAt(i);
+        if (c === "\\") {
+          var esc = text.charAt(i + 1);
+          if (esc === "u") {
+            if (!/^[0-9a-fA-F]{4}$/.test(text.substr(i + 2, 4))) {
+              return { pos: i, kind: "bad-escape" };
+            }
+            i += 6;
+            continue;
+          }
+          if ("\"\\/bfnrt".indexOf(esc) === -1) return { pos: i, kind: "bad-escape" };
+          i += 2;
+          continue;
+        }
+        if (c === '"') return { pos: -1, next: i + 1 };
+        if (c.charCodeAt(0) < 0x20) return { pos: i, kind: "control" };
+        i += 1;
+      }
+      return { pos: n, kind: "unterminated-string" };
+    }
+
+    function findAnomaly(text) {
+      var i = 0;
+      var n = text.length;
+      while (i < n) {
+        var c = text.charAt(i);
+        if (c === '"') {
+          var scanned = scanStringLiteral(text, i);
+          if (scanned.pos >= 0) return { pos: scanned.pos, kind: scanned.kind };
+          i = scanned.next;
+          continue;
+        }
+        if (c === "'") return { pos: i, kind: "single-quote" };
+        if (c === "/" && (text.charAt(i + 1) === "/" || text.charAt(i + 1) === "*")) {
+          return { pos: i, kind: "comment" };
+        }
+        if (c === ",") {
+          var j = i + 1;
+          while (j < n && /\s/.test(text.charAt(j))) j += 1;
+          if (text.charAt(j) === "}" || text.charAt(j) === "]") {
+            return { pos: i, kind: "trailing-comma" };
+          }
+        }
+        if (/[A-Za-z_$]/.test(c)) {
+          var prevChar = i > 0 ? text.charAt(i - 1) : "";
+          // A letter glued to a digit, sign, dot or another letter is part of a
+          // number or of a literal already recognised above; skip, do not flag.
+          if (/[0-9.+\-]/.test(prevChar)) {
+            i += 1;
+            continue;
+          }
+          if (text.startsWith("true", i) || text.startsWith("null", i)) {
+            i += 4;
+            continue;
+          }
+          if (text.startsWith("false", i)) {
+            i += 5;
+            continue;
+          }
+          return { pos: i, kind: "bare-word" };
+        }
+        i += 1;
+      }
+      return null;
+    }
+
+    function explain(message, text, pos, kind) {
+      var lower = message.toLowerCase();
+      var ch = pos >= 0 && pos < text.length ? text.charAt(pos) : "";
+      var before = pos > 0 ? text.slice(0, pos) : "";
+      var prev = before.replace(/\s+$/, "").slice(-1);
+
+      if (/call stack|stack size|out of memory|invalid string length|too large/.test(lower)) {
+        return {
+          title: "The document is too large or too deeply nested to parse",
+          body:
+            "The engine gave up before reporting a syntax error, which normally means thousands of nested arrays or objects, or a single value larger than the string limit. Reduce the nesting or split the document before formatting it here.",
+        };
+      }
+      if (kind === "trailing-comma") {
+        return {
+          title: "Trailing comma",
+          body:
+            "A comma comes immediately before a closing brace or bracket. JSON forbids a comma after the last member or item, so delete that comma — this is the single most common JSON mistake.",
+        };
+      }
+      if (kind === "single-quote") {
+        return {
+          title: "Single quotes are not valid JSON",
+          body:
+            "JSON strings and property names must use double quotes. Replace this ' with \", and escape any double quote that appears inside the string itself.",
+        };
+      }
+      if (kind === "comment") {
+        return {
+          title: "Comments are not part of JSON",
+          body:
+            "Standard JSON has no comment syntax, so // and /* */ are syntax errors. Remove the comment, or keep configuration notes in a separate file alongside the JSON.",
+        };
+      }
+      if (kind === "control") {
+        return {
+          title: "A raw control character is inside a string",
+          body:
+            "JSON strings cannot contain literal newlines, tabs or other control characters. Escape them instead: \\n for a newline, \\t for a tab, or \\u0000-style escapes for anything else.",
+        };
+      }
+      if (kind === "bad-escape") {
+        return {
+          title: "Invalid escape sequence in a string",
+          body:
+            "JSON allows only \\\" \\\\ \\/ \\b \\f \\n \\r \\t and \\uXXXX inside a string. This backslash is followed by something else, so double it if you meant a literal backslash.",
+        };
+      }
+      if (kind === "unterminated-string") {
+        return {
+          title: "A string is never closed",
+          body:
+            "A double quote was opened and the text ended before it was closed. Check for a missing \" and remember that a newline inside a string must be written as \\n.",
+        };
+      }
+      if (/end of (json )?(input|data)|unterminated|unexpected end/.test(lower)) {
+        return {
+          title: "The JSON stops before it is finished",
+          body:
+            "A string, object or array was still open when the text ended. Check for a missing closing quote (\"), brace (}) or bracket (]), and remember that JSON does not allow an empty input.",
+        };
+      }
+      if (/control character/.test(lower)) {
+        return {
+          title: "A raw control character is inside a string",
+          body:
+            "JSON strings cannot contain literal newlines, tabs or other control characters. Escape them instead: \\n for a newline, \\t for a tab, or \\u0000-style escapes for anything else.",
+        };
+      }
+      if (/after json|non-whitespace character after/.test(lower)) {
+        return {
+          title: "Extra content after the JSON value",
+          body:
+            "The first value parsed correctly, but more text follows it. A document must contain exactly one value — this usually means two objects pasted one after another, a stray semicolon, or a trailing fragment.",
+        };
+      }
+      if (/expected ',' or/.test(lower)) {
+        return {
+          title: "A comma is missing between two members",
+          body:
+            "Members of an object and items of an array must be separated by a comma. Add one before the position marked below.",
+        };
+      }
+      if (/property name|double-quoted property/.test(lower)) {
+        return {
+          title: "A property name is not properly quoted",
+          body:
+            "Object keys must be double-quoted strings. Unquoted identifiers, single quotes and trailing commas before a closing brace all produce this error — quote the key or delete the stray comma.",
+        };
+      }
+      if (ch === "'") {
+        return {
+          title: "Single quotes are not valid JSON",
+          body:
+            "JSON strings and property names must use double quotes. Replace this ' with \", and escape any double quote that appears inside the string itself.",
+        };
+      }
+      if (ch === "\u201c" || ch === "\u201d" || ch === "\u2018" || ch === "\u2019") {
+        return {
+          title: "Typographic quotes are not valid JSON",
+          body:
+            "The text contains curly “smart” quotes, which are not delimiters in JSON. Replace them with plain \" characters — a word processor or a chat app may have changed them automatically.",
+        };
+      }
+      if (ch === "}" || ch === "]") {
+        if (prev === ",") {
+          return {
+            title: "Trailing comma",
+            body:
+              "A comma comes immediately before the closing " + ch + ". JSON forbids a comma after the last member, so delete that comma — this is the single most common JSON mistake.",
+          };
+        }
+        return {
+          title: "Unexpected closing " + ch,
+          body:
+            "The parser expected a value or a member name but found a closing " + ch + ". Look for an extra " + ch + ", a mismatched bracket, or a property that was written without a value.",
+        };
+      }
+      if (ch === ",") {
+        return {
+          title: "Unexpected comma",
+          body:
+            "A comma appeared where a value or a member name was expected — often a doubled comma, or a comma as the very first character inside an object or array.",
+        };
+      }
+      if (ch === "#" || ch === "/") {
+        return {
+          title: "Comments are not part of JSON",
+          body:
+            "Standard JSON has no comment syntax, so //, /* */ and # are all syntax errors. Remove the comment, or keep configuration notes in a separate file alongside the JSON.",
+        };
+      }
+      if (/[A-Za-z_$]/.test(ch)) {
+        var word = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(text.slice(pos)) || [];
+        var token = word[0] || ch;
+        if (/^(undefined|NaN|Infinity)$/i.test(token)) {
+          return {
+            title: "JavaScript-only value: " + token,
+            body:
+              "JSON has no undefined, NaN or Infinity. Use null for a missing value, and represent special numbers as strings or with a convention your consumer understands.",
+          };
+        }
+        if (/^(True|False|None|NULL|true|false|null)/.test(token)) {
+          return {
+            title: "Wrong spelling of a literal",
+            body:
+              "JSON literals are lowercase: true, false and null. Nothing else is accepted in that position, so check the capitalisation of '" + token + "'.",
+          };
+        }
+        return {
+          title: "Unexpected bare word",
+          body:
+            "The parser found the unquoted text '" + token + "' where a value was expected. Every string must be wrapped in double quotes, and every object key must be a quoted string.",
+        };
+      }
+      if (ch === "") {
+        return {
+          title: "Unexpected end of input",
+          body:
+            "The parser ran out of text at this point. Something is unclosed — count the braces and brackets, and check that the last string has a closing quote.",
+        };
+      }
+      return {
+        title: "The parser rejected the text here",
+        body:
+          "The exact character is marked below. Check for a stray comma, a missing quote, a mismatched brace or bracket, or a value that is not allowed in JSON.",
+      };
+    }
+
+    function renderExcerpt(text, pos, unknownPos) {
+      var host = $("jf-excerpt");
+      host.textContent = "";
+
+      var target = unknownPos ? text.length : pos;
+      var at = lineColAt(text, target);
+      var lines = text.split("\n");
+      var from = Math.max(0, at.line - 3);
+      var to = Math.min(lines.length - 1, at.line + 1);
+
+      for (var i = from; i <= to; i++) {
+        var raw = lines[i].replace(/\r$/, "");
+        var isErrorLine = i === at.line - 1;
+        var start = 0;
+        var prefix = "";
+        if (isErrorLine && raw.length > 110 && !unknownPos) {
+          start = Math.max(0, at.col - 1 - 60);
+          if (start > 0) prefix = "…";
+        }
+        var visible = raw.slice(start, start + 120);
+
+        var row = document.createElement("span");
+        row.className = "jf-x-line" + (isErrorLine ? " jf-x-line--err" : "");
+
+        var num = document.createElement("span");
+        num.className = "jf-x-num";
+        num.textContent = String(i + 1).padStart(4, " ");
+        row.appendChild(num);
+        row.appendChild(document.createTextNode(" | "));
+
+        var hitIndex = unknownPos ? -1 : at.col - 1 - start;
+        if (isErrorLine && hitIndex >= 0 && hitIndex < visible.length) {
+          row.appendChild(document.createTextNode(prefix + visible.slice(0, hitIndex)));
+          var hit = document.createElement("span");
+          hit.className = "jf-x-hit";
+          hit.textContent = visible.charAt(hitIndex);
+          row.appendChild(hit);
+          row.appendChild(document.createTextNode(visible.slice(hitIndex + 1)));
+        } else {
+          row.appendChild(document.createTextNode(prefix + visible));
+          if (isErrorLine) {
+            var mark = document.createElement("span");
+            mark.className = "jf-x-mark";
+            mark.textContent = unknownPos
+              ? "   ⟵ this browser reported no position; showing the end of the input"
+              : "   ⟵ the parser stopped here";
+            row.appendChild(mark);
+          }
+        }
+        host.appendChild(row);
+      }
+    }
+
+    function showError(err, text) {
+      var message = String(err && err.message ? err.message : err);
+      var posMatch = /position (\d+)/i.exec(message);
+      var lcMatch = /line (\d+) column (\d+)/i.exec(message);
+      var unknownPos = false;
+      var estimated = false;
+      var pos = -1;
+
+      if (posMatch) {
+        pos = parseInt(posMatch[1], 10);
+      } else if (lcMatch) {
+        pos = posAtLineCol(text, parseInt(lcMatch[1], 10), parseInt(lcMatch[2], 10));
+      }
+
+      // No position in the engine's message: locate the first local anomaly ourselves.
+      var anomaly = findAnomaly(text);
+      var kind = null;
+      if (pos < 0 && anomaly) {
+        pos = anomaly.pos;
+        estimated = true;
+        kind = anomaly.kind;
+      } else if (pos < 0) {
+        unknownPos = true;
+      } else if (anomaly && Math.abs(anomaly.pos - pos) <= 2) {
+        // The engine's position and the scanner agree on where the problem is,
+        // so the scanner's more specific diagnosis can be trusted.
+        kind = anomaly.kind;
+      }
+
+      var at = lineColAt(text, unknownPos ? text.length : pos);
+      var ch = !unknownPos && pos >= 0 && pos < text.length ? text.charAt(pos) : "";
+      var explained = explain(message, text, pos, kind);
+
+      $("jf-error-title").textContent = explained.title;
+      $("jf-error-body").textContent = explained.body;
+
+      var whereText = unknownPos
+        ? "Line " + at.line + ", column " + at.col + " (the end of the input) "
+        : "Line " + at.line + ", column " + at.col + ", character " + pos + " ";
+      if (estimated) whereText += "(position estimated by this page, the browser reported none) ";
+      $("jf-error-char").textContent =
+        whereText + "— the parser stopped at " + charLabel(ch) + ".";
+
+      renderExcerpt(text, pos, unknownPos);
+
+      $("jf-error").hidden = false;
+      $("jf-status").className = "jf__status jf__status--bad";
+      $("jf-status").textContent =
+        "Invalid JSON — line " +
+        at.line +
+        ", column " +
+        at.col +
+        ". " +
+        explained.title +
+        ". The explanation and a marked excerpt are below.";
+    }
+
+    function clearError() {
+      $("jf-error").hidden = true;
+      $("jf-error-title").textContent = "";
+      $("jf-error-body").textContent = "";
+      $("jf-error-char").textContent = "";
+      $("jf-excerpt").textContent = "";
+      $("jf-status").className = "jf__status";
+    }
+
+    /* ---------- statistics ---------- */
+
+    function byteLength(text) {
+      if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(text).length;
+      return text.length;
+    }
+
+    function nestDepth(value) {
+      // Iterative on purpose: a document nested thousands of levels deep would
+      // overflow the call stack in a recursive version.
+      var stack = [{ value: value, depth: 0 }];
+      var max = 0;
+      while (stack.length) {
+        var item = stack.pop();
+        var current = item.value;
+        if (current === null || typeof current !== "object") continue;
+        var depth = item.depth + 1;
+        if (depth > max) max = depth;
+        if (depth >= 200) continue;
+        var keys = Object.keys(current);
+        for (var i = 0; i < keys.length; i++) {
+          stack.push({ value: current[keys[i]], depth: depth });
+        }
+      }
+      return max;
+    }
+
+    function topLevelLabel(value) {
+      if (Array.isArray(value)) {
+        return value.length + (value.length === 1 ? " item" : " items");
+      }
+      if (value !== null && typeof value === "object") {
+        return String(Object.keys(value).length);
+      }
+      return "0";
+    }
+
+    function describe(value) {
+      var plural = function (n, word) {
+        return n + " " + word + (n === 1 ? "" : "s");
+      };
+      if (Array.isArray(value)) return "an array with " + plural(value.length, "item");
+      if (value === null) return "a top-level null";
+      if (typeof value === "object") return "an object with " + plural(Object.keys(value).length, "key");
+      if (typeof value === "string") {
+        var shown = value.length > 32 ? value.slice(0, 32) + "…" : value;
+        return "a top-level string: " + JSON.stringify(shown);
+      }
+      return "a top-level " + typeof value + ": " + String(value);
+    }
+
+    function updateStats(text, value) {
+      $("jf-stat-chars").textContent = String(text.length);
+      $("jf-stat-lines").textContent = text === "" ? "0" : String(text.split("\n").length);
+      $("jf-size").textContent =
+        text === ""
+          ? "The text box is empty."
+          : "The current text is " +
+            byteLength(text) +
+            " bytes when saved as UTF-8, " +
+            text.length +
+            " characters including whitespace.";
+
+      if (value === undefined) {
+        $("jf-stat-keys").textContent = "—";
+        $("jf-stat-depth").textContent = "—";
+      } else {
+        $("jf-stat-keys").textContent = topLevelLabel(value);
+        var depth = nestDepth(value);
+        $("jf-stat-depth").textContent = depth > 199 ? "200+" : String(depth);
+      }
+    }
+
+    /* ---------- tree ---------- */
+
+    function keyNode(key) {
+      var span = document.createElement("span");
+      span.className = "jf-t-key";
+      span.textContent = JSON.stringify(key);
+      return span;
+    }
+
+    function preview(value) {
+      if (Array.isArray(value)) {
+        return "[" + value.length + (value.length === 1 ? " item" : " items") + "]";
+      }
+      var n = Object.keys(value).length;
+      return "{" + n + (n === 1 ? " key" : " keys") + "}";
+    }
+
+    function leafType(value) {
+      if (value === null) return "null";
+      if (typeof value === "string") return "str";
+      if (typeof value === "number") return "num";
+      if (typeof value === "boolean") return "bool";
+      return "null";
+    }
+
+    function treeNode(value, keyLabel, indexLabel, depth, budget) {
+      if (budget.nodes >= budget.max || depth > MAX_TREE_DEPTH) return null;
+      budget.nodes += 1;
+
+      if (value === null || typeof value !== "object") {
+        var leaf = document.createElement("span");
+        if (keyLabel !== null) {
+          leaf.appendChild(keyNode(keyLabel));
+          leaf.appendChild(document.createTextNode(": "));
+        }
+        var val = document.createElement("span");
+        val.className = "jf-t-" + leafType(value);
+        val.textContent =
+          value === null ? "null" : typeof value === "string" ? JSON.stringify(value) : String(value);
+        leaf.appendChild(val);
+        return leaf;
+      }
+
+      var isArray = Array.isArray(value);
+      var branch = document.createElement("details");
+      branch.className = "jf-t-branch";
+      if (depth < 2) branch.open = true;
+
+      var summary = document.createElement("summary");
+      if (keyLabel !== null) {
+        summary.appendChild(keyNode(keyLabel));
+        summary.appendChild(document.createTextNode(": "));
+      } else if (indexLabel !== null) {
+        var idx = document.createElement("span");
+        idx.className = "jf-t-index";
+        idx.textContent = indexLabel + ": ";
+        summary.appendChild(idx);
+      }
+      var tag = document.createElement("span");
+      tag.className = "jf-t-tag";
+      tag.textContent = isArray ? "array" : "object";
+      var prev = document.createElement("span");
+      prev.className = "jf-t-preview";
+      prev.textContent = " " + preview(value);
+      summary.appendChild(tag);
+      summary.appendChild(prev);
+      branch.appendChild(summary);
+
+      var list = document.createElement("ul");
+      list.className = "jf-t-list";
+
+      var keys = isArray
+        ? value.map(function (_, i) {
+            return String(i);
+          })
+        : Object.keys(value);
+
+      for (var i = 0; i < keys.length; i++) {
+        var child = treeNode(
+          value[keys[i]],
+          isArray ? null : keys[i],
+          isArray ? keys[i] : null,
+          depth + 1,
+          budget
+        );
+        var item = document.createElement("li");
+        item.className = "jf-t-item";
+        if (child) {
+          item.appendChild(child);
+        } else {
+          var note = document.createElement("span");
+          note.className = "jf-t-note";
+          note.textContent = "… more of this document is not shown (tree view truncated)";
+          item.appendChild(note);
+          budget.truncated = true;
+        }
+        list.appendChild(item);
+        if (!child) break;
+      }
+
+      branch.appendChild(list);
+      return branch;
+    }
+
+    function renderTree(value, valid) {
+      var host = $("jf-tree");
+      host.textContent = "";
+      state.treeDirty = false;
+
+      if (!valid) {
+        var empty = document.createElement("p");
+        empty.className = "jf-t-note";
+        empty.textContent = "The tree appears once the text parses as valid JSON.";
+        host.appendChild(empty);
+        return;
+      }
+
+      var budget = { nodes: 0, max: MAX_TREE_NODES, truncated: false };
+      var root = treeNode(value, null, null, 0, budget);
+      if (root) host.appendChild(root);
+
+      if (budget.truncated) {
+        var note = document.createElement("p");
+        note.className = "jf-t-note";
+        note.textContent =
+          "This document is larger than the tree view renders. The statistics and the text are still complete.";
+        host.appendChild(note);
+      }
+    }
+
+    /* ---------- validation ---------- */
+
+    function validate() {
+      var text = $("jf-input").value;
+      var result = text.trim() === "" ? null : tryParse(text);
+
+      updateStats(text, result && result.ok ? result.value : undefined);
+
+      if (text.trim() === "") {
+        state.hasValue = false;
+        state.value = null;
+        clearError();
+        $("jf-status").textContent = "Waiting for input — paste some JSON to validate it.";
+        renderTree(null, false);
+        return;
+      }
+
+      if (!result.ok) {
+        state.hasValue = false;
+        state.value = null;
+        showError(result.error, text);
+        renderTree(null, false);
+        return;
+      }
+
+      state.hasValue = true;
+      state.value = result.value;
+      clearError();
+      $("jf-status").className = "jf__status jf__status--ok";
+      $("jf-status").textContent =
+        "Valid JSON — " + describe(result.value) + ". Nothing is uploaded; everything runs in this tab.";
+      if ($("jf-tree-details").open) renderTree(result.value, true);
+      else state.treeDirty = true;
+      return result.value;
+    }
+
+    /* ---------- operations ---------- */
+
+    function applyOperation(okMessage, transform) {
+      var text = $("jf-input").value;
+      if (text.trim() === "") {
+        $("jf-status").className = "jf__status";
+        $("jf-status").textContent = "There is nothing to do yet — paste some JSON first.";
+        return;
+      }
+      var result = tryParse(text);
+      if (!result.ok) {
+        validate();
+        $("jf-status").className = "jf__status jf__status--bad";
+        $("jf-status").textContent =
+          "That change needs valid JSON. Fix the error below, then try again.";
+        return;
+      }
+      var output;
+      try {
+        output = transform(result.value);
+      } catch (err) {
+        $("jf-status").className = "jf__status jf__status--bad";
+        $("jf-status").textContent =
+          "That change could not be completed: " +
+          (err && err.message ? err.message : "the document is too large or too deeply nested") +
+          ". The text is unchanged.";
+        return;
+      }
+      $("jf-input").value = output;
+      validate();
+      $("jf-status").className = "jf__status jf__status--ok";
+      $("jf-status").textContent =
+        okMessage + " — " + output.length + " characters, " + byteLength(output) + " bytes as UTF-8.";
+    }
+
+    /* ---------- clipboard and download ---------- */
+
+    function fallbackCopy(text) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.top = "-1000px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      var ok = false;
+      try {
+        area.select();
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(area);
+      return ok;
+    }
+
+    function copy(text) {
+      function done(ok) {
+        $("jf-status").className = "jf__status" + (ok ? " jf__status--ok" : "");
+        $("jf-status").textContent = ok
+          ? "Copied " + text.length + " characters to the clipboard."
+          : "The clipboard was blocked by the browser — select the text and press Ctrl+C instead.";
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            done(true);
+          },
+          function () {
+            done(fallbackCopy(text));
+          }
+        );
+      } else {
+        done(fallbackCopy(text));
+      }
+    }
+
+    function download() {
+      var text = $("jf-input").value;
+      if (text === "") {
+        $("jf-status").className = "jf__status";
+        $("jf-status").textContent = "There is nothing to download yet.";
+        return;
+      }
+      var blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = "formatted.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 2000);
+      $("jf-status").className = "jf__status jf__status--ok";
+      $("jf-status").textContent = "Saved formatted.json (" + byteLength(text) + " bytes).";
+    }
+
+    /* ---------- wiring ---------- */
+
+    function init() {
+      var input = $("jf-input");
+      var timer = null;
+
+      input.addEventListener("input", function () {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+          timer = null;
+          validate();
+        }, 180);
+      });
+
+      $("jf-indent").addEventListener("change", function () {
+        if (state.hasValue) {
+          applyOperation("Re-indented with " + indentLabel(), function (value) {
+            return JSON.stringify(value, null, indentString());
+          });
+        }
+      });
+
+      $("jf-pretty").addEventListener("click", function () {
+        applyOperation("Pretty-printed with " + indentLabel(), function (value) {
+          return JSON.stringify(value, null, indentString());
+        });
+      });
+
+      $("jf-minify").addEventListener("click", function () {
+        applyOperation("Minified, with all optional whitespace removed", function (value) {
+          return JSON.stringify(value);
+        });
+      });
+
+      $("jf-sort").addEventListener("click", function () {
+        applyOperation("Keys sorted alphabetically at every level", function (value) {
+          return JSON.stringify(sortDeep(value), null, indentString());
+        });
+      });
+
+      $("jf-clear").addEventListener("click", function () {
+        input.value = "";
+        state.hasValue = false;
+        state.value = null;
+        validate();
+        input.focus();
+      });
+
+      $("jf-copy").addEventListener("click", function () {
+        if (input.value === "") {
+          $("jf-status").textContent = "There is nothing to copy yet.";
+          return;
+        }
+        copy(input.value);
+      });
+
+      $("jf-download").addEventListener("click", download);
+
+      $("jf-sample").addEventListener("click", function () {
+        input.value = SAMPLE;
+        validate();
+        $("jf-status").className = "jf__status jf__status--ok";
+        $("jf-status").textContent =
+          "Sample loaded — try Pretty-print, Minify or Sort keys on it, then paste your own.";
+      });
+
+      $("jf-tree-details").addEventListener("toggle", function () {
+        if ($("jf-tree-details").open && state.treeDirty) {
+          renderTree(state.value, state.hasValue);
+        }
+      });
+
+      validate();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

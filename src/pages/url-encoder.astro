@@ -1,0 +1,842 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "url-encoder")!;
+
+const faqs = [
+  {
+    q: "What is the difference between encodeURI and encodeURIComponent?",
+    a: "encodeURI is designed for a complete URL and leaves the reserved characters that give a URL its structure untouched — : / ? # & = + $ , ; @ and more. encodeURIComponent is designed for a single piece of a URL, such as one query value, and escapes all of those reserved characters. Use encodeURI on a whole address and encodeURIComponent on every individual parameter value.",
+  },
+  {
+    q: "Why does my search break when a value contains & or =?",
+    a: "Because & separates parameters and = separates a name from its value inside a query string. If you build ?q=Tom & Jerry by hand, the server reads two parameters: q=Tom and Jerry with an empty value. Running the value through encodeURIComponent first produces Tom%20%26%20Jerry, and the ampersand is then just data.",
+  },
+  {
+    q: "Which characters are never encoded?",
+    a: "Percent-encoding leaves the unreserved set alone: A–Z, a–z, 0–9, hyphen, underscore, period and tilde. Those characters are safe in every part of a URL, so all three functions pass them through unchanged. Everything else is replaced by % followed by two hexadecimal digits of its UTF-8 bytes.",
+  },
+  {
+    q: "Are %20 and + the same thing in a query string?",
+    a: "No, and the difference causes real bugs. Percent-encoding represents a space as %20. The plus sign as a shorthand for a space comes from HTML form encoding, application/x-www-form-urlencoded, and is only interpreted that way by decoders that expect it. encodeURIComponent never produces + for a space, so %20 is the safer choice in a URL.",
+  },
+];
+
+const sources = [
+  {
+    label: "RFC 3986 — Uniform Resource Identifier (URI): Generic Syntax",
+    href: "https://www.rfc-editor.org/rfc/rfc3986",
+    note: "Defines the reserved and unreserved character sets and the percent-encoding rules, including section 2.4 on when to encode and decode.",
+  },
+  {
+    label: "MDN Web Docs — encodeURIComponent()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent",
+    note: "Lists exactly which characters each function escapes, and documents the URIError thrown on a lone surrogate or malformed escape sequence.",
+  },
+  {
+    label: "WHATWG URL Standard — application/x-www-form-urlencoded",
+    href: "https://url.spec.whatwg.org/#application/x-www-form-urlencoded",
+    note: "Specifies how query strings are parsed and serialised, and why plus is treated as a space only in form-encoded data.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Percent-encode or decode text with the right function for the job, then paste any full URL to see its protocol, host, path and every query parameter decoded one by one."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body ue">
+        <div class="field ue__pane">
+          <label for="ue-in">Text or URL</label>
+          <textarea
+            id="ue-in"
+            class="ue__ta"
+            rows="4"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            placeholder="https://example.com/search?q=coffee & cream&lang=en"
+          ></textarea>
+        </div>
+
+        <div class="ue__modes">
+          <div class="fieldset" id="ue-modes">
+            <legend>Mode</legend>
+            <div class="ue__radio-row">
+              <label class="check">
+                <input type="radio" name="ue-mode" value="component" checked />
+                <span>Component <code>encodeURIComponent</code></span>
+              </label>
+              <label class="check">
+                <input type="radio" name="ue-mode" value="uri" />
+                <span>Full URL <code>encodeURI</code></span>
+              </label>
+              <label class="check">
+                <input type="radio" name="ue-mode" value="decode" />
+                <span>Decode <code>decodeURIComponent</code></span>
+              </label>
+            </div>
+          </div>
+          <p class="ue__note" id="ue-note">
+            Escapes everything except <code>A–Z a–z 0–9 - _ . ! ~ * ' ( )</code>. Use it on a single
+            parameter value.
+          </p>
+        </div>
+
+        <div class="field ue__pane">
+          <label for="ue-out">Result</label>
+          <textarea
+            id="ue-out"
+            class="ue__ta"
+            rows="4"
+            readonly
+            spellcheck="false"
+            aria-live="polite"
+            aria-atomic="true"
+            placeholder="The encoded or decoded result appears here."
+          ></textarea>
+        </div>
+
+        <div class="ue__actions">
+          <button type="button" class="btn btn--soft" id="ue-copy">Copy result</button>
+          <button type="button" class="btn btn--ghost" id="ue-swap">Use result as input</button>
+          <button type="button" class="btn btn--ghost" id="ue-clear">Clear result</button>
+        </div>
+
+        <p class="ue__error" id="ue-error" role="alert" aria-live="assertive" hidden></p>
+
+        <div class="ue__status" aria-live="polite">
+          <span id="ue-status">Ready — type or paste, and the result updates live.</span>
+        </div>
+
+        <section class="ue__reader" aria-labelledby="ue-reader-h">
+          <h2 class="ue__h" id="ue-reader-h">Query string reader</h2>
+          <p class="ue__help">
+            Paste any full URL and press <em>Read URL</em> to split it into its parts and list every
+            query parameter with its raw and decoded values.
+          </p>
+
+          <div class="field ue__pane">
+            <label for="ue-url">Full URL to inspect</label>
+            <input
+              type="text"
+              id="ue-url"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder="https://shop.example.com/items?id=42&name=Blue%20mug&tag=a%26b"
+            />
+          </div>
+
+          <div class="ue__actions">
+            <button type="button" class="btn btn--primary" id="ue-read">Read URL</button>
+            <button type="button" class="btn btn--ghost" id="ue-fill">Use the input above</button>
+          </div>
+
+          <p class="ue__badge-row">
+            <span class="badge badge--accent" id="ue-param-count">No URL read yet</span>
+          </p>
+
+          <div class="table-wrap ue__table">
+            <table class="data">
+              <caption class="sr-only">Parts of the parsed URL</caption>
+              <tbody>
+                <tr>
+                  <th scope="row">Protocol</th>
+                  <td><span class="readout" id="ue-part-protocol">—</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Host</th>
+                  <td><span class="readout" id="ue-part-host">—</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Port</th>
+                  <td><span class="readout" id="ue-part-port">—</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Path</th>
+                  <td><span class="readout" id="ue-part-path">—</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Fragment</th>
+                  <td><span class="readout" id="ue-part-hash">—</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="ue__params-head">
+            <h3 class="ue__h3">Query parameters</h3>
+            <button type="button" class="btn btn--soft btn--sm" id="ue-copy-params">Copy all parameters</button>
+          </div>
+
+          <div class="table-wrap ue__table">
+            <table class="data" id="ue-params-table">
+              <caption class="sr-only">Query parameters, with the raw and decoded value of each one</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Raw value</th>
+                  <th scope="col">Decoded value</th>
+                  <th scope="col"><span class="sr-only">Copy</span></th>
+                </tr>
+              </thead>
+              <tbody id="ue-params">
+                <tr id="ue-params-row">
+                  <td colspan="4">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="empty-state" id="ue-params-empty">
+            No parameters yet. Read a URL that contains a query string and every name, raw value and
+            decoded value will appear here.
+          </p>
+
+          <p class="ue__error" id="ue-url-error" role="alert" aria-live="assertive" hidden></p>
+          <div class="ue__status" aria-live="polite">
+            <span id="ue-url-status">Waiting for a URL to read.</span>
+          </div>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Everything happens in your browser with the built-in URL and encodeURI functions — no request is
+        ever made, so private links stay private.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How percent-encoding works</h2>
+  <p>
+    A URL can only carry a limited set of characters safely. Percent-encoding, standardised in RFC 3986,
+    is the escape hatch: any character that is not in the unreserved set is replaced by a percent sign
+    followed by two hexadecimal digits for each byte of its UTF-8 encoding. That last detail matters for
+    anything non-English — <code>café</code> becomes <code>caf%C3%A9</code>, six characters, because the
+    <code>é</code> is two UTF-8 bytes rather than one.
+  </p>
+  <p>
+    The unreserved set never needs escaping: <code>A–Z</code>, <code>a–z</code>, <code>0–9</code>, and
+    the four punctuation characters <code>-</code>, <code>_</code>, <code>.</code> and <code>~</code>.
+    Everything else has a meaning somewhere in a URL — <code>?</code> starts a query string,
+    <code>#</code> starts a fragment, <code>/</code> separates path segments, <code>&amp;</code>
+    separates parameters, <code>=</code> separates a name from its value, and <code>+</code> is read as a
+    space by form-encoded decoders.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Character</th>
+          <th scope="col">Meaning in a URL</th>
+          <th scope="col">encodeURI leaves it</th>
+          <th scope="col">encodeURIComponent leaves it</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>&amp;</code></td>
+          <td>Separates query parameters</td>
+          <td>Yes</td>
+          <td>No — becomes <code>%26</code></td>
+        </tr>
+        <tr>
+          <td><code>=</code></td>
+          <td>Separates name from value</td>
+          <td>Yes</td>
+          <td>No — becomes <code>%3D</code></td>
+        </tr>
+        <tr>
+          <td><code>?</code></td>
+          <td>Starts the query string</td>
+          <td>Yes</td>
+          <td>No — becomes <code>%3F</code></td>
+        </tr>
+        <tr>
+          <td><code>/</code></td>
+          <td>Separates path segments</td>
+          <td>Yes</td>
+          <td>No — becomes <code>%2F</code></td>
+        </tr>
+        <tr>
+          <td><code>#</code></td>
+          <td>Starts the fragment</td>
+          <td>Yes</td>
+          <td>No — becomes <code>%23</code></td>
+        </tr>
+        <tr>
+          <td>space</td>
+          <td>Not allowed at all</td>
+          <td>No — becomes <code>%20</code></td>
+          <td>No — becomes <code>%20</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Why picking the wrong function breaks query strings</h2>
+  <p>
+    <code>encodeURI</code> assumes you are handing it a complete, already-structured address, so it
+    deliberately leaves the structural characters alone. That is exactly right for
+    <code>https://example.com/a b/c</code>, and exactly wrong for a single value. If a search term
+    contains an ampersand and you encode it with <code>encodeURI</code>, the ampersand survives and the
+    server sees a new parameter that you never intended:
+  </p>
+  <pre><code>// A value the user typed:
+Tom &amp; Jerry
+
+// Wrong: encodeURI leaves the & alone, so the query is split in two.
+?q=Tom%20&amp;%20Jerry&amp;lang=en
+//  → q = "Tom ", lang = "en", and a stray parameter named " Jerry"
+
+// Right: encodeURIComponent escapes the & as %26 and it stays data.
+?q=Tom%20%26%20Jerry&amp;lang=en
+//  → q = "Tom &amp; Jerry", lang = "en"</code></pre>
+  <p>
+    The same failure happens with <code>=</code>, with <code>+</code> and with anything else that is
+    reserved. The reliable habit is: build the URL from parts and run
+    <code>encodeURIComponent</code> on each individual name and value before you join them with
+    <code>&amp;</code> and <code>=</code>. If you have a URL object available, setting the search
+    parameters through <code>URLSearchParams</code> does that escaping for you.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      Decoding is the mirror image. <code>decodeURIComponent</code> throws a <code>URIError</code> on a
+      malformed sequence such as a lone <code>%</code>, so this tool catches that and reports it instead
+      of failing silently or showing a blank result.
+    </p>
+  </div>
+  <p>
+    What this tool does <em>not</em> claim: it cannot tell you that a URL is reachable, that its host
+    exists, or that a server will interpret the parameters the way you expect. It only applies the
+    standard escaping rules and, in the reader below, the standard parsing rules from the WHATWG URL
+    standard. Query parameters that repeat — <code>?tag=a&amp;tag=b</code> — are listed as separate rows
+    rather than merged into one, because that is what the byte stream actually contains.
+  </p>
+
+  <h2>How to use this tool</h2>
+  <ol>
+    <li>
+      <strong>Pick the right mode.</strong> Choose <em>Component</em> for a single value such as a
+      search term or a redirect target, and <em>Full URL</em> when you are escaping a whole address that
+      already has its <code>?</code> and <code>&amp;</code> in place.
+    </li>
+    <li>
+      <strong>Type and watch.</strong> The result updates live as you type; there is no Apply button.
+      The note under the modes always spells out which characters the current function leaves alone.
+    </li>
+    <li>
+      <strong>Decode to check your work.</strong> Switch to <em>Decode</em> to turn
+      <code>%20</code> and <code>%26</code> back into readable text, so you can confirm a value survived
+      a round trip through some other system.
+    </li>
+    <li>
+      <strong>Read a full URL.</strong> Paste an address into the query string reader and press
+      <em>Read URL</em>. Protocol, host, port, path and fragment are laid out in a table, and each query
+      parameter is listed with its raw value next to its decoded value.
+    </li>
+    <li>
+      <strong>Copy anything.</strong> Each output has its own copy button — the encoded or decoded
+      result, and the full parameter list as <code>name=value</code> lines once a URL has been read.
+    </li>
+  </ol>
+</ToolLayout>
+
+<style>
+  .ue {
+    display: grid;
+    gap: 1.1rem;
+  }
+  .ue__pane {
+    min-width: 0;
+  }
+  .ue__ta {
+    min-height: 6rem;
+    resize: vertical;
+    line-height: 1.5;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+  }
+  #ue-url {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+  }
+  .ue__modes {
+    display: grid;
+    gap: 0.6rem;
+  }
+  .ue__radio-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+  }
+  .ue__modes code,
+  .ue__note code,
+  .ue__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .ue__note {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .ue__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .ue__status {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+  .ue__error {
+    margin: 0;
+    padding: 0.75rem 0.95rem;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-inline-start: 3px solid var(--danger);
+    font-size: 0.92rem;
+  }
+  .ue__reader {
+    display: grid;
+    gap: 0.9rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--border);
+  }
+  .ue__h {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .ue__h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .ue__help {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+  .ue__badge-row {
+    margin: 0;
+  }
+  .ue__table {
+    background: var(--surface);
+  }
+  .ue__table th[scope="row"] {
+    width: 7.5rem;
+    color: var(--text-muted);
+    font-weight: 650;
+  }
+  .ue__table .readout {
+    display: inline-block;
+    padding: 0.25rem 0.55rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    word-break: break-all;
+  }
+  .ue__params-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+  .ue__params-head .btn {
+    margin-inline-start: auto;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var input = document.getElementById("ue-in");
+    var output = document.getElementById("ue-out");
+    var modeFieldset = document.getElementById("ue-modes");
+    var noteEl = document.getElementById("ue-note");
+    var errorBox = document.getElementById("ue-error");
+    var statusEl = document.getElementById("ue-status");
+    var urlField = document.getElementById("ue-url");
+    var urlErrorBox = document.getElementById("ue-url-error");
+    var urlStatusEl = document.getElementById("ue-url-status");
+    var paramCount = document.getElementById("ue-param-count");
+    var paramsBody = document.getElementById("ue-params");
+    var paramsEmpty = document.getElementById("ue-params-empty");
+    var placeholderRow = document.getElementById("ue-params-row");
+
+    var partIds = {
+      protocol: "ue-part-protocol",
+      host: "ue-part-host",
+      port: "ue-part-port",
+      path: "ue-part-path",
+      hash: "ue-part-hash",
+    };
+
+    var NOTES = {
+      component:
+        "Escapes everything except A–Z a–z 0–9 - _ . ! ~ * ' ( ). Use it on a single parameter value.",
+      uri: "Escapes spaces and non-ASCII text but keeps : / ? # & = + $ , ; @ so the URL keeps its structure. Use it on a whole address.",
+      decode: "Turns %20-style escapes back into characters. A malformed escape such as a lone % is reported as an error rather than silently ignored.",
+    };
+
+    var MODE_LABEL = { component: "Component", uri: "Full URL", decode: "Decode" };
+
+    var lastParams = [];
+    var haveUrlResult = false;
+
+    /* ---------- encoder ---------- */
+
+    function currentMode() {
+      var checked = modeFieldset.querySelector('input[name="ue-mode"]:checked');
+      return checked ? checked.value : "component";
+    }
+
+    function clearError() {
+      errorBox.hidden = true;
+      errorBox.textContent = "";
+    }
+
+    function run() {
+      clearError();
+      var mode = currentMode();
+      noteEl.textContent = NOTES[mode];
+      var text = input.value;
+      if (text === "") {
+        output.value = "";
+        statusEl.textContent = "Nothing to convert yet — type or paste some text.";
+        return;
+      }
+      try {
+        if (mode === "uri") {
+          output.value = encodeURI(text);
+          statusEl.textContent = "Encoded as a full URL with encodeURI.";
+        } else if (mode === "decode") {
+          output.value = decodeURIComponent(text);
+          statusEl.textContent = "Decoded with decodeURIComponent.";
+        } else {
+          output.value = encodeURIComponent(text);
+          statusEl.textContent = "Encoded as a component with encodeURIComponent.";
+        }
+      } catch (err) {
+        output.value = "";
+        errorBox.hidden = false;
+        errorBox.textContent =
+          "That input could not be decoded — it contains a malformed percent escape or an unpaired surrogate. Check for a stray % or a half-finished %XX sequence.";
+        statusEl.textContent = "Conversion failed.";
+      }
+    }
+
+    /* ---------- URL reader ---------- */
+
+    function decodeParam(value) {
+      var plusAsSpace = String(value).replace(/\+/g, " ");
+      try {
+        return { text: decodeURIComponent(plusAsSpace) };
+      } catch (err) {
+        return { text: plusAsSpace, error: true };
+      }
+    }
+
+    function setPart(key, value) {
+      document.getElementById(partIds[key]).textContent = value === "" ? "—" : value;
+    }
+
+    function makeParamRow(index, name, raw, decoded, malformed) {
+      var row = document.createElement("tr");
+
+      var nameCell = document.createElement("td");
+      var nameReadout = document.createElement("span");
+      nameReadout.className = "readout";
+      nameReadout.textContent = name === "" ? "(empty name)" : name;
+      nameCell.appendChild(nameReadout);
+
+      var rawCell = document.createElement("td");
+      var rawReadout = document.createElement("span");
+      rawReadout.className = "readout";
+      rawReadout.textContent = raw === "" ? "(empty)" : raw;
+      rawCell.appendChild(rawReadout);
+
+      var decodedCell = document.createElement("td");
+      var decodedReadout = document.createElement("span");
+      decodedReadout.className = "readout";
+      decodedReadout.textContent = decoded === "" ? "(empty)" : decoded;
+      if (malformed) decodedReadout.style.color = "var(--danger)";
+      decodedCell.appendChild(decodedReadout);
+
+      var copyCell = document.createElement("td");
+      var copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "btn btn--ghost btn--sm";
+      copyBtn.textContent = "Copy";
+      copyBtn.setAttribute("data-param-index", String(index));
+      copyCell.appendChild(copyBtn);
+
+      row.appendChild(nameCell);
+      row.appendChild(rawCell);
+      row.appendChild(decodedCell);
+      row.appendChild(copyCell);
+
+      if (malformed) row.title = "The value contains a malformed percent escape and was shown as-is.";
+
+      return row;
+    }
+
+    function clearParamsBody() {
+      while (paramsBody.firstChild) paramsBody.removeChild(paramsBody.firstChild);
+    }
+
+    function clearUrlResult() {
+      lastParams = [];
+      haveUrlResult = false;
+      clearParamsBody();
+      var placeholder = document.createElement("tr");
+      var cell = document.createElement("td");
+      cell.colSpan = 4;
+      cell.textContent = "—";
+      placeholder.appendChild(cell);
+      paramsBody.appendChild(placeholder);
+      paramsEmpty.hidden = false;
+      paramCount.textContent = "No URL read yet";
+    }
+
+    function readUrl() {
+      urlErrorBox.hidden = true;
+      urlErrorBox.textContent = "";
+      var raw = urlField.value.trim();
+      if (raw === "") {
+        urlStatusEl.textContent = "Paste a URL first, then press Read URL.";
+        urlErrorBox.hidden = false;
+        urlErrorBox.textContent = "There is no URL to read yet — paste one into the field above.";
+        return;
+      }
+
+      var parsed;
+      try {
+        parsed = new URL(raw);
+      } catch (err) {
+        parsed = null;
+      }
+      if (!parsed) {
+        try {
+          parsed = new URL(raw, window.location.href);
+        } catch (err) {
+          parsed = null;
+        }
+      }
+      if (!parsed) {
+        clearUrlResult();
+        urlErrorBox.hidden = false;
+        urlErrorBox.textContent =
+          "That does not look like a URL — check the scheme (https://) and try again.";
+        urlStatusEl.textContent = "Could not read that URL.";
+        return;
+      }
+
+      setPart("protocol", parsed.protocol);
+      setPart("host", parsed.host);
+      setPart("port", parsed.port);
+      setPart("path", parsed.pathname);
+      setPart("hash", parsed.hash);
+
+      lastParams = [];
+      clearParamsBody();
+
+      var pairs = [];
+      var search = parsed.search.replace(/^\?/, "");
+      if (search !== "") {
+        var chunks = search.split("&");
+        for (var i = 0; i < chunks.length; i++) {
+          var chunk = chunks[i];
+          if (chunk === "") continue;
+          var eq = chunk.indexOf("=");
+          pairs.push(eq === -1 ? [chunk, ""] : [chunk.slice(0, eq), chunk.slice(eq + 1)]);
+        }
+      }
+
+      for (var j = 0; j < pairs.length; j++) {
+        var name = decodeParam(pairs[j][0]);
+        var value = decodeParam(pairs[j][1]);
+        lastParams.push({
+          name: name.text,
+          raw: pairs[j][1],
+          decoded: value.text,
+        });
+        paramsBody.appendChild(
+          makeParamRow(j, name.text, pairs[j][1], value.text, Boolean(value.error))
+        );
+      }
+
+      haveUrlResult = true;
+
+      if (pairs.length === 0) {
+        paramCount.textContent = "0 query parameters";
+        paramsEmpty.hidden = false;
+        paramsEmpty.textContent =
+          "This URL has no query string, so there are no parameters to show. Its parts are listed above.";
+      } else {
+        paramCount.textContent =
+          pairs.length + (pairs.length === 1 ? " query parameter" : " query parameters");
+        paramsEmpty.hidden = true;
+      }
+
+      urlStatusEl.textContent =
+        "Read " +
+        (parsed.host || "the URL") +
+        " — " +
+        pairs.length +
+        (pairs.length === 1 ? " parameter" : " parameters") +
+        " split out.";
+    }
+
+    function paramLines() {
+      var lines = [];
+      for (var i = 0; i < lastParams.length; i++) {
+        lines.push(lastParams[i].name + " = " + lastParams[i].decoded);
+      }
+      return lines.join("\n");
+    }
+
+    /* ---------- clipboard ---------- */
+
+    function fallbackCopy(text) {
+      var helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.top = "-1000px";
+      document.body.appendChild(helper);
+      helper.select();
+      var ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(helper);
+      return ok;
+    }
+
+    function copyText(text, onDone) {
+      if (!text) {
+        onDone(false);
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            onDone(true);
+          },
+          function () {
+            onDone(fallbackCopy(text));
+          }
+        );
+      } else {
+        onDone(fallbackCopy(text));
+      }
+    }
+
+    /* ---------- wiring ---------- */
+
+    function init() {
+      input.addEventListener("input", run);
+
+      modeFieldset.addEventListener("change", function () {
+        run();
+      });
+
+      document.getElementById("ue-copy").addEventListener("click", function () {
+        if (!output.value) {
+          statusEl.textContent = "There is nothing to copy yet.";
+          return;
+        }
+        copyText(output.value, function (ok) {
+          statusEl.textContent = ok
+            ? "Result copied to the clipboard."
+            : "Copying was blocked — select the text and press Ctrl+C.";
+        });
+      });
+
+      document.getElementById("ue-swap").addEventListener("click", function () {
+        if (!output.value) {
+          statusEl.textContent = "There is no result to move up yet.";
+          return;
+        }
+        input.value = output.value;
+        run();
+        statusEl.textContent = "Moved the result into the input, so you can convert it again.";
+      });
+
+      document.getElementById("ue-clear").addEventListener("click", function () {
+        output.value = "";
+        clearError();
+        statusEl.textContent = "Result cleared — the input is untouched.";
+      });
+
+      document.getElementById("ue-read").addEventListener("click", readUrl);
+
+      document.getElementById("ue-fill").addEventListener("click", function () {
+        var value = input.value.trim();
+        if (!value) {
+          urlStatusEl.textContent = "The input box above is empty — type a URL there first.";
+          return;
+        }
+        urlField.value = value;
+        readUrl();
+      });
+
+      urlField.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          readUrl();
+        }
+      });
+
+      document.getElementById("ue-copy-params").addEventListener("click", function () {
+        if (!haveUrlResult || !lastParams.length) {
+          urlStatusEl.textContent = "Read a URL with query parameters first.";
+          return;
+        }
+        copyText(paramLines(), function (ok) {
+          urlStatusEl.textContent = ok
+            ? "Parameter list copied to the clipboard."
+            : "Copying was blocked — select the table text and press Ctrl+C.";
+        });
+      });
+
+      paramsBody.addEventListener("click", function (event) {
+        var btn = event.target.closest("button[data-param-index]");
+        if (!btn) return;
+        var index = parseInt(btn.getAttribute("data-param-index"), 10);
+        var param = lastParams[index];
+        if (!param) return;
+        copyText(param.decoded, function (ok) {
+          urlStatusEl.textContent = ok
+            ? "Copied the value of “" + param.name + "”."
+            : "Copying was blocked — select the value and press Ctrl+C.";
+        });
+      });
+
+      if (placeholderRow && placeholderRow.parentNode) {
+        placeholderRow.parentNode.removeChild(placeholderRow);
+      }
+
+      run();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

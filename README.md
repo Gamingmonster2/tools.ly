@@ -23,7 +23,9 @@ npm install          # install dependencies
 npm run dev          # local dev server with hot reload
 npm run build        # build the static site into dist/
 npm run preview      # preview the built site
-npm run check:urls   # run the migration guard (see below) — run this after every build
+npm run check        # build, then run both guards below (use this before every push)
+npm run check:urls   # migration guard: legacy URLs, sitemap, metadata, no third-party assets
+npm run check:styles # diagnostic: runtime-assigned classes that scoped CSS cannot reach
 ```
 
 Visual check of the built output without the dev server:

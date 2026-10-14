@@ -1,0 +1,827 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "hash-generator")!;
+
+const faqs = [
+  {
+    q: "Is hashing the same thing as encryption?",
+    a: "No. Encryption is a two-way operation: whoever holds the key can turn the ciphertext back into the original message. A cryptographic hash is one-way by design — a fixed-length digest computed from the input, with no key and no undo. That is why hashes are used to check integrity and to store passwords, and why they are the wrong tool when you need to read the data again later.",
+  },
+  {
+    q: "Which algorithm should I pick — SHA-1, SHA-256 or SHA-512?",
+    a: "SHA-256 is the safe default for checksums, file integrity and any new work: it is fast, widely implemented and has no known practical collision. SHA-512 is an equally good choice and can be slightly faster on 64-bit hardware. SHA-1 still matches legacy digests and old manifests, but deliberate collisions have been produced in public research, so it must not be used where an attacker benefits from forging a match — signatures, certificates or tamper detection.",
+  },
+  {
+    q: "Can this tool reverse or crack a hash?",
+    a: "No, and neither can anything else in the general case. The page computes digests forward only. What attackers actually do is guess — hashing candidate inputs until one matches, which works when the input is short, common or predictable. That is also why a fast hash such as SHA-256 is a poor way to store passwords: use a deliberately slow, salted function such as Argon2id, scrypt, bcrypt or PBKDF2 instead.",
+  },
+  {
+    q: "Will the digest match sha256sum, openssl or PowerShell?",
+    a: "It matches exactly when the other program hashes the same bytes with the same algorithm. The usual causes of a mismatch are invisible byte differences: a trailing newline added by an editor, Windows CRLF versus Unix LF line endings, or a UTF-8 file with a byte-order mark. Text here is always encoded as UTF-8 with no BOM and no added newline, and files are hashed as their raw bytes.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — SubtleCrypto.digest()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest",
+    note: "Documents the browser API this page calls, including the asynchronous contract and the SHA-1, SHA-256, SHA-384 and SHA-512 algorithms it accepts.",
+  },
+  {
+    label: "NIST — FIPS 180-4, Secure Hash Standard (SHS)",
+    href: "https://csrc.nist.gov/pubs/fips/180-4/upd1/final",
+    note: "The official publication page for the standard that defines SHA-1, SHA-256, SHA-384 and SHA-512, including the message padding, block sizes and the downloadable PDF.",
+  },
+  {
+    label: "OWASP — Password Storage Cheat Sheet",
+    href: "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html",
+    note: "Explains why fast general-purpose hashes are unsuitable for passwords and gives current parameters for Argon2id, scrypt, bcrypt and PBKDF2.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Hash typed text or a file you drop in, get SHA-1, SHA-256, SHA-384 and SHA-512 digests at once, and compare the result with a hash someone gave you — entirely inside your browser."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body hg">
+        <section class="hg__block" aria-labelledby="hg-input-h">
+          <h2 class="hg__h" id="hg-input-h">1. Choose the input</h2>
+
+          <div class="field">
+            <label for="hg-text">Text to hash</label>
+            <textarea
+              id="hg-text"
+              rows="4"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="Type or paste the text you want to hash…"
+              aria-describedby="hg-text-help"></textarea>
+            <p class="hg__help" id="hg-text-help">
+              Hashed as UTF-8 bytes, exactly as written — no newline is added and trailing spaces count.
+            </p>
+          </div>
+
+          <div class="hg__drop" id="hg-drop">
+            <div class="field">
+              <label for="hg-file">…or choose a file, or drop one anywhere in this box</label>
+              <input type="file" id="hg-file" aria-describedby="hg-file-help" />
+            </div>
+            <p class="hg__help" id="hg-file-help">
+              The file is read locally with the File API. Nothing is uploaded and the page keeps working
+              with the network switched off.
+            </p>
+            <p class="hg__fileinfo readout" id="hg-fileinfo" hidden></p>
+            <div class="hg__fileactions">
+              <button type="button" class="btn btn--ghost btn--sm" id="hg-clear-file" hidden>
+                Clear file and hash the text instead
+              </button>
+            </div>
+          </div>
+
+          <div class="callout callout--warn" id="hg-bigwarn" hidden>
+            <p>
+              That file is larger than 10&nbsp;MB, and the browser reads it into memory in one go, so this
+              may take a moment. Keep the tab open until the digests appear.
+            </p>
+          </div>
+
+          <div class="hg__actions">
+            <button type="button" class="btn btn--primary" id="hg-run">Compute hashes</button>
+            <span class="hg__status" id="hg-status" role="status" aria-live="polite">
+              Nothing hashed yet.
+            </span>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="hg-upper" />
+            Show digests in UPPERCASE
+          </label>
+        </section>
+
+        <section class="hg__block" aria-labelledby="hg-res-h">
+          <h2 class="hg__h" id="hg-res-h">2. Digests</h2>
+          <p class="hg__help" id="hg-subject" aria-live="polite">
+            Press <em>Compute hashes</em> to fill this table.
+          </p>
+
+          <div class="table-wrap" id="hg-results" aria-live="polite">
+            <table class="data hg__table">
+              <caption class="sr-only">
+                SHA-1, SHA-256, SHA-384 and SHA-512 digests for the current input
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Algorithm</th>
+                  <th scope="col">Digest (hexadecimal)</th>
+                  <th scope="col"><span class="sr-only">Copy digest</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">SHA-1</th>
+                  <td><span class="hg__digest" id="hg-d-sha1">—</span></td>
+                  <td>
+                    <button type="button" class="btn btn--ghost btn--sm" data-copy-alg="SHA-1">
+                      Copy
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">SHA-256</th>
+                  <td><span class="hg__digest" id="hg-d-sha256">—</span></td>
+                  <td>
+                    <button type="button" class="btn btn--ghost btn--sm" data-copy-alg="SHA-256">
+                      Copy
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">SHA-384</th>
+                  <td><span class="hg__digest" id="hg-d-sha384">—</span></td>
+                  <td>
+                    <button type="button" class="btn btn--ghost btn--sm" data-copy-alg="SHA-384">
+                      Copy
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">SHA-512</th>
+                  <td><span class="hg__digest" id="hg-d-sha512">—</span></td>
+                  <td>
+                    <button type="button" class="btn btn--ghost btn--sm" data-copy-alg="SHA-512">
+                      Copy
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="hg__help">
+            Output sizes: SHA-1 is 160 bits (40 hex characters), SHA-256 is 256 bits (64), SHA-384 is
+            384 bits (96) and SHA-512 is 512 bits (128).
+          </p>
+        </section>
+
+        <section class="hg__block" aria-labelledby="hg-cmp-h">
+          <h2 class="hg__h" id="hg-cmp-h">3. Compare with an expected hash</h2>
+          <div class="field">
+            <label for="hg-expected">Expected hash</label>
+            <input
+              type="text"
+              id="hg-expected"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="Paste a digest, e.g. 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c…"
+              aria-describedby="hg-cmp-help" />
+            <p class="hg__help" id="hg-cmp-help">
+              Case is ignored and all spaces, tabs and line breaks are stripped before comparing, so a
+              hash copied out of a download page or an email still matches.
+            </p>
+          </div>
+          <p class="hg__verdict result-box" id="hg-verdict" role="status" aria-live="polite">
+            Paste a hash to compare it with the digests above.
+          </p>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Digests come from your browser's built-in Web Crypto API — the text or file is read in this tab and
+        never sent anywhere.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    A cryptographic hash function takes an input of any length — a single character, a 4&nbsp;GB disk
+    image — and returns a fixed-size string of bytes called a digest. The same input always produces the
+    same digest, on every machine and in every implementation, and changing even one bit of the input
+    produces a completely different, unpredictable result. That last property, usually called the
+    avalanche effect, is what makes a digest useful as a fingerprint: nobody can quietly edit a file and
+    keep the hash.
+  </p>
+  <p>
+    This page hands your input to <code>crypto.subtle.digest()</code>, the Web Crypto implementation that
+    ships with the browser. Text is converted to bytes with <code>TextEncoder</code>, which always emits
+    UTF-8 without a byte-order mark; a file is read as an <code>ArrayBuffer</code> through the File API,
+    so the digest covers the exact bytes on disk, including things an editor hides such as CRLF line
+    endings. Because <code>digest()</code> is asynchronous, the button reports a
+    <em>computing…</em> state and stays disabled until all four algorithms have finished. The result is
+    shown as lowercase hexadecimal — two characters per byte, which is why SHA-256 is always exactly 64
+    characters and SHA-512 exactly 128.
+  </p>
+  <p>
+    The four algorithms are members of the same SHA-2 family, standardised in NIST FIPS&nbsp;180-4, plus
+    the older SHA-1. They differ only in output size and internal word size: SHA-1 produces 160 bits,
+    SHA-256 produces 256, and SHA-384 and SHA-512 are truncated and distinct variants of the 512-bit
+    construction. Larger output means a larger space an attacker has to search, but for ordinary
+    integrity checks SHA-256 already offers a comfortable margin. All four are computed here in a single
+    pass over one input, which is handy when a download page lists several checksums and you are not sure
+    which one you will be asked for.
+  </p>
+
+  <h2>What hashing does not do</h2>
+  <p>
+    The limits matter more than the mechanics, so here they are plainly. <strong>Hashing is not
+    encryption.</strong> There is no key and no decryption step; the tool cannot reverse a hash, and no
+    other tool can either for any input that is not trivially guessable. If you need to recover the
+    original data, hash the wrong primitive — use encryption with a key you can manage.
+  </p>
+  <ul>
+    <li>
+      <strong>SHA-1 is no longer collision-safe.</strong> Chosen-prefix collisions have been demonstrated
+      publicly, which means two different inputs can be crafted to produce the same SHA-1 digest. It is
+      still adequate for spotting accidental corruption, but it must not be used for signatures,
+      certificates or anything an adversary has an incentive to forge. MD5, the other hash you will still
+      meet in the wild, is broken even more thoroughly and should be treated the same way.
+    </li>
+    <li>
+      <strong>SHA-2 needs correct usage, not just a correct algorithm.</strong> A digest proves that two
+      byte sequences are identical. It does not prove who produced them. If you need to know that a
+      message came from a particular party and was not altered on the way, you need a keyed construction
+      — HMAC, or a digital signature — rather than a bare hash.
+    </li>
+    <li>
+      <strong>Fast hashes are the wrong tool for passwords.</strong> SHA-256 is designed to be quick,
+      which is exactly what a password cracker wants. Password storage needs a salted, deliberately slow
+      function such as Argon2id, scrypt, bcrypt or PBKDF2, with a per-user salt and a tuned work factor.
+    </li>
+    <li>
+      <strong>A matching hash is not a proof of safety.</strong> Comparing a digest tells you the bytes
+      are the same as the ones that produced the expected value. If the expected value itself came from a
+      compromised source, or was published alongside a malicious file, the match means nothing.
+    </li>
+    <li>
+      <strong>The environment has to cooperate.</strong> Web Crypto is only exposed in a secure context,
+      so the page needs HTTPS or a <code>localhost</code> origin. In an insecure context the tool says so
+      instead of failing silently, and very large files are limited mainly by how much memory the browser
+      will allocate.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Never paste a real secret — a password, an API key, a recovery phrase — into any web page you do not
+      control. Even when the tool is honest about staying local, the browser, an extension or the
+      clipboard can leak it later.
+    </p>
+  </div>
+
+  <h2>How to use this tool</h2>
+  <ol>
+    <li>
+      <strong>Pick exactly one input.</strong> Type or paste into the text box, or choose a file with the
+      file button or by dragging it onto the dashed box. When a file is selected it takes precedence over
+      the text, and <em>Clear file and hash the text instead</em> switches back.
+    </li>
+    <li>
+      <strong>Press Compute hashes.</strong> All four digests appear together for the same input, so you
+      can compare against whichever checksum a vendor published. The button is disabled while the work is
+      running and the status line reports the size of the input.
+    </li>
+    <li>
+      <strong>Copy the digest you need.</strong> Each row has its own copy button, and the
+      <em>UPPERCASE</em> toggle reformats every digest on screen and in the clipboard. Hexadecimal case is
+      purely cosmetic — <code>a3f1</code> and <code>A3F1</code> are the same bytes.
+    </li>
+    <li>
+      <strong>Compare against a known value.</strong> Paste the expected hash into the third section. The
+      comparison ignores spaces, tabs and line breaks and is case-insensitive, then names the algorithm
+      that matched — or tells you that none of the four did.
+    </li>
+    <li>
+      <strong>Mind the bytes, not the text.</strong> If a comparison fails unexpectedly, check the boring
+      things first: an editor that appended a newline, a file saved as UTF-16 or with a BOM, a ZIP
+      extracted with different line endings, or the wrong algorithm entirely.
+    </li>
+  </ol>
+  <p>
+    As a quick check that everything works as advertised, hash the five characters
+    <code>hello</code> in the text box. SHA-256 gives
+    <code>2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824</code> — the same value any
+    compatible tool will print, because the standard fixes the padding and the output, not the
+    implementation.
+  </p>
+</ToolLayout>
+
+<style>
+  .hg {
+    display: grid;
+    gap: clamp(1.1rem, 2.5vw, 1.75rem);
+  }
+  .hg__block {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .hg__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0;
+  }
+  /* An explicit display rule beats the browser's [hidden] default, so keep the
+     two hidden-until-needed elements genuinely hidden. */
+  [hidden] {
+    display: none;
+  }
+  .hg__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .hg__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .hg__drop {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    display: grid;
+    gap: 0.7rem;
+    background: var(--surface-2);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .hg__drop--over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .hg__fileinfo {
+    margin: 0;
+    font-size: 0.85rem;
+  }
+  .hg__fileactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .hg__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .hg__status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .hg__table {
+    width: 100%;
+  }
+  .hg__table tbody th {
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+  }
+  .hg__digest {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    word-break: break-all;
+    color: var(--text);
+  }
+  .hg__digest--pending {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+  .hg__verdict {
+    margin: 0;
+    word-break: normal;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+  }
+  .hg__verdict--ok {
+    border-color: var(--ok);
+    background: var(--ok-soft);
+  }
+  .hg__verdict--bad {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var $ = function (id) {
+      return document.getElementById(id);
+    };
+
+    var ALGOS = [
+      { name: "SHA-1", id: "sha1" },
+      { name: "SHA-256", id: "sha256" },
+      { name: "SHA-384", id: "sha384" },
+      { name: "SHA-512", id: "sha512" },
+    ];
+    var BIG_BYTES = 10 * 1024 * 1024;
+
+    var state = {
+      file: null,
+      digests: null,
+      subject: "",
+      running: false,
+      token: 0,
+    };
+
+    /* ---------- helpers ---------- */
+
+    function toHex(buffer) {
+      var bytes = new Uint8Array(buffer);
+      var out = "";
+      for (var i = 0; i < bytes.length; i++) {
+        var h = bytes[i].toString(16);
+        out += h.length === 1 ? "0" + h : h;
+      }
+      return out;
+    }
+
+    function formatBytes(n) {
+      if (n < 1024) return n + " bytes";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function cryptoReady() {
+      return (
+        typeof crypto !== "undefined" &&
+        crypto.subtle &&
+        typeof crypto.subtle.digest === "function"
+      );
+    }
+
+    function setStatus(text) {
+      $("hg-status").textContent = text;
+    }
+
+    function setPending() {
+      for (var i = 0; i < ALGOS.length; i++) {
+        var el = $("hg-d-" + ALGOS[i].id);
+        el.textContent = "computing…";
+        el.classList.add("hg__digest--pending");
+      }
+      $("hg-subject").textContent = "Computing " + ALGOS.length + " digests…";
+    }
+
+    function clearDigests() {
+      for (var i = 0; i < ALGOS.length; i++) {
+        var el = $("hg-d-" + ALGOS[i].id);
+        el.textContent = "—";
+        el.classList.remove("hg__digest--pending");
+      }
+    }
+
+    /* ---------- input ---------- */
+
+    function readFileAsArrayBuffer(file) {
+      if (file.arrayBuffer) return file.arrayBuffer();
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          resolve(reader.result);
+        };
+        reader.onerror = function () {
+          reject(reader.error || new Error("the file could not be read"));
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function readInput() {
+      if (state.file) return readFileAsArrayBuffer(state.file);
+      // Text is always hashed as UTF-8 bytes, never as UTF-16 code units.
+      return Promise.resolve(new TextEncoder().encode($("hg-text").value));
+    }
+
+    function setFile(file) {
+      state.file = file || null;
+      var info = $("hg-fileinfo");
+      var clearBtn = $("hg-clear-file");
+      var warn = $("hg-bigwarn");
+
+      if (!state.file) {
+        info.hidden = true;
+        info.textContent = "";
+        clearBtn.hidden = true;
+        warn.hidden = true;
+        return;
+      }
+
+      info.textContent =
+        "Selected file: " + state.file.name + " — " + formatBytes(state.file.size) + ".";
+      info.hidden = false;
+      clearBtn.hidden = false;
+      warn.hidden = state.file.size <= BIG_BYTES;
+      setStatus("File selected. Press Compute hashes.");
+    }
+
+    /* ---------- hashing ---------- */
+
+    function hashAll(bytes) {
+      var out = {};
+      var chain = Promise.resolve();
+      ALGOS.forEach(function (algo) {
+        chain = chain.then(function () {
+          return crypto.subtle.digest(algo.name, bytes).then(function (buffer) {
+            out[algo.name] = toHex(buffer);
+          });
+        });
+      });
+      return chain.then(function () {
+        return out;
+      });
+    }
+
+    function run() {
+      if (state.running) return;
+
+      var text = $("hg-text").value;
+      if (!state.file && text === "") {
+        setStatus("Type some text or choose a file first.");
+        return;
+      }
+      if (!cryptoReady()) {
+        setStatus(
+          "Web Crypto is not available in this context. Open the page over HTTPS or from localhost in a modern browser."
+        );
+        return;
+      }
+
+      state.running = true;
+      state.token += 1;
+      var token = state.token;
+
+      var runBtn = $("hg-run");
+      runBtn.disabled = true;
+      runBtn.setAttribute("aria-busy", "true");
+      setStatus(state.file ? "Reading the file…" : "Hashing the text…");
+      setPending();
+
+      readInput()
+        .then(function (bytes) {
+          return hashAll(bytes).then(function (digests) {
+            return { digests: digests, size: bytes.byteLength };
+          });
+        })
+        .then(function (result) {
+          if (token !== state.token) return;
+          state.digests = result.digests;
+          state.subject = state.file
+            ? "Digests for the file " +
+              state.file.name +
+              " (" +
+              formatBytes(state.file.size) +
+              "):"
+            : "Digests for " +
+              Array.from(text).length +
+              " character" +
+              (Array.from(text).length === 1 ? "" : "s") +
+              " of UTF-8 text:";
+          paint();
+          setStatus("Done — four digests computed for " + (state.file ? "the file" : "the text") + ".");
+        })
+        .catch(function (err) {
+          if (token !== state.token) return;
+          state.digests = null;
+          clearDigests();
+          setStatus(
+            "Could not hash that input: " + (err && err.message ? err.message : "unknown error") + "."
+          );
+        })
+        .then(function () {
+          if (token !== state.token) return;
+          state.running = false;
+          runBtn.disabled = false;
+          runBtn.removeAttribute("aria-busy");
+        });
+    }
+
+    /* ---------- render ---------- */
+
+    function paint() {
+      if (!state.digests) {
+        $("hg-subject").textContent = "Press Compute hashes to fill this table.";
+        return;
+      }
+      var upper = $("hg-upper").checked;
+      for (var i = 0; i < ALGOS.length; i++) {
+        var el = $("hg-d-" + ALGOS[i].id);
+        var value = state.digests[ALGOS[i].name] || "—";
+        el.textContent = upper ? value.toUpperCase() : value;
+        el.classList.remove("hg__digest--pending");
+      }
+      $("hg-subject").textContent = state.subject;
+      updateCompare();
+    }
+
+    function normalize(value) {
+      return String(value).replace(/\s+/g, "").toLowerCase();
+    }
+
+    function setVerdict(text, kind) {
+      var node = $("hg-verdict");
+      node.textContent = text;
+      node.classList.remove("hg__verdict--ok", "hg__verdict--bad");
+      if (kind === "ok") node.classList.add("hg__verdict--ok");
+      if (kind === "bad") node.classList.add("hg__verdict--bad");
+    }
+
+    function updateCompare() {
+      var expected = normalize($("hg-expected").value);
+      if (expected === "") {
+        setVerdict("Paste a hash to compare it with the digests above.", null);
+        return;
+      }
+      if (!/^[0-9a-f]+$/.test(expected)) {
+        setVerdict(
+          "That does not look like a hexadecimal digest. It contains " +
+            (expected.length ? "characters outside 0-9 and a-f" : "nothing usable") +
+            " once spaces are removed.",
+          "bad"
+        );
+        return;
+      }
+      if (!state.digests) {
+        setVerdict(
+          "Waiting for a computed digest. Hash the input first, then compare — the expected hash alone cannot be checked.",
+          null
+        );
+        return;
+      }
+
+      var matched = [];
+      var sameLength = [];
+      for (var i = 0; i < ALGOS.length; i++) {
+        var value = (state.digests[ALGOS[i].name] || "").toLowerCase();
+        if (value === expected) matched.push(ALGOS[i].name);
+        else if (value.length === expected.length) sameLength.push(ALGOS[i].name);
+      }
+
+      if (matched.length) {
+        setVerdict(
+          "Match. The current input produces that exact " +
+            matched.join(" and ") +
+            " digest (case and whitespace ignored).",
+          "ok"
+        );
+        return;
+      }
+
+      var detail =
+        "No match. None of the four digests for the current input equals that value. ";
+      if (sameLength.length) {
+        detail +=
+          "The length fits " +
+          sameLength.join(" and ") +
+          ", so check that you hashed the same bytes — a trailing newline or different line endings are the usual culprits.";
+      } else {
+        detail +=
+          "The length does not match any of the four algorithms either: SHA-1 is 40 hex characters, SHA-256 is 64, SHA-384 is 96 and SHA-512 is 128.";
+      }
+      setVerdict(detail, "bad");
+    }
+
+    /* ---------- clipboard ---------- */
+
+    function fallbackCopy(text) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.top = "-1000px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      var ok = false;
+      try {
+        area.select();
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(area);
+      return ok;
+    }
+
+    function flash(btn, message) {
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+      btn.textContent = message;
+      btn.classList.add("btn--primary");
+      btn.classList.remove("btn--ghost");
+      window.setTimeout(function () {
+        btn.textContent = btn.dataset.label;
+        btn.classList.remove("btn--primary");
+        btn.classList.add("btn--ghost");
+      }, 1400);
+    }
+
+    function copyText(text, btn) {
+      var done = function (ok) {
+        flash(btn, ok ? "Copied" : "Press Ctrl+C");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            done(true);
+          },
+          function () {
+            done(fallbackCopy(text));
+          }
+        );
+      } else {
+        done(fallbackCopy(text));
+      }
+    }
+
+    /* ---------- wiring ---------- */
+
+    function init() {
+      $("hg-run").addEventListener("click", run);
+
+      $("hg-file").addEventListener("change", function (event) {
+        var files = event.target.files;
+        setFile(files && files.length ? files[0] : null);
+      });
+
+      $("hg-clear-file").addEventListener("click", function () {
+        $("hg-file").value = "";
+        setFile(null);
+        setStatus("File cleared — the text box is the input again.");
+      });
+
+      $("hg-upper").addEventListener("change", paint);
+      $("hg-expected").addEventListener("input", updateCompare);
+
+      $("hg-text").addEventListener("input", function () {
+        if (state.digests && !state.file) {
+          setStatus("Input changed — press Compute hashes to refresh the digests.");
+        }
+      });
+
+      var drop = $("hg-drop");
+      ["dragenter", "dragover"].forEach(function (type) {
+        drop.addEventListener(type, function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          drop.classList.add("hg__drop--over");
+        });
+      });
+      ["dragleave", "dragend"].forEach(function (type) {
+        drop.addEventListener(type, function () {
+          drop.classList.remove("hg__drop--over");
+        });
+      });
+      drop.addEventListener("drop", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        drop.classList.remove("hg__drop--over");
+        var dt = event.dataTransfer;
+        if (dt && dt.files && dt.files.length) {
+          setFile(dt.files[0]);
+        }
+      });
+
+      // Dropping a file outside the box should not make the browser navigate away.
+      window.addEventListener("dragover", function (event) {
+        event.preventDefault();
+      });
+      window.addEventListener("drop", function (event) {
+        event.preventDefault();
+      });
+
+      var copyButtons = document.querySelectorAll("[data-copy-alg]");
+      for (var i = 0; i < copyButtons.length; i++) {
+        copyButtons[i].addEventListener("click", function (event) {
+          var btn = event.currentTarget;
+          var alg = btn.getAttribute("data-copy-alg");
+          var value = state.digests && state.digests[alg];
+          if (!value) {
+            setStatus("Nothing to copy yet — compute the digests first.");
+            return;
+          }
+          copyText($("hg-upper").checked ? value.toUpperCase() : value, btn);
+        });
+      }
+
+      if (!cryptoReady()) {
+        setStatus(
+          "Web Crypto is not available in this context, so hashing is disabled. Serve this page over HTTPS or from localhost."
+        );
+      }
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

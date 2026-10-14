@@ -1,0 +1,601 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "image-resizer")!;
+
+const faqs = [
+  {
+    q: "Does this upload my image anywhere?",
+    a: "No. The file is decoded by your browser, drawn onto a canvas with the transforms you choose, and exported locally. Cutting your network connection after the page loads changes nothing about how the tool behaves — which is the simplest proof that no upload is happening.",
+  },
+  {
+    q: "Can I enlarge an image back to its original size?",
+    a: "You can, but the detail will not come back. Resizing down discards pixels permanently; enlarging afterwards interpolates new pixels that were invented by the browser, which produces a soft or blocky result. Always keep the original file and resize a copy.",
+  },
+  {
+    q: "What is the difference between contain and cover?",
+    a: "Contain scales the image so that all of it fits inside the target box, adding background bars where the aspect ratios differ. Cover scales it so that the whole box is filled, cropping whatever overflows — which is why cover mode gives you offset and zoom controls to choose which part survives.",
+  },
+  {
+    q: "Why is my exported PNG bigger than the JPEG version?",
+    a: "PNG is lossless, so it stores every pixel exactly and cannot be told to drop detail. That is the right choice for screenshots, logos and anything with flat colour or transparency, but it is a poor choice for photographs, which is where JPEG or WebP win by a large margin.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — CanvasRenderingContext2D.drawImage()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage",
+    note: "the call used for every scale, crop and rotation here",
+  },
+  {
+    label: "MDN — createImageBitmap()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Window/createImageBitmap",
+    note: "how the file is decoded before it is drawn",
+  },
+  {
+    label: "web.dev — Optimize images",
+    href: "https://web.dev/fast/#optimize-your-images",
+    note: "why serving an image at its displayed size matters more than compression",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Resize, crop, rotate and re-encode an image to exact pixel dimensions, entirely inside your browser."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="imr-drop" id="imr-drop">
+          <p class="imr-drop__title">Drop an image here</p>
+          <p class="imr-drop__hint">JPEG, PNG, WebP or GIF.</p>
+          <label class="btn btn--primary" for="imr-input">Choose a file</label>
+          <input id="imr-input" type="file" accept="image/*" class="sr-only" />
+        </div>
+
+        <div id="imr-editor" hidden>
+          <div class="imr-grid">
+            <fieldset class="fieldset">
+              <legend>Size</legend>
+
+              <div class="check">
+                <input id="imr-lock" type="checkbox" checked />
+                <label for="imr-lock">Lock aspect ratio</label>
+              </div>
+
+              <div class="field-grid" style="margin-top:0.75rem">
+                <div class="field">
+                  <label for="imr-width">Width (px)</label>
+                  <input id="imr-width" type="number" min="1" max="8000" step="1" inputmode="numeric" />
+                </div>
+                <div class="field">
+                  <label for="imr-height">Height (px)</label>
+                  <input id="imr-height" type="number" min="1" max="8000" step="1" inputmode="numeric" />
+                </div>
+              </div>
+
+              <div class="field" style="margin-top:0.75rem">
+                <label for="imr-scale">Scale — <output id="imr-scale-out">100</output>%</label>
+                <input id="imr-scale" type="range" min="10" max="400" step="1" value="100" />
+              </div>
+
+              <div class="field" style="margin-top:0.75rem">
+                <label for="imr-fit">Fit mode</label>
+                <select id="imr-fit">
+                  <option value="contain">Contain — fit inside, add background bars</option>
+                  <option value="cover" selected>Cover — fill the box, crop the overflow</option>
+                  <option value="stretch">Stretch — fill the box, distort if needed</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <fieldset class="fieldset">
+              <legend>Crop &amp; orientation</legend>
+
+              <div class="field">
+                <label for="imr-offset-x">Horizontal offset — <output id="imr-offset-x-out">0</output>%</label>
+                <input id="imr-offset-x" type="range" min="-100" max="100" step="1" value="0" />
+              </div>
+
+              <div class="field" style="margin-top:0.6rem">
+                <label for="imr-offset-y">Vertical offset — <output id="imr-offset-y-out">0</output>%</label>
+                <input id="imr-offset-y" type="range" min="-100" max="100" step="1" value="0" />
+              </div>
+
+              <div class="field" style="margin-top:0.6rem">
+                <label for="imr-zoom">Crop zoom — <output id="imr-zoom-out">1.00</output>×</label>
+                <input id="imr-zoom" type="range" min="1" max="3" step="0.05" value="1" />
+              </div>
+
+              <div class="field-grid" style="margin-top:0.75rem">
+                <div class="field">
+                  <label for="imr-rotate">Rotate</label>
+                  <select id="imr-rotate">
+                    <option value="0">0°</option>
+                    <option value="90">90° clockwise</option>
+                    <option value="180">180°</option>
+                    <option value="270">270° clockwise</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="imr-bg">Background</label>
+                  <input id="imr-bg" type="color" value="#ffffff" />
+                </div>
+              </div>
+
+              <div class="imr-flips">
+                <label class="check"><input id="imr-flip-h" type="checkbox" /> <span>Flip horizontally</span></label>
+                <label class="check"><input id="imr-flip-v" type="checkbox" /> <span>Flip vertically</span></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="fieldset">
+              <legend>Output</legend>
+
+              <div class="field">
+                <label for="imr-format">Format</label>
+                <select id="imr-format">
+                  <option value="image/png">PNG — lossless, keeps transparency</option>
+                  <option value="image/jpeg">JPEG — smallest for photos</option>
+                  <option value="image/webp">WebP — small, keeps transparency</option>
+                </select>
+              </div>
+
+              <div class="field" style="margin-top:0.75rem">
+                <label for="imr-quality">Quality — <output id="imr-quality-out">85</output>%</label>
+                <input id="imr-quality" type="range" min="10" max="100" step="1" value="85" />
+                <small style="color:var(--text-faint);font-size:0.78rem">JPEG and WebP only.</small>
+              </div>
+
+              <div class="imr-actions">
+                <button class="btn btn--primary" type="button" id="imr-download">Download result</button>
+                <button class="btn btn--ghost" type="button" id="imr-reset">Reset</button>
+                <label class="btn btn--ghost" for="imr-input">Choose another</label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="stat-grid" style="margin-top:1.5rem">
+            <div class="stat">
+              <div class="stat__label">Original</div>
+              <div class="stat__value" style="font-size:1.1rem" id="imr-original">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Output dimensions</div>
+              <div class="stat__value" style="font-size:1.1rem" id="imr-out-dims">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Estimated file size</div>
+              <div class="stat__value" style="font-size:1.1rem" id="imr-out-size">—</div>
+            </div>
+          </div>
+
+          <h3 style="margin-top:1.5rem;font-size:1rem">Preview</h3>
+          <div class="imr-preview" id="imr-preview-wrap" hidden>
+            <canvas id="imr-preview" aria-label="Preview of the resized image"></canvas>
+          </div>
+
+          <p class="imr-status" id="imr-status" role="status" aria-live="polite"></p>
+          <p class="imr-error" id="imr-error" role="alert" hidden></p>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Nothing is uploaded. Resizing is irreversible, so keep the original file — this exports a copy.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the resize actually happens</h2>
+  <p>
+    The file is decoded into an image bitmap, then drawn onto a canvas whose dimensions you control.
+    Everything you see in the controls is a canvas operation: <code>drawImage</code> with a source
+    rectangle performs the crop, the destination rectangle performs the scale, and a rotation and a
+    negative scale handle the flip. When you press download, the canvas is re-encoded with
+    <code>toBlob()</code> using the format and quality you picked. The original file on disk is
+    never touched.
+  </p>
+  <p>
+    The offset and zoom controls only do something in <strong>cover</strong> mode, because that is
+    the only mode where part of the image is deliberately discarded. In <strong>contain</strong>
+    mode nothing is cropped — the whole image is scaled to fit and the leftover space is filled with
+    the background colour, which matters when you export a transparent PNG as a JPEG.
+    <strong>Stretch</strong> is the crude option: it maps the source onto the target box exactly,
+    which is what you want for a deliberate distortion and what you should avoid for a photograph.
+  </p>
+
+  <h2>Choosing dimensions that respect the image</h2>
+  <p>
+    Scaling down by a large factor in one step gives a slightly worse result than doing it in
+    stages, because a single big reduction has to average a lot of pixels at once. In practice the
+    difference is small for factors below about three, and browsers now use good resampling
+    (<code>imageSmoothingQuality = "high"</code>), so a single step is usually fine. What matters far
+    more is choosing the right target: the largest size at which the image will ever be displayed.
+  </p>
+  <p>
+    Scaling up is the case to be careful about. Interpolation invents pixels; it cannot recover
+    detail that was never captured. A 400 px photograph enlarged to 1600 px will be soft at 100 %
+    zoom no matter which tool does it, so if the image is destined for print, go back to the
+    original capture rather than enlarging a small copy.
+  </p>
+
+  <h2>A practical order of operations</h2>
+  <ol>
+    <li>Enter the final width you need, with the aspect ratio locked so the height follows automatically.</li>
+    <li>Switch to cover mode if the exact frame matters (a profile picture, a card, a banner) and use offset and zoom to choose the crop.</li>
+    <li>Set rotation and flips if the camera orientation was wrong.</li>
+    <li>Pick the format: PNG for screenshots, logos and transparency; JPEG or WebP for photographs.</li>
+    <li>Check the estimated size, then download and inspect the result at 100 % zoom before using it.</li>
+  </ol>
+  <div class="callout callout--warn">
+    <p>
+      Exporting a transparent image as JPEG has no alpha channel to store transparency in, so the
+      transparent areas are filled with the background colour you chose. If you need the
+      transparency, keep PNG or WebP.
+    </p>
+  </div>
+</ToolLayout>
+
+<style>
+  .imr-drop {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    padding: clamp(1.25rem, 4vw, 2.25rem);
+    text-align: center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .imr-drop[data-over="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .imr-drop__title { font-weight: 700; margin: 0 0 0.25rem; }
+  .imr-drop__hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1rem; }
+
+  .imr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    align-items: start;
+    margin-top: 1.25rem;
+  }
+  .imr-grid output { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .imr-flips { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.6rem; }
+  .imr-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+
+  .imr-preview {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    background:
+      repeating-conic-gradient(var(--bg-sunken) 0% 25%, transparent 0% 50%) 50% / 18px 18px;
+    overflow: auto;
+    max-height: 60vh;
+  }
+  .imr-preview canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin-inline: auto;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .imr-status { margin: 1rem 0 0; font-size: 0.9rem; color: var(--text-muted); min-height: 1.2em; }
+  .imr-error { margin: 1rem 0 0; font-size: 0.9rem; color: var(--danger); }
+</style>
+
+<script>
+  const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const input = el<HTMLInputElement>("imr-input");
+  const drop = el("imr-drop");
+  const editor = el("imr-editor");
+  const previewWrap = el("imr-preview-wrap");
+  const canvas = el<HTMLCanvasElement>("imr-preview");
+  const status = el("imr-status");
+  const errorBox = el("imr-error");
+
+  const widthInput = el<HTMLInputElement>("imr-width");
+  const heightInput = el<HTMLInputElement>("imr-height");
+  const lockInput = el<HTMLInputElement>("imr-lock");
+  const scaleInput = el<HTMLInputElement>("imr-scale");
+  const fitInput = el<HTMLSelectElement>("imr-fit");
+  const offsetX = el<HTMLInputElement>("imr-offset-x");
+  const offsetY = el<HTMLInputElement>("imr-offset-y");
+  const zoomInput = el<HTMLInputElement>("imr-zoom");
+  const rotateInput = el<HTMLSelectElement>("imr-rotate");
+  const bgInput = el<HTMLInputElement>("imr-bg");
+  const flipH = el<HTMLInputElement>("imr-flip-h");
+  const flipV = el<HTMLInputElement>("imr-flip-v");
+  const formatInput = el<HTMLSelectElement>("imr-format");
+  const qualityInput = el<HTMLInputElement>("imr-quality");
+
+  let bitmap: ImageBitmap | null = null;
+  let sourceRatio = 1;
+  let lastUrl: string | null = null;
+  let pendingSize: number | null = null;
+  let sizeTimer = 0;
+
+  const MAX_SIDE = 8000;
+
+  const say = (text: string) => {
+    status.textContent = text;
+  };
+
+  const fail = (text: string) => {
+    errorBox.textContent = text;
+    errorBox.hidden = false;
+  };
+
+  const clearError = () => {
+    errorBox.hidden = true;
+    errorBox.textContent = "";
+  };
+
+  const humanSize = (bytes: number) =>
+    bytes < 1024
+      ? `${bytes} B`
+      : bytes < 1024 * 1024
+        ? `${(bytes / 1024).toFixed(1)} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  const outputSize = (): { w: number; h: number } => {
+    const w = Math.min(MAX_SIDE, Math.max(1, Math.round(Number(widthInput.value) || 1)));
+    const h = Math.min(MAX_SIDE, Math.max(1, Math.round(Number(heightInput.value) || 1)));
+    return { w, h };
+  };
+
+  const draw = () => {
+    if (!bitmap) return;
+
+    const rotation = Number(rotateInput.value);
+    const swapped = rotation === 90 || rotation === 270;
+    const { w, h } = outputSize();
+
+    // The user sets the FINAL size; the box the image is drawn into is pre-rotation.
+    const boxW = swapped ? h : w;
+    const boxH = swapped ? w : h;
+
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      fail("This browser would not provide a drawing context, so the image cannot be resized.");
+      return;
+    }
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = bgInput.value;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.scale(flipH.checked ? -1 : 1, flipV.checked ? -1 : 1);
+
+    const srcW = bitmap.width;
+    const srcH = bitmap.height;
+    const mode = fitInput.value;
+
+    if (mode === "stretch") {
+      ctx.drawImage(bitmap, -boxW / 2, -boxH / 2, boxW, boxH);
+    } else {
+      const fitScale =
+        mode === "contain"
+          ? Math.min(boxW / srcW, boxH / srcH)
+          : Math.max(boxW / srcW, boxH / srcH);
+
+      const zoom = mode === "cover" ? Number(zoomInput.value) || 1 : 1;
+      const scale = fitScale * zoom;
+
+      const dw = srcW * scale;
+      const dh = srcH * scale;
+
+      // Offsets are a percentage of the slack, so they mean the same thing at any zoom.
+      const slackX = Math.max(0, dw - boxW);
+      const slackY = Math.max(0, dh - boxH);
+      const dx = -dw / 2 - (slackX / 2) * ((Number(offsetX.value) || 0) / 100);
+      const dy = -dh / 2 - (slackY / 2) * ((Number(offsetY.value) || 0) / 100);
+
+      ctx.drawImage(bitmap, dx, dy, dw, dh);
+    }
+
+    ctx.restore();
+
+    el("imr-out-dims").textContent = `${w} × ${h}`;
+
+    // Estimate the encoded size, debounced because toBlob on a large canvas is not cheap.
+    pendingSize = null;
+    el("imr-out-size").textContent = "estimating…";
+    window.clearTimeout(sizeTimer);
+    sizeTimer = window.setTimeout(() => {
+      const lossy = formatInput.value !== "image/png";
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            el("imr-out-size").textContent = "unknown";
+            return;
+          }
+          pendingSize = blob.size;
+          el("imr-out-size").textContent = humanSize(blob.size);
+        },
+        formatInput.value,
+        lossy ? Number(qualityInput.value) / 100 : undefined
+      );
+    }, 220);
+  };
+
+  const syncFromScale = () => {
+    if (!bitmap) return;
+    const factor = (Number(scaleInput.value) || 100) / 100;
+    widthInput.value = String(Math.max(1, Math.round(bitmap.width * factor)));
+    heightInput.value = String(Math.max(1, Math.round(bitmap.height * factor)));
+    sourceRatio = bitmap.width / bitmap.height;
+    draw();
+  };
+
+  const load = async (file: File) => {
+    clearError();
+    if (!file.type.startsWith("image/")) {
+      fail("That file does not look like an image this browser can read.");
+      return;
+    }
+
+    try {
+      bitmap?.close?.();
+      bitmap = await createImageBitmap(file);
+    } catch {
+      fail(`${file.name} could not be decoded. It may be corrupt or in an unsupported format.`);
+      return;
+    }
+
+    sourceRatio = bitmap.width / bitmap.height;
+    editor.hidden = false;
+    previewWrap.hidden = false;
+
+    scaleInput.value = "100";
+    el("imr-scale-out").textContent = "100";
+    widthInput.value = String(bitmap.width);
+    heightInput.value = String(bitmap.height);
+
+    el("imr-original").textContent = `${humanSize(file.size)} · ${bitmap.width}×${bitmap.height}`;
+
+    if (bitmap.width > 4000 || bitmap.height > 4000) {
+      say("Large image loaded — the preview may be slower to update.");
+    } else {
+      say("");
+    }
+
+    draw();
+  };
+
+  // ---- wiring -------------------------------------------------------------
+
+  input.addEventListener("change", () => {
+    if (input.files && input.files[0]) void load(input.files[0]);
+    input.value = "";
+  });
+
+  for (const event of ["dragenter", "dragover"]) {
+    drop.addEventListener(event, (e) => {
+      e.preventDefault();
+      drop.dataset.over = "true";
+    });
+  }
+  for (const event of ["dragleave", "drop"]) {
+    drop.addEventListener(event, (e) => {
+      e.preventDefault();
+      drop.dataset.over = "false";
+    });
+  }
+  drop.addEventListener("drop", (e) => {
+    const file = (e as DragEvent).dataTransfer?.files?.[0];
+    if (file) void load(file);
+  });
+
+  widthInput.addEventListener("input", () => {
+    if (lockInput.checked && bitmap) {
+      const w = Math.max(1, Number(widthInput.value) || 1);
+      heightInput.value = String(Math.max(1, Math.round(w / sourceRatio)));
+    }
+    draw();
+  });
+
+  heightInput.addEventListener("input", () => {
+    if (lockInput.checked && bitmap) {
+      const h = Math.max(1, Number(heightInput.value) || 1);
+      widthInput.value = String(Math.max(1, Math.round(h * sourceRatio)));
+    }
+    draw();
+  });
+
+  scaleInput.addEventListener("input", () => {
+    el("imr-scale-out").textContent = scaleInput.value;
+    syncFromScale();
+  });
+
+  offsetX.addEventListener("input", () => {
+    el("imr-offset-x-out").textContent = offsetX.value;
+    draw();
+  });
+  offsetY.addEventListener("input", () => {
+    el("imr-offset-y-out").textContent = offsetY.value;
+    draw();
+  });
+  zoomInput.addEventListener("input", () => {
+    el("imr-zoom-out").textContent = Number(zoomInput.value).toFixed(2);
+    draw();
+  });
+  qualityInput.addEventListener("input", () => {
+    el("imr-quality-out").textContent = qualityInput.value;
+  });
+
+  for (const control of [fitInput, rotateInput, bgInput, flipH, flipV, formatInput, qualityInput, lockInput]) {
+    control.addEventListener("change", draw);
+  }
+
+  el("imr-reset").addEventListener("click", () => {
+    if (!bitmap) return;
+    scaleInput.value = "100";
+    el("imr-scale-out").textContent = "100";
+    widthInput.value = String(bitmap.width);
+    heightInput.value = String(bitmap.height);
+    fitInput.value = "cover";
+    offsetX.value = "0";
+    offsetY.value = "0";
+    el("imr-offset-x-out").textContent = "0";
+    el("imr-offset-y-out").textContent = "0";
+    zoomInput.value = "1";
+    el("imr-zoom-out").textContent = "1.00";
+    rotateInput.value = "0";
+    bgInput.value = "#ffffff";
+    flipH.checked = false;
+    flipV.checked = false;
+    draw();
+    say("Reset to the original dimensions.");
+  });
+
+  el("imr-download").addEventListener("click", () => {
+    if (!bitmap) return;
+    draw();
+
+    const mime = formatInput.value;
+    const lossy = mime !== "image/png";
+    const extension = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+
+    // Draw once more synchronously so the export matches exactly what is previewed.
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          fail("The browser could not encode the result. Try a different output format.");
+          return;
+        }
+        if (lastUrl) URL.revokeObjectURL(lastUrl);
+        lastUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = lastUrl;
+        link.download = `resized-${canvas.width}x${canvas.height}.${extension}`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+
+        say(`Exported ${canvas.width}×${canvas.height} as ${extension.toUpperCase()} (${humanSize(blob.size)}).`);
+      },
+      mime,
+      lossy ? Number(qualityInput.value) / 100 : undefined
+    );
+  });
+</script>

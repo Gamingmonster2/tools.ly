@@ -1,0 +1,383 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "remove-duplicate-lines")!;
+
+const faqs = [
+  {
+    q: "What counts as a duplicate line?",
+    a: "A duplicate is an exact match after the normalisation you have switched on. With nothing enabled, only byte-for-byte identical lines collapse. Turn on trim and lines that differ solely by leading or trailing spaces become duplicates; turn on ignore case and Apple and apple become duplicates too. The comparison is always on the whole line, not on the words inside it.",
+  },
+  {
+    q: "Which occurrence is kept, the first or the last?",
+    a: "Your choice. Keep first preserves the earliest occurrence of each value and drops the later ones; keep last does the opposite. This matters when later lines carry updated information: a list of names with a corrected entry at the bottom is better deduplicated with keep last, while a changelog read from oldest to newest usually wants keep first.",
+  },
+  {
+    q: "What is natural order sorting?",
+    a: "Natural order compares embedded numbers by their numeric value instead of character by character, so item2 comes before item10. Plain A–Z sorting would place item10 before item2 because the character 1 is smaller than 2. The tool uses Intl.Collator with the numeric option, which is the standard browser implementation of natural comparison.",
+  },
+  {
+    q: "Does the sort survive when I keep the original order?",
+    a: "Yes. With keep original order selected, output lines stay in the sequence they had in the input, only with duplicates removed. That is the mode to use when the order itself carries meaning, such as a playlist, a route or a list of steps.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Intl.Collator",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Collator",
+    note: "the numeric option that makes item10 sort after item9 instead of after item1",
+  },
+  {
+    label: "MDN — String.prototype.localeCompare",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/localeCompare",
+    note: "how locale-aware, case-aware comparison differs from naive code-unit ordering",
+  },
+  {
+    label: "Unicode — UAX #29, Text Segmentation",
+    href: "https://www.unicode.org/reports/tr29/",
+    note: "why line boundaries and word-like units are harder to define than a simple newline split",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Paste a list and get it deduplicated live — with case, trimming, first-or-last and natural sorting under your control, plus counts of exactly what changed."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="field">
+          <label for="rdl-input">Input — one item per line</label>
+          <textarea
+            id="rdl-input"
+            rows="10"
+            spellcheck="false"
+            placeholder={"Apple\nbanana\nApple\nitem10\nitem9\n  banana  "}>Apple
+banana
+Apple
+item10
+item9
+  banana  </textarea>
+        </div>
+
+        <div class="field-grid" style="margin-top:1rem">
+          <fieldset class="fieldset">
+            <legend>Normalisation</legend>
+            <label class="check" for="rdl-ignore-case">
+              <input type="checkbox" id="rdl-ignore-case" />
+              Ignore case
+            </label>
+            <label class="check" for="rdl-trim">
+              <input type="checkbox" id="rdl-trim" checked />
+              Trim each line
+            </label>
+            <label class="check" for="rdl-drop-empty">
+              <input type="checkbox" id="rdl-drop-empty" />
+              Ignore empty lines
+            </label>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Which occurrence to keep</legend>
+            <label class="check" for="rdl-keep-first">
+              <input type="radio" name="rdl-keep" id="rdl-keep-first" value="first" checked />
+              Keep first occurrence
+            </label>
+            <label class="check" for="rdl-keep-last">
+              <input type="radio" name="rdl-keep" id="rdl-keep-last" value="last" />
+              Keep last occurrence
+            </label>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Output order</legend>
+            <div class="field">
+              <label for="rdl-sort">Sorting</label>
+              <select id="rdl-sort">
+                <option value="original" selected>Keep original order</option>
+                <option value="asc">Sort A–Z</option>
+                <option value="desc">Sort Z–A</option>
+                <option value="natural">Natural order (item2 before item10)</option>
+              </select>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="stat-grid" style="margin-top:1.25rem">
+          <div class="stat">
+            <div class="stat__label">Input lines</div>
+            <div class="stat__value" id="rdl-in-count">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Output lines</div>
+            <div class="stat__value" id="rdl-out-count">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Duplicates removed</div>
+            <div class="stat__value" id="rdl-removed">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Unique values</div>
+            <div class="stat__value" id="rdl-unique">0</div>
+          </div>
+        </div>
+
+        <p class="readout" id="rdl-summary" aria-live="polite" style="margin-top:0.85rem">—</p>
+
+        <div class="field" style="margin-top:1.25rem">
+          <label for="rdl-output">Result</label>
+          <textarea id="rdl-output" rows="10" spellcheck="false" readonly></textarea>
+        </div>
+
+        <div class="tag-row" style="margin-top:1rem">
+          <button class="btn btn--primary" type="button" id="rdl-process">Process</button>
+          <button class="btn btn--soft" type="button" id="rdl-copy">Copy result</button>
+          <button class="btn btn--ghost" type="button" id="rdl-download">Download .txt</button>
+          <button class="btn btn--ghost" type="button" id="rdl-clear">Clear</button>
+        </div>
+
+        <p class="readout" id="rdl-status" role="status" aria-live="polite" style="margin-top:0.75rem">—</p>
+      </div>
+
+      <div class="panel__foot">
+        Nothing leaves your browser — the list is deduplicated locally, so it keeps working offline.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    The tool splits your input on line breaks, then walks the lines in order and builds a map keyed by
+    the <em>normalised</em> form of each line. That key is what decides whether two lines are "the
+    same": with every option off it is the raw line, with <strong>trim</strong> on it is the line
+    without leading and trailing whitespace, and with <strong>ignore case</strong> on it is also
+    lower-cased. The first line that produces a given key is stored, and every later line that
+    produces the same key is dropped — unless you selected keep last, in which case the stored value
+    is overwritten so the final occurrence wins and the earlier copies fall away.
+  </p>
+  <p>
+    Once duplicates are gone, the surviving lines are ordered according to your sorting choice. A–Z
+    and Z–A use a locale-aware comparison, and natural order uses <code>Intl.Collator</code> with the
+    <code>numeric</code> option so that <code>item2</code> sorts before <code>item10</code> rather
+    than after <code>item1</code>. Keep original order skips sorting entirely and leaves the
+    survivors in the sequence they appeared in, which is the only mode that is safe for playlists,
+    routes and step-by-step instructions.
+  </p>
+
+  <h2>What "duplicate" means here</h2>
+  <p>
+    A duplicate is an <strong>exact match after the normalisation you chose</strong> — nothing more.
+    The comparison is on the whole line, so <code>Apple Inc</code> and <code>Apple</code> are
+    different values no matter which options are set, and the tool never tries to guess at
+    near-matches, fuzzy spelling or word-level overlap.
+  </p>
+  <p>
+    Case is the clearest example. <code>Apple</code> and <code>apple</code> are two distinct lines
+    while ignore case is off, and one value as soon as you switch it on. Whitespace behaves the same
+    way: with trim off, <code>"banana"</code> and <code>"banana&nbsp;&nbsp;"</code> are different
+    lines; with trim on they collapse into one. That also means ignore case and trim change the text
+    you get back — the surviving line keeps its original spelling and spacing from the input, so
+    deduplicating <code>APPLE</code> followed by <code>apple</code> with keep first returns
+    <code>APPLE</code>, while keep last returns <code>apple</code>.
+  </p>
+  <p>
+    Empty lines get their own switch. With ignore empty lines off, every blank line is a value, so
+    several blank lines in a row collapse to one; with it on, blank lines are discarded entirely and
+    never appear in the output or in the counts.
+  </p>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>Paste or type your list into the input box, one item per line.</li>
+    <li>Set the normalisation options. Leave them all off if you want a strictly literal comparison, or turn on trim first — it is the one that saves the most surprises.</li>
+    <li>Choose whether the first or the last occurrence of each value should survive, then pick an output order.</li>
+    <li>Watch the four counters: input lines, output lines, duplicates removed and unique values. They update as you type, so you can see the effect of each switch immediately.</li>
+    <li>Copy the result or download it as a plain <code>.txt</code> file. The download is produced locally with a Blob, so there is no upload and no round trip.</li>
+  </ol>
+  <p>
+    Two honest limits are worth knowing. The counters count lines, not words, and a line that differs
+    only by invisible characters — a non-breaking space, a zero-width space, a stray carriage return
+    from a Windows clipboard — counts as a distinct value even with trim on, because trim only
+    removes the standard whitespace at the two ends. If a list refuses to shrink and you cannot see
+    why, the cause is usually invisible characters or trailing punctuation rather than a bug in the
+    comparison.
+  </p>
+  <p>
+    Very large inputs are handled in memory on the main thread. Tens of thousands of lines are
+    comfortable; several hundred thousand will make the first keystroke pause for a moment while the
+    comparison runs. Nothing is truncated, but the page may feel briefly unresponsive on very large
+    pastes.
+  </p>
+</ToolLayout>
+
+<style>
+  .stat__value {
+    font-size: 1.35rem;
+  }
+</style>
+
+<script>
+  const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+  const input = byId<HTMLTextAreaElement>("rdl-input");
+  const output = byId<HTMLTextAreaElement>("rdl-output");
+  const ignoreCase = byId<HTMLInputElement>("rdl-ignore-case");
+  const trimLines = byId<HTMLInputElement>("rdl-trim");
+  const dropEmpty = byId<HTMLInputElement>("rdl-drop-empty");
+  const sortMode = byId<HTMLSelectElement>("rdl-sort");
+  const outCount = byId("rdl-out-count");
+  const inCount = byId("rdl-in-count");
+  const removed = byId("rdl-removed");
+  const unique = byId("rdl-unique");
+  const summary = byId("rdl-summary");
+  const status = byId("rdl-status");
+
+  // Intl.Collator with numeric:true is what makes "item10" sort after "item9"
+  // instead of immediately after "item1" as a plain character comparison would.
+  const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: "variant" });
+  const plain = new Intl.Collator(undefined, { numeric: false, sensitivity: "variant" });
+
+  const keepMode = (): "first" | "last" =>
+    byId<HTMLInputElement>("rdl-keep-last").checked ? "last" : "first";
+
+  const process = () => {
+    const raw = input.value;
+    if (raw === "" && output.value === "") {
+      return { inLines: 0, outText: "", result: [] as string[], kept: 0, removedCount: 0, uniqueCount: 0 };
+    }
+
+    const lines = raw.split(/\r\n|\r|\n/);
+    const inLines = raw === "" ? 0 : lines.length;
+
+    const keepLast = keepMode() === "last";
+    const seen = new Map<string, number>();
+    const result: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = trimLines.checked ? line.trim() : line;
+      // "Ignore empty lines" drops a value that is empty after normalisation,
+      // which includes whitespace-only lines when trim is on.
+      if (dropEmpty.checked && trimmed.trim() === "") continue;
+      const key = ignoreCase.checked ? trimmed.toLowerCase() : trimmed;
+      const at = seen.get(key);
+      if (at === undefined) {
+        seen.set(key, result.length);
+        result.push(trimmed);
+      } else if (keepLast) {
+        // Overwrite in place: the last occurrence wins but the line keeps its
+        // original position until the optional sort is applied.
+        result[at] = trimmed;
+      }
+    }
+
+    const ordered = result.slice();
+    if (sortMode.value === "asc") {
+      ordered.sort((a, b) => plain.compare(a, b));
+    } else if (sortMode.value === "desc") {
+      ordered.sort((a, b) => plain.compare(b, a));
+    } else if (sortMode.value === "natural") {
+      ordered.sort((a, b) => natural.compare(a, b));
+    }
+
+    const outText = ordered.join("\n");
+    const removedCount = Math.max(0, inLines - ordered.length);
+    const uniqueCount = new Set(ordered.map((v) => (ignoreCase.checked ? v.toLowerCase() : v))).size;
+
+    return { inLines, outText, result: ordered, kept: ordered.length, removedCount, uniqueCount };
+  };
+
+  const paint = () => {
+    const r = process();
+    output.value = r.outText;
+    inCount.textContent = String(r.inLines);
+    outCount.textContent = String(r.kept);
+    removed.textContent = String(r.removedCount);
+    unique.textContent = String(r.uniqueCount);
+
+    if (r.inLines === 0) {
+      summary.textContent = "No input yet — paste a list above to see the counts.";
+    } else {
+      const occurrence = keepMode() === "last" ? "last" : "first";
+      summary.textContent =
+        `${r.inLines} line${r.inLines === 1 ? "" : "s"} in, ${r.kept} out, ` +
+        `${r.removedCount} duplicate${r.removedCount === 1 ? "" : "s"} removed, ` +
+        `${r.uniqueCount} unique value${r.uniqueCount === 1 ? "" : "s"} — keeping the ${occurrence} occurrence` +
+        (dropEmpty.checked ? ", empty lines ignored." : ".");
+    }
+    return r;
+  };
+
+  const flash = (message: string) => {
+    status.textContent = message;
+    window.setTimeout(() => {
+      if (status.textContent === message) status.textContent = "—";
+    }, 2600);
+  };
+
+  for (const control of [input, ignoreCase, trimLines, dropEmpty, sortMode]) {
+    control.addEventListener("input", paint);
+    control.addEventListener("change", paint);
+  }
+  byId("rdl-keep-first").addEventListener("change", paint);
+  byId("rdl-keep-last").addEventListener("change", paint);
+
+  byId("rdl-process").addEventListener("click", () => {
+    const r = paint();
+    flash(`Processed ${r.inLines} line${r.inLines === 1 ? "" : "s"}; ${r.removedCount} removed.`);
+  });
+
+  const copyText = async (text: string) => {
+    if (text === "") {
+      flash("There is nothing to copy yet.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      flash("Result copied to your clipboard.");
+    } catch {
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
+      const ok = document.execCommand("copy");
+      helper.remove();
+      flash(ok ? "Result copied to your clipboard." : "Copying was blocked by the browser.");
+    }
+  };
+
+  byId("rdl-copy").addEventListener("click", () => {
+    void copyText(output.value);
+  });
+
+  byId("rdl-download").addEventListener("click", () => {
+    if (output.value === "") {
+      flash("There is nothing to download yet.");
+      return;
+    }
+    const blob = new Blob([output.value], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "deduplicated-lines.txt";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    flash("Download started.");
+  });
+
+  byId("rdl-clear").addEventListener("click", () => {
+    input.value = "";
+    paint();
+    input.focus();
+    flash("Cleared.");
+  });
+
+  paint();
+</script>

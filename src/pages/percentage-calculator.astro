@@ -1,0 +1,619 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "percentage-calculator")!;
+
+const faqs = [
+  {
+    q: "What is the difference between \"percent of\" and \"percent change\"?",
+    a: "They answer different questions. \"X percent of Y\" takes a share of a single number and needs no second measurement: 15% of 200 is 30. \"Percent change\" compares two measurements of the same thing taken at different times and expresses the size of the move relative to where it started: from 200 to 230 is an increase of 30, which is 30 ÷ 200 = 0.15, so 15%. The base matters — a 15% rise followed by a 15% fall does not return you to the starting number, because the second calculation is taken from the larger base. From 200, a 15% rise gives 230, and 15% off 230 gives 195.5, not 200. That asymmetry is why percentage changes should always be read together with the base they were measured from.",
+  },
+  {
+    q: "Why does the total after adding a percentage sometimes look a cent out compared with my invoice?",
+    a: "Three separate things cause this. First, some systems round at every intermediate step — the tax on each line item — while this tool rounds once at the very end, so a five-line invoice can differ by a cent or two in either direction. Second, VAT or sales tax charged per line rather than on the subtotal produces a different total by design, not by error. Third, the underlying arithmetic is IEEE 754 binary floating point and cannot represent 0.1 exactly, which is why a raw calculation can print 0.30000000000000004; this page rounds its display to 12 significant digits so that noise stays invisible. For an amount that must balance to the cent, calculate in whole cents — multiply by 100, work in integers, and round once with a documented rule such as round-half-up.",
+  },
+  {
+    q: "How do I work out the original price before a discount, or the price before tax?",
+    a: "Work backwards from the percentage that remains. If an item is 30% off and you paid 70, then 70 is 70% of the original price, so the original is 70 ÷ 0.70 = 100. If a price of 120 includes 20% tax, then 120 is 120% of the pre-tax amount, so the pre-tax figure is 120 ÷ 1.20 = 100 and the tax is 20. This is the single most common percentage mistake: subtracting the percentage instead of dividing by (1 + rate). Taking 20% off 120 gives 96, which is not the pre-tax price. Mode 4 computes the division for you when you select subtract and read the result as the base.",
+  },
+  {
+    q: "What is the difference between percentage points and percent?",
+    a: "A percentage point is an absolute difference between two percentages; a percent is a relative one. If a rate moves from 20% to 25%, it has risen by 5 percentage points, but the relative increase is 5 ÷ 20 = 25%. Both statements are true and they are used to describe very different magnitudes, so news reporting that says \"up 25%\" without stating the base is genuinely ambiguous. Mode 3 on this page always computes the relative change, so enter 20 and 25 rather than 0.20 and 0.25 — the relative answer is the one it reports.",
+  },
+];
+
+const sources = [
+  {
+    label: "NIST — Guide for the Use of the International System of Units (SI), Special Publication 811",
+    href: "https://www.nist.gov/pml/special-publication-811",
+    note: "The reference for significant figures and rounding conventions, which explains why this page rounds once for display rather than at every intermediate step.",
+  },
+  {
+    label: "MDN Web Docs — Number.prototype.toPrecision()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toPrecision",
+    note: "Documents the rounding primitive used here to hold results to 12 significant digits and suppress binary floating-point noise in the displayed answer.",
+  },
+  {
+    label: "IEEE 754-2019 — Standard for Floating-Point Arithmetic",
+    href: "https://standards.ieee.org/ieee/754/6210/",
+    note: "The specification behind the binary64 format that JavaScript numbers use, and therefore the reason 0.1 + 0.2 is not exactly 0.3 in any browser or spreadsheet.",
+  },
+];
+
+const intro =
+  "Four percentage calculators in one page — a share of a number, one number as a percentage of another, percentage change with an increase or decrease verdict, and adding or removing a percentage such as tax or a discount — each showing the formula and the substitution it used.";
+---
+
+<ToolLayout tool={tool} intro={intro} faqs={faqs} sources={sources}>
+  <Fragment slot="tool">
+    <div class="panel pc">
+      <div class="panel__body">
+        <div class="pc__tabs" role="tablist" aria-label="Percentage mode">
+          <button type="button" class="pc__tab" id="pc-tab1" role="tab" aria-selected="true" aria-controls="pc-panel1" tabindex="0" data-mode="1">What is X% of Y?</button>
+          <button type="button" class="pc__tab" id="pc-tab2" role="tab" aria-selected="false" aria-controls="pc-panel2" tabindex="-1" data-mode="2">X is what percent of Y?</button>
+          <button type="button" class="pc__tab" id="pc-tab3" role="tab" aria-selected="false" aria-controls="pc-panel3" tabindex="-1" data-mode="3">Percentage change from X to Y</button>
+          <button type="button" class="pc__tab" id="pc-tab4" role="tab" aria-selected="false" aria-controls="pc-panel4" tabindex="-1" data-mode="4">Add or subtract X% from Y</button>
+        </div>
+
+        <section class="pc__panel" id="pc-panel1" role="tabpanel" aria-labelledby="pc-tab1" tabindex="0" data-panel="1">
+          <h2 class="pc__title">What is X% of Y?</h2>
+          <div class="pc__fields field-grid">
+            <div class="field">
+              <label for="pc1-x">Percentage, X (%)</label>
+              <input id="pc1-x" type="text" inputmode="decimal" autocomplete="off" value="15" />
+            </div>
+            <div class="field">
+              <label for="pc1-y">Of value, Y</label>
+              <input id="pc1-y" type="text" inputmode="decimal" autocomplete="off" value="200" />
+            </div>
+          </div>
+          <div class="pc__out">
+            <p class="pc__formula">Formula: <code>X% of Y = (X ÷ 100) × Y</code></p>
+            <div class="result-box pc__result" aria-live="polite">30</div>
+            <p class="pc__sub" data-sub>Substituted: (15 ÷ 100) × 200 = 30</p>
+          </div>
+        </section>
+
+        <section class="pc__panel" id="pc-panel2" role="tabpanel" aria-labelledby="pc-tab2" tabindex="0" data-panel="2" hidden>
+          <h2 class="pc__title">X is what percent of Y?</h2>
+          <div class="pc__fields field-grid">
+            <div class="field">
+              <label for="pc2-x">Part, X</label>
+              <input id="pc2-x" type="text" inputmode="decimal" autocomplete="off" value="30" />
+            </div>
+            <div class="field">
+              <label for="pc2-y">Whole, Y</label>
+              <input id="pc2-y" type="text" inputmode="decimal" autocomplete="off" value="200" />
+            </div>
+          </div>
+          <div class="pc__out">
+            <p class="pc__formula">Formula: <code>X of Y = (X ÷ Y) × 100 %</code></p>
+            <div class="result-box pc__result" aria-live="polite">15%</div>
+            <p class="pc__sub" data-sub>Substituted: (30 ÷ 200) × 100 = 15%</p>
+          </div>
+        </section>
+
+        <section class="pc__panel" id="pc-panel3" role="tabpanel" aria-labelledby="pc-tab3" tabindex="0" data-panel="3" hidden>
+          <h2 class="pc__title">Percentage change from X to Y</h2>
+          <div class="pc__fields field-grid">
+            <div class="field">
+              <label for="pc3-x">Starting value, X (old)</label>
+              <input id="pc3-x" type="text" inputmode="decimal" autocomplete="off" value="200" />
+            </div>
+            <div class="field">
+              <label for="pc3-y">Ending value, Y (new)</label>
+              <input id="pc3-y" type="text" inputmode="decimal" autocomplete="off" value="250" />
+            </div>
+          </div>
+          <div class="pc__out">
+            <p class="pc__formula">Formula: <code>change = ((Y − X) ÷ |X|) × 100 %</code></p>
+            <div class="result-box pc__result" aria-live="polite"><span class="pc__value">25% increase</span></div>
+            <p class="pc__sub" data-sub>Substituted: ((250 − 200) ÷ 200) × 100 = 25% increase</p>
+          </div>
+        </section>
+
+        <section class="pc__panel" id="pc-panel4" role="tabpanel" aria-labelledby="pc-tab4" tabindex="0" data-panel="4" hidden>
+          <h2 class="pc__title">Add or subtract X% from Y</h2>
+          <div class="pc__fields field-grid">
+            <div class="field">
+              <label for="pc4-x">Percentage, X (%)</label>
+              <input id="pc4-x" type="text" inputmode="decimal" autocomplete="off" value="20" />
+            </div>
+            <div class="field">
+              <label for="pc4-y">Base value, Y</label>
+              <input id="pc4-y" type="text" inputmode="decimal" autocomplete="off" value="150" />
+            </div>
+            <div class="field pc__opfield">
+              <span class="pc__oplabel" id="pc4-oplabel">Operation</span>
+              <div class="pc__ops" role="radiogroup" aria-labelledby="pc4-oplabel">
+                <label class="pc__op"><input type="radio" name="pc4-op" value="add" checked /> <span>Add (tax, tip, markup)</span></label>
+                <label class="pc__op"><input type="radio" name="pc4-op" value="subtract" /> <span>Subtract (discount, deduction)</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="pc__out">
+            <p class="pc__formula" data-formula>
+              Formula: <code data-formula-add>Y + (X ÷ 100) × Y = Y × (1 + X ÷ 100)</code><code
+                data-formula-sub
+                hidden>Y − (X ÷ 100) × Y = Y × (1 − X ÷ 100)</code
+              >
+            </p>
+            <div class="result-box pc__result" aria-live="polite">180</div>
+            <p class="pc__sub" data-sub>Substituted: 150 × (1 + 20 ÷ 100) = 180</p>
+          </div>
+        </section>
+
+        <h2 class="pc__tabletitle">Common percentages of 100</h2>
+        <div class="table-wrap">
+          <table class="data pc__table">
+            <caption class="sr-only">Common percentages and the value they represent, using 100 as the base</caption>
+            <thead>
+              <tr>
+                <th scope="col">Percentage</th>
+                <th scope="col">Of 100</th>
+                <th scope="col">As a decimal</th>
+                <th scope="col">As a fraction</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">1%</th><td>1</td><td>0.01</td><td>1/100</td></tr>
+              <tr><th scope="row">5%</th><td>5</td><td>0.05</td><td>1/20</td></tr>
+              <tr><th scope="row">10%</th><td>10</td><td>0.10</td><td>1/10</td></tr>
+              <tr><th scope="row">12.5%</th><td>12.5</td><td>0.125</td><td>1/8</td></tr>
+              <tr><th scope="row">20%</th><td>20</td><td>0.20</td><td>1/5</td></tr>
+              <tr><th scope="row">25%</th><td>25</td><td>0.25</td><td>1/4</td></tr>
+              <tr><th scope="row">33⅓%</th><td>33.333…</td><td>0.333…</td><td>1/3</td></tr>
+              <tr><th scope="row">50%</th><td>50</td><td>0.50</td><td>1/2</td></tr>
+              <tr><th scope="row">75%</th><td>75</td><td>0.75</td><td>3/4</td></tr>
+              <tr><th scope="row">100%</th><td>100</td><td>1.00</td><td>1/1</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel__foot">
+        Every mode recalculates as you type; the formula line and the substituted line always show exactly
+        which arithmetic produced the number, and no value you enter leaves this page.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the percentage calculator works</h2>
+  <p>
+    The page holds four independent calculators, each with its own two inputs and its own formula, shown
+    beside the result. Mode 1 answers "what is X% of Y?" by converting the percentage to a fraction and
+    multiplying: (X ÷ 100) × Y. Mode 2 inverts that relationship to express one number as a share of
+    another, computing (X ÷ Y) × 100 and appending a percent sign. Mode 3 compares two measurements of
+    the same quantity, subtracting to find the size of the move, dividing by the size of the starting
+    value, and reporting both the percentage and whether it is an increase or a decrease — a move
+    downwards is shown as a negative percentage so a fall is never mistaken for a rise. Mode 4 applies a
+    percentage to a base, as tax, tip or markup adds it and a discount or deduction removes it, using
+    Y × (1 + X ÷ 100) for an increase and Y × (1 − X ÷ 100) for a decrease.
+  </p>
+  <p>
+    Each panel recomputes as you type, and, importantly, prints the arithmetic it performed underneath
+    the answer — <code>Substituted: (30 ÷ 200) × 100 = 15%</code> — so the result can be checked against
+    the inputs without guessing which formula was used. Results are held to 12 significant digits for
+    display and printed with thousands separators. That is deliberately a little less than the 15 to 17
+    significant decimal digits a JavaScript double can carry, and it is what keeps binary floating-point
+    artefacts such as the 0.30000000000000004 produced by 0.1 + 0.2 out of an answer that should simply
+    read 0.3.
+  </p>
+  <p>
+    The reference table below the four modes lists the percentages people reach for most often — 1, 5,
+    10, 12.5, 20, 25, 33⅓, 50, 75 and 100 percent — with the value each represents against a base of 100,
+    plus the decimal and fraction equivalents. It is a fixed table, not a live conversion, and it renders
+    even when scripts are switched off, which makes it a handy anchor for mental arithmetic: 12.5% of
+    100 is 12.5, so 12.5% of any number is that number divided by eight.
+  </p>
+
+  <h2>Accuracy, rounding and the limits of percentages</h2>
+  <p>
+    Percentages are exact arithmetic in principle, but three practical effects make a computed result
+    differ from a figure someone else has already rounded. The first is rounding order. If a figure has
+    already been rounded — a price to the nearest cent, a measurement to two decimal places, a
+    population to the nearest thousand — then any percentage derived from it inherits that rounding, and
+    the error grows when you multiply it back up. A rate computed from a rounded base can be off by
+    several tenths of a percentage point without any of the arithmetic being wrong.
+  </p>
+  <p>
+    The second is stepwise rounding. This tool rounds once, at the end, and keeps full precision in
+    between. Many billing and accounting systems instead round at each intermediate stage — tax per line
+    item, currency conversion per shipment — and the accumulated difference is a cent or two rather than
+    a mistake. When you are reconciling against an invoice, find out where the other system rounds before
+    you conclude that either figure is wrong. The third effect is floating point itself: JavaScript
+    numbers are IEEE 754 binary64, 0.1 has no exact binary representation, and a naive sum prints as
+    0.30000000000000004. The 12-significant-digit display rounding used here hides that noise, but it
+    does not make the underlying arithmetic exact.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      Percentages can also mislead without being numerically wrong. A 50% increase from a base of two is
+      one unit, and identical headline percentages can describe wildly different absolute amounts. Always
+      read a percentage change together with the base it was measured from, and for money calculate in
+      whole cents and apply one documented rounding rule at the end.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <p>
+    Choose the mode that matches your question with the buttons above the tool, or focus a button and use
+    the arrow keys to move between them. Each mode keeps its own inputs, so switching back and forth does
+    not lose what you typed. In mode 1 enter the percentage and the value it applies to; in mode 2 enter
+    the part and the whole; in mode 3 enter the starting value and the ending value, in that order,
+    because the sign of the answer depends on which is which; in mode 4 enter the percentage, the base
+    value, and choose whether it is being added or subtracted with the radio buttons. Results update on
+    every keystroke, so there is nothing to submit.
+  </p>
+  <p>
+    Mode 4 covers the everyday finance cases. To add value-added tax or sales tax, enter the rate,
+    enter the pre-tax amount and leave <strong>Add</strong> selected; to take a discount off a marked
+    price, enter the discount rate and the marked price and select <strong>Subtract</strong>. Note that
+    subtracting a percentage does not reverse adding one — 20% added to 150 gives 180, and 20% taken off
+    180 gives 144, not 150 — so if you need the pre-tax amount from a tax-inclusive price, the
+    substituted line will show you the multiplication that was reversed and you can divide by
+    (1 + rate) instead.
+  </p>
+  <p>
+    All four modes are keyboard reachable, every input has a label, and each result sits in a live region
+    so a screen reader announces the new value as it changes. Decimals, negative numbers and thousands
+    separators are accepted in every field, and the layout is usable at 360 pixels wide. Because the
+    whole calculator is one local script with no network calls, it works offline and nothing you enter
+    leaves the page.
+  </p>
+</ToolLayout>
+
+<style>
+  .pc__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+  }
+  .pc__tab {
+    flex: 1 1 auto;
+    min-height: 44px;
+    max-width: 100%;
+    padding: 0.5rem 0.85rem;
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+  .pc__tab:hover { border-color: var(--border-strong); color: var(--text); }
+  .pc__tab[aria-selected="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .pc__tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .pc__panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); }
+  .pc__panel[hidden] { display: none; }
+  .pc__title {
+    margin: 0 0 0.9rem;
+    font-size: 1.05rem;
+  }
+  .pc__fields { margin-bottom: 1.1rem; }
+  .pc__opfield { display: flex; flex-direction: column; gap: 0.35rem; }
+  .pc__oplabel {
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--text-muted);
+  }
+  .pc__ops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    padding-top: 0.3rem;
+  }
+  .pc__op {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .pc__op input { margin: 0; accent-color: var(--accent); }
+  .pc__op:has(input:checked) { color: var(--text); font-weight: 600; }
+
+  .pc__out {
+    display: grid;
+    gap: 0.6rem;
+    margin-top: 0.35rem;
+  }
+  .pc__formula {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .pc__formula code {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    color: var(--text);
+  }
+  .pc__result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 58px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.25rem, 4.5vw, 1.7rem);
+    font-weight: 700;
+    color: var(--accent);
+    overflow-wrap: anywhere;
+  }
+  .pc__value { font-size: inherit; }
+  .pc__sub {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-faint);
+    overflow-wrap: anywhere;
+  }
+
+  .pc__tabletitle {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 1.05rem;
+  }
+  .pc__table td,
+  .pc__table th { white-space: nowrap; }
+  .pc__table td {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 400px) {
+    .pc__tab { flex-basis: 100%; }
+  }
+</style>
+
+<script>
+  const root = document.querySelector(".pc");
+  if (root) {
+    const tabs = Array.from(root.querySelectorAll(".pc__tab"));
+    const panels = Array.from(root.querySelectorAll(".pc__panel"));
+
+    function selectMode(mode, focus) {
+      tabs.forEach((tab) => {
+        const isSel = tab.dataset.mode === mode;
+        tab.setAttribute("aria-selected", isSel ? "true" : "false");
+        tab.tabIndex = isSel ? 0 : -1;
+        if (isSel && focus) tab.focus();
+      });
+      panels.forEach((panel) => {
+        panel.hidden = panel.dataset.panel !== mode;
+      });
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => selectMode(tab.dataset.mode, false));
+      tab.addEventListener("keydown", (event) => {
+        const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+        if (keys.indexOf(event.key) < 0) return;
+        event.preventDefault();
+        let next = index;
+        if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = tabs.length - 1;
+        selectMode(tabs[next].dataset.mode, true);
+      });
+    });
+
+    /* ------------------------------------------------------------- formatting */
+
+    function trimZeros(text) {
+      if (text.indexOf(".") < 0) return text;
+      return text.replace(/0+$/, "").replace(/\.$/, "");
+    }
+
+    function groupThousands(intPart) {
+      return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202F");
+    }
+
+    /*
+     * Round to 12 significant digits, which is below the 15-17 digits a double
+     * can carry, so binary artefacts such as 0.30000000000000004 collapse to
+     * 0.3 on the way to the screen while genuine differences survive.
+     */
+    function formatNumber(value) {
+      if (Number.isNaN(value)) return "—";
+      if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
+      if (value === 0) return "0";
+      const neg = value < 0;
+      const abs = Math.abs(value);
+      if (!(abs >= 1e-9 && abs < 1e15)) {
+        const parts = abs.toExponential(9).split("e");
+        return `${neg ? "-" : ""}${trimZeros(Number(parts[0]).toFixed(9))} × 10^${Number(parts[1])}`;
+      }
+      const rounded = Number(abs.toPrecision(12));
+      const digits = Math.max(0, Math.min(20, 11 - Math.floor(Math.log10(rounded))));
+      const fixed = trimZeros(rounded.toFixed(digits));
+      const dot = fixed.indexOf(".");
+      const out =
+        dot < 0 ? groupThousands(fixed) : groupThousands(fixed.slice(0, dot)) + fixed.slice(dot);
+      return neg ? "-" + out : out;
+    }
+
+    function formatPercent(value) {
+      return formatNumber(value) + "%";
+    }
+
+    /* True when display rounding actually changed the value. */
+    function roundedForDisplay(value) {
+      if (!Number.isFinite(value) || value === 0) return false;
+      return Number(value.toPrecision(12)) !== value;
+    }
+
+    function parseValue(raw) {
+      const cleaned = String(raw).replace(/[\s\u00A0\u202F\u2009]/g, "").replace(/,/g, "").replace(/%$/, "");
+      if (cleaned === "" || cleaned === "-" || cleaned === "." || cleaned === "-.") return NaN;
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    /* ------------------------------------------------------------ arithmetic */
+
+    function percentOf(percent, base) {
+      // Dividing by 100 first keeps 15% of 200 as an exact multiplication,
+      // instead of forming 15 x 200 = 3000 and then dividing it down again.
+      return (percent / 100) * base;
+    }
+
+    function percentOfResult(part, whole) {
+      if (whole === 0) return null;
+      return (part / whole) * 100;
+    }
+
+    function percentChange(from, to) {
+      // The base is the starting value, so a move away from zero is unbounded
+      // and a move from zero has no meaningful base at all.
+      if (from === 0) return null;
+      return ((to - from) / Math.abs(from)) * 100;
+    }
+
+    function adjustByPercent(base, percent, add) {
+      const factor = add ? 1 + percent / 100 : 1 - percent / 100;
+      return base * factor;
+    }
+
+    /* ----------------------------------------------------------------- wiring */
+
+    function watch(ids, run) {
+      ids.forEach((id) => {
+        const el = root.querySelector("#" + id);
+        if (el) el.addEventListener("input", run);
+      });
+      run();
+    }
+
+    function setText(panel, selector, text) {
+      const el = panel.querySelector(selector);
+      if (el) el.textContent = text;
+    }
+
+    function subLine(panel, text) {
+      setText(panel, "[data-sub]", text);
+    }
+
+    const panel1 = root.querySelector("#pc-panel1");
+    const panel2 = root.querySelector("#pc-panel2");
+    const panel3 = root.querySelector("#pc-panel3");
+    const panel4 = root.querySelector("#pc-panel4");
+
+    watch(["pc1-x", "pc1-y"], () => {
+      const x = parseValue(root.querySelector("#pc1-x").value);
+      const y = parseValue(root.querySelector("#pc1-y").value);
+      const out = panel1.querySelector(".pc__result");
+      const value = percentOf(x, y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        out.textContent = "—";
+        subLine(panel1, "Enter a percentage and a value to see the answer.");
+        return;
+      }
+      out.textContent = formatNumber(value);
+      subLine(
+        panel1,
+        `Substituted: (${formatNumber(x)} ÷ 100) × ${formatNumber(y)} = ${formatNumber(value)}` +
+          (roundedForDisplay(value) ? " · answer rounded for display" : ""),
+      );
+    });
+
+    watch(["pc2-x", "pc2-y"], () => {
+      const x = parseValue(root.querySelector("#pc2-x").value);
+      const y = parseValue(root.querySelector("#pc2-y").value);
+      const out = panel2.querySelector(".pc__result");
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        out.textContent = "—";
+        subLine(panel2, "Enter the part and the whole to see the share.");
+        return;
+      }
+      if (y === 0) {
+        out.textContent = "—";
+        subLine(panel2, "The whole is zero, so no part can be expressed as a percentage of it.");
+        return;
+      }
+      const value = percentOfResult(x, y);
+      out.textContent = formatPercent(value);
+      subLine(
+        panel2,
+        `Substituted: (${formatNumber(x)} ÷ ${formatNumber(y)}) × 100 = ${formatPercent(value)}` +
+          (roundedForDisplay(value) ? " · answer rounded for display" : ""),
+      );
+    });
+
+    watch(["pc3-x", "pc3-y"], () => {
+      const x = parseValue(root.querySelector("#pc3-x").value);
+      const y = parseValue(root.querySelector("#pc3-y").value);
+      const out = panel3.querySelector(".pc__result");
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        out.textContent = "—";
+        subLine(panel3, "Enter the starting and ending values to measure the change.");
+        return;
+      }
+      if (x === 0) {
+        out.textContent = "—";
+        subLine(panel3, "The starting value is zero, so a percentage change from it is not defined.");
+        return;
+      }
+      const value = percentChange(x, y);
+      const direction = value > 0 ? " increase" : value < 0 ? " decrease" : " (no change)";
+      out.textContent = formatPercent(value) + direction;
+      subLine(
+        panel3,
+        `Substituted: ((${formatNumber(y)} − ${formatNumber(x)}) ÷ ${formatNumber(Math.abs(x))}) × 100 = ${formatPercent(value)}${direction}` +
+          (roundedForDisplay(value) ? " · answer rounded for display" : ""),
+      );
+    });
+
+    const addCode = panel4.querySelector("[data-formula-add]");
+    const subCode = panel4.querySelector("[data-formula-sub]");
+    function runMode4() {
+      const x = parseValue(root.querySelector("#pc4-x").value);
+      const y = parseValue(root.querySelector("#pc4-y").value);
+      const opEl = root.querySelector("input[name='pc4-op']:checked");
+      const add = !opEl || opEl.value === "add";
+      const out = panel4.querySelector(".pc__result");
+      /* The two formulas are static markup; only their visibility changes here. */
+      if (addCode && subCode) {
+        addCode.hidden = !add;
+        subCode.hidden = add;
+      }
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        out.textContent = "—";
+        subLine(panel4, "Enter a percentage and a base value to see the adjusted amount.");
+        return;
+      }
+      const value = adjustByPercent(y, x, add);
+      out.textContent = formatNumber(value);
+      const sign = add ? "+" : "−";
+      const tail = !add && value < 0 ? " (below zero)" : "";
+      subLine(
+        panel4,
+        `Substituted: ${formatNumber(y)} × (1 ${sign} ${formatNumber(x)} ÷ 100) = ${formatNumber(value)}${tail}` +
+          (roundedForDisplay(value) ? " · answer rounded for display" : ""),
+      );
+    }
+
+    watch(["pc4-x", "pc4-y"], runMode4);
+    root.querySelectorAll("input[name='pc4-op']").forEach((radio) => {
+      radio.addEventListener("change", runMode4);
+    });
+  }
+</script>

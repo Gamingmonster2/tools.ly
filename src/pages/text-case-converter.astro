@@ -1,0 +1,611 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+
+const tool = allTools.find((t) => t.slug === "text-case-converter")!;
+
+const faqs = [
+  {
+    q: "Which title case does this tool use?",
+    a: "A deliberately simple one: the first word is always capitalised, and every other word is capitalised unless it appears in a short list of articles, conjunctions and short prepositions such as a, an, the, and, of, in and to. That matches the spirit of most headline styles but not the letter of any of them — the Chicago Manual of Style, the AP Stylebook and Wikipedia's Manual of Style each decide differently about words like “over”, “up” and “with”. If the capitalisation will be checked by an editor, apply their guide after converting.",
+  },
+  {
+    q: "Why does uppercase sometimes change the number of characters?",
+    a: "Case mapping is not always one letter to one letter. The German sharp s (ß) uppercases to SS, and a few ligatures expand the same way. The character counter therefore shows the input and the output separately, and the two can legitimately differ by more than zero after an UPPERCASE conversion.",
+  },
+  {
+    q: "Does the converter work for Turkish or Azerbaijani?",
+    a: "Not perfectly. This tool uses the locale-independent JavaScript methods, where the lowercase of “I” is “i”. In Turkish the dotted and dotless i are different letters: “I” should lowercase to “ı” and “i” should uppercase to “İ”. JavaScript offers toLocaleUpperCase and toLocaleLowerCase for that case, but the correct locale cannot be guessed reliably from a block of text, so the tool stays neutral and leaves locale-correct casing to a language-specific pass.",
+  },
+  {
+    q: "Why is “reverse characters” not the same as reversing a string in code?",
+    a: "Because a user-perceived character is often more than one code point. Emoji with skin-tone modifiers, flags and many accented letters are built from several code points, and reversing the raw code points breaks them apart. Where the browser exposes Intl.Segmenter this tool reverses grapheme clusters instead, so those characters stay intact; in older browsers it falls back to code points and the output may look scrambled for such characters.",
+  },
+];
+
+const sources = [
+  {
+    label: "Wikipedia — Manual of Style: Capital letters",
+    href: "https://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style/Capital_letters",
+    note: "A readable comparison of sentence case and title case, including the house rules that differ from Chicago and AP.",
+  },
+  {
+    label: "Unicode — SpecialCasing.txt (Unicode Character Database)",
+    href: "https://www.unicode.org/Public/UCD/latest/ucd/SpecialCasing.txt",
+    note: "The normative list of characters whose case mappings are not one-to-one, such as ß → SS and the Turkish dotted i.",
+  },
+  {
+    label: "MDN Web Docs — String.prototype.toLocaleUpperCase()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleUpperCase",
+    note: "Explains locale-sensitive casing and why the plain toUpperCase() method is locale-independent.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Paste your text and convert it to UPPERCASE, lowercase, Title Case, Sentence case, camelCase, PascalCase, snake_case, kebab-case, CONSTANT_CASE or aLtErNaTiNg case — plus reverse characters and reverse word order."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body tcc">
+        <div class="field">
+          <label for="tcc-input">Your text</label>
+          <textarea
+            id="tcc-input"
+            rows="8"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Type or paste the text you want to convert…"></textarea>
+        </div>
+
+        <div class="tcc__group" role="group" aria-label="Case conversions">
+          <button type="button" class="btn btn--soft btn--sm" data-case="upper">UPPERCASE</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="lower">lowercase</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="title">Title Case</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="sentence">Sentence case</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="camel">camelCase</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="pascal">PascalCase</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="snake">snake_case</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="kebab">kebab-case</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="constant">CONSTANT_CASE</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="alternating">aLtErNaTiNg case</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="reverse-chars">Reverse characters</button>
+          <button type="button" class="btn btn--soft btn--sm" data-case="reverse-words">Reverse word order</button>
+        </div>
+
+        <fieldset class="fieldset">
+          <legend>Clean-up options</legend>
+          <div class="check">
+            <input type="checkbox" id="tcc-collapse" />
+            <label for="tcc-collapse">Collapse repeated whitespace</label>
+          </div>
+          <div class="check">
+            <input type="checkbox" id="tcc-trim" />
+            <label for="tcc-trim">Trim lines</label>
+          </div>
+        </fieldset>
+
+        <div class="stat-grid" id="tcc-stats" aria-live="polite" aria-atomic="false">
+          <div class="stat">
+            <div class="stat__label">Input characters</div>
+            <div class="stat__value" id="tcc-in-chars">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Input words</div>
+            <div class="stat__value" id="tcc-in-words">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Output characters</div>
+            <div class="stat__value" id="tcc-out-chars">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Output words</div>
+            <div class="stat__value" id="tcc-out-words">0</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="tcc-output">Result</label>
+          <textarea
+            id="tcc-output"
+            rows="8"
+            readonly
+            spellcheck="false"
+            placeholder="Choose a conversion above and the result appears here."></textarea>
+          <p class="tcc__help">
+            The result box is read-only and stays selectable, so you can also copy it by hand with
+            <kbd>Ctrl</kbd>+<kbd>C</kbd> if your browser blocks clipboard access.
+          </p>
+        </div>
+
+        <div class="tcc__actions">
+          <button type="button" class="btn btn--primary" id="tcc-copy">Copy result</button>
+          <button type="button" class="btn btn--ghost" id="tcc-swap">Use result as input</button>
+          <button type="button" class="btn btn--ghost" id="tcc-clear">Clear</button>
+          <span class="badge badge--ok" id="tcc-status" role="status" aria-live="polite" hidden>Copied!</span>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Pick a conversion, then stack another on top of the result — or apply the clean-up toggles to tidy
+        stray spaces and indentation afterwards.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the case converter works</h2>
+  <p>
+    The converter treats your text as a sequence of <em>words</em> and <em>separators</em>. A word is a run of
+    letters and digits; the separators are everything else — spaces, tabs, line breaks, punctuation. That single
+    split is what makes the programming-style conversions possible: <code>camelCase</code>,
+    <code>PascalCase</code>, <code>snake_case</code>, <code>kebab-case</code> and <code>CONSTANT_CASE</code> all
+    take the same word list and differ only in what they do to each word and what they glue between them.
+  </p>
+  <p>
+    The split is camel-aware, so text that is already in developer style converts cleanly in the other direction:
+    <em>getUserName</em> and <em>get_user_name</em> both break into <em>get</em>, <em>user</em>, <em>name</em>,
+    which is why <code>snake_case</code> turns the first into <em>get_user_name</em> rather than
+    <em>getusername</em>. Sentence case lowercases everything and then capitalises the first letter of each
+    sentence, restarting after a full stop, question mark, exclamation mark, ellipsis or line break. Alternating
+    case flips every letter it meets and leaves digits and punctuation alone.
+  </p>
+  <p>
+    Character reversing is grapheme-aware where the browser supports it. Instead of reversing UTF-16 code units —
+    which shreds emoji and combining accents — the tool asks <code>Intl.Segmenter</code> for grapheme clusters and
+    reverses those, so a family emoji or a flag survives the trip. Reversing word order works on whitespace-separated
+    tokens and rejoins them with a single space.
+  </p>
+
+  <h2>Accuracy and limits: title case is not a solved problem</h2>
+  <p>
+    Every conversion here is a mechanical string operation with a predictable result — except title case, which is
+    a style decision dressed up as an algorithm. The Chicago Manual of Style lowercases short prepositions and
+    conjunctions but capitalises the first and last word of a title regardless of length; the AP Stylebook
+    capitalises all prepositions of four letters or more; Wikipedia's Manual of Style has its own list and its own
+    treatment of hyphenated compounds. Feed the same headline to a Chicago tool and a Wikipedia tool and you will
+    get two different answers, and neither is wrong.
+  </p>
+  <p>
+    <strong>This converter uses one simple rule:</strong> the first word is always capitalised, and every other
+    word is capitalised unless it appears in a short stopword list of articles, conjunctions and short prepositions
+    (a, an, the, and, but, or, of, in, on, to, for, with, at, by, from and similar). It does not know about
+    hyphenated compounds, it does not look at whether a word is a verb or a preposition in context, and it does not
+    keep acronyms or product names in their chosen casing — <em>iPhone</em> becomes <em>Iphone</em> after a
+    lowercase-and-recapitalise pass, so fix proper nouns by hand before publishing.
+  </p>
+  <ul>
+    <li><strong>Locale-sensitive casing.</strong> The conversions use the locale-independent JavaScript methods, so Turkish and Azerbaijani dotted/dotless i are handled the default way rather than the local way, and a few languages with special casing rules will look slightly off.</li>
+    <li><strong>One-to-many mappings.</strong> Uppercasing is not length-preserving: ß becomes SS, and some ligatures expand. Compare the input and output character counts if an exact length matters.</li>
+    <li><strong>Accents and non-Latin scripts.</strong> Case mapping follows Unicode, so Greek, Cyrillic and most accented Latin letters convert correctly. Scripts with no concept of case — Chinese, Japanese, Korean, Arabic, Hebrew, Thai — pass through unchanged, which is expected rather than a failure.</li>
+    <li><strong>Sentence detection is naive.</strong> A full stop after an abbreviation starts a new “sentence”, so <em>e.g. this</em> becomes <em>e.g. This</em>. Review the output rather than trusting it blindly.</li>
+    <li><strong>Whitespace toggles run after the conversion.</strong> <em>Collapse repeated whitespace</em> turns runs of spaces and tabs into one space and caps consecutive blank lines at one; <em>Trim lines</em> removes leading and trailing whitespace on every line. Both are applied to the output, not the input, so the original text in the box above is never modified.</li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Never run snake_case or camelCase over source code as a whole — identifiers, string literals and comments
+      would all be rewritten together. Convert the identifier you are renaming, then paste it back.
+    </p>
+  </div>
+
+  <h2>How to use the converter</h2>
+  <ol>
+    <li><strong>Paste your text</strong> into the top box. The input character and word counts update as you type.</li>
+    <li><strong>Press a conversion button.</strong> The result appears in the read-only box below it, and the output counts update at the same time, so you can see at a glance whether a conversion changed the length of the text.</li>
+    <li><strong>Stack conversions if you need to.</strong> <em>Use result as input</em> moves the output into the top box, which is handy when you want sentence case and then a clean-up pass, or a programming style and then a reverse.</li>
+    <li><strong>Switch on clean-up options</strong> for pasted text that carries stray indentation or double spaces. They apply to the result immediately, so you can toggle them on and off to compare.</li>
+    <li><strong>Copy the result</strong> with the copy button — a <em>Copied!</em> badge confirms it — or select the text in the box and copy it manually.</li>
+  </ol>
+  <p>
+    A typical workflow for a headline is: paste, press <em>Title Case</em>, then read it once and fix the words the
+    rule cannot know about — product names, acronyms and the prepositions your house style wants capitalised.
+  </p>
+</ToolLayout>
+
+<style>
+  .tcc {
+    display: grid;
+    gap: clamp(1rem, 2.5vw, 1.5rem);
+  }
+  textarea#tcc-input,
+  textarea#tcc-output {
+    width: 100%;
+    min-height: 9rem;
+    resize: vertical;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+  }
+  textarea#tcc-output {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    background: var(--bg-sunken);
+  }
+  textarea#tcc-input:focus-visible,
+  textarea#tcc-output:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .tcc__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  .tcc__group .btn {
+    white-space: nowrap;
+  }
+  .tcc__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .tcc__help kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+  }
+  .tcc__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  @media (max-width: 360px) {
+    .tcc__group .btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var TITLE_STOPWORDS = new Set(
+      (
+        "a an and as at but by for from in into nor of on onto or over per so the to up via with yet"
+      ).split(" ")
+    );
+
+    var input = document.getElementById("tcc-input");
+    var output = document.getElementById("tcc-output");
+    var collapseToggle = document.getElementById("tcc-collapse");
+    var trimToggle = document.getElementById("tcc-trim");
+    var group = document.querySelector(".tcc__group");
+    var copyBtn = document.getElementById("tcc-copy");
+    var swapBtn = document.getElementById("tcc-swap");
+    var clearBtn = document.getElementById("tcc-clear");
+    var status = document.getElementById("tcc-status");
+
+    var counters = {
+      inChars: document.getElementById("tcc-in-chars"),
+      inWords: document.getElementById("tcc-in-words"),
+      outChars: document.getElementById("tcc-out-chars"),
+      outWords: document.getElementById("tcc-out-words"),
+    };
+
+    var statusTimer = null;
+
+    /* ---------- word helpers ---------- */
+
+    var splitWords = null;
+    try {
+      splitWords = new RegExp("[^\\p{L}\\p{N}]+", "u");
+    } catch (err) {
+      splitWords = /[^A-Za-z0-9]+/;
+    }
+
+    var wordSegmenter = null;
+    if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+      try {
+        wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+      } catch (err) {
+        wordSegmenter = null;
+      }
+    }
+
+    var graphemeSegmenter = null;
+    if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+      try {
+        graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+      } catch (err) {
+        graphemeSegmenter = null;
+      }
+    }
+
+    function countWords(text) {
+      if (!text) return 0;
+      if (wordSegmenter) {
+        var segments = Array.from(wordSegmenter.segment(text));
+        var total = 0;
+        for (var i = 0; i < segments.length; i++) {
+          if (segments[i].isWordLike) total++;
+        }
+        return total;
+      }
+      var matches = text.match(/[^\s]+/g);
+      return matches ? matches.length : 0;
+    }
+
+    function isCased(ch) {
+      return ch.toLowerCase() !== ch.toUpperCase();
+    }
+
+    function capitalise(word) {
+      if (!word) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+
+    function eachWord(text, fn) {
+      var parts = text.split(/(\s+)/);
+      var first = true;
+      var out = [];
+      for (var i = 0; i < parts.length; i++) {
+        var part = parts[i];
+        if (!part || /^\s+$/.test(part)) {
+          out.push(part);
+        } else {
+          out.push(fn(part, first));
+          first = false;
+        }
+      }
+      return out.join("");
+    }
+
+    function splitIntoTokens(text) {
+      var camelSplit = text
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+      return camelSplit.split(splitWords).filter(function (w) {
+        return w.length > 0;
+      });
+    }
+
+    /* ---------- conversions ---------- */
+
+    function titleCase(text) {
+      return eachWord(text, function (word, isFirst) {
+        var lower = word.toLowerCase();
+        if (!isFirst && TITLE_STOPWORDS.has(lower)) return lower;
+        return capitalise(lower);
+      });
+    }
+
+    function sentenceCase(text) {
+      var lower = text.toLowerCase();
+      var out = "";
+      var start = true;
+      for (var i = 0; i < lower.length; i++) {
+        var ch = lower.charAt(i);
+        if (start && /\S/.test(ch)) {
+          out += isCased(ch) ? ch.toUpperCase() : ch;
+          start = false;
+          continue;
+        }
+        out += ch;
+        if (ch === "." || ch === "!" || ch === "?" || ch === "\u2026" || ch === "\n") start = true;
+      }
+      return out;
+    }
+
+    function alternatingCase(text) {
+      var out = "";
+      var flip = 0;
+      for (var i = 0; i < text.length; i++) {
+        var ch = text.charAt(i);
+        if (isCased(ch)) {
+          out += flip % 2 === 0 ? ch.toLowerCase() : ch.toUpperCase();
+          flip++;
+        } else {
+          out += ch;
+        }
+      }
+      return out;
+    }
+
+    function reverseCharacters(text) {
+      if (graphemeSegmenter) {
+        var clusters = Array.from(graphemeSegmenter.segment(text)).map(function (s) {
+          return s.segment;
+        });
+        return clusters.reverse().join("");
+      }
+      return Array.from(text).reverse().join("");
+    }
+
+    function reverseWords(text) {
+      var trimmed = text.trim();
+      if (!trimmed) return "";
+      return trimmed.split(/\s+/).reverse().join(" ");
+    }
+
+    var converters = {
+      upper: function (t) {
+        return t.toUpperCase();
+      },
+      lower: function (t) {
+        return t.toLowerCase();
+      },
+      title: titleCase,
+      sentence: sentenceCase,
+      camel: function (t) {
+        var tokens = splitIntoTokens(t);
+        return tokens
+          .map(function (w, i) {
+            var lower = w.toLowerCase();
+            return i === 0 ? lower : capitalise(lower);
+          })
+          .join("");
+      },
+      pascal: function (t) {
+        return splitIntoTokens(t)
+          .map(function (w) {
+            return capitalise(w.toLowerCase());
+          })
+          .join("");
+      },
+      snake: function (t) {
+        return splitIntoTokens(t)
+          .map(function (w) {
+            return w.toLowerCase();
+          })
+          .join("_");
+      },
+      kebab: function (t) {
+        return splitIntoTokens(t)
+          .map(function (w) {
+            return w.toLowerCase();
+          })
+          .join("-");
+      },
+      constant: function (t) {
+        return splitIntoTokens(t)
+          .map(function (w) {
+            return w.toUpperCase();
+          })
+          .join("_");
+      },
+      alternating: alternatingCase,
+      "reverse-chars": reverseCharacters,
+      "reverse-words": reverseWords,
+    };
+
+    var lastConvert = null;
+
+    /* ---------- clean-up + render ---------- */
+
+    function cleanUp(text) {
+      var out = text;
+      if (collapseToggle.checked) {
+        out = out.replace(/[^\S\n]+/g, " ").replace(/[ ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+      }
+      if (trimToggle.checked) {
+        out = out
+          .split("\n")
+          .map(function (line) {
+            return line.trim();
+          })
+          .join("\n");
+      }
+      return out;
+    }
+
+    function runConversion(kind) {
+      var fn = converters[kind];
+      if (!fn) return;
+      lastConvert = kind;
+      var source = input.value;
+      output.value = source ? cleanUp(fn(source)) : "";
+      updateCounts();
+    }
+
+    function updateCounts() {
+      var inText = input.value;
+      var outText = output.value;
+      counters.inChars.textContent = inText.length;
+      counters.inWords.textContent = countWords(inText);
+      counters.outChars.textContent = outText.length;
+      counters.outWords.textContent = countWords(outText);
+    }
+
+    function showStatus(message) {
+      status.textContent = message;
+      status.hidden = false;
+      if (statusTimer) clearTimeout(statusTimer);
+      statusTimer = setTimeout(function () {
+        status.hidden = true;
+      }, 1800);
+    }
+
+    /* ---------- clipboard ---------- */
+
+    function legacyCopy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      var ok = false;
+      try {
+        ta.select();
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    /* ---------- wiring ---------- */
+
+    input.addEventListener("input", function () {
+      if (output.value === "" && !input.value.trim()) {
+        updateCounts();
+        return;
+      }
+      if (lastConvert) runConversion(lastConvert);
+      else updateCounts();
+    });
+
+    collapseToggle.addEventListener("change", function () {
+      if (lastConvert && input.value && output.value !== "") runConversion(lastConvert);
+    });
+    trimToggle.addEventListener("change", function () {
+      if (lastConvert && input.value && output.value !== "") runConversion(lastConvert);
+    });
+
+    group.addEventListener("click", function (event) {
+      var btn = event.target.closest("button[data-case]");
+      if (!btn) return;
+      runConversion(btn.getAttribute("data-case"));
+    });
+
+    copyBtn.addEventListener("click", function () {
+      var text = output.value;
+      if (!text) {
+        showStatus("Nothing to copy yet");
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            showStatus("Copied!");
+          },
+          function () {
+            showStatus(legacyCopy(text) ? "Copied!" : "Press Ctrl+C to copy");
+          }
+        );
+      } else {
+        showStatus(legacyCopy(text) ? "Copied!" : "Press Ctrl+C to copy");
+      }
+    });
+
+    swapBtn.addEventListener("click", function () {
+      if (!output.value) return;
+      input.value = output.value;
+      runConversion(lastConvert);
+      input.focus();
+    });
+
+    clearBtn.addEventListener("click", function () {
+      input.value = "";
+      output.value = "";
+      input.focus();
+      updateCounts();
+    });
+
+    updateCounts();
+  })();
+</script>

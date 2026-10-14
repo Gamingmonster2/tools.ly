@@ -1,0 +1,730 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "unit-converter")!;
+
+const faqs = [
+  {
+    q: "Are the conversion factors exact?",
+    a: "Where an exact definition exists, yes — and the converter uses it verbatim. Since 1959 the international inch has been defined as exactly 25.4 millimetres, so 1 in = 25.4 mm and 1 mm = 1/25.4 in with no approximation anywhere. The international avoirdupois pound has been exactly 0.45359237 kilograms since the same agreement. US and imperial volumes are defined from the exact inch: a US gallon is exactly 231 cubic inches, which is 3.785411784 litres. Factors that cannot be exact at all — a mean Earth year, the astronomical unit, the mean solar day — are documented averages, and those are the only numbers here that carry real uncertainty.",
+  },
+  {
+    q: "How does the temperature conversion work?",
+    a: "Temperature is the one category that cannot be handled with a single multiplier, because the Celsius, Fahrenheit and Kelvin scales sit at different zeros. This page uses the textbook formulas instead: °F = °C × 9/5 + 32, °C = (°F − 32) × 5/9 and K = °C + 273.15. That matters for values far from room temperature — a simple multiply-by-1.8 shortcut would turn 10 °C into 18 °F instead of the correct 50 °F. The term 273.15 is exact by definition, and this tool does not accept temperatures below absolute zero.",
+  },
+  {
+    q: "Why does the answer sometimes stop matching my own arithmetic at the last digit?",
+    a: "Raw JavaScript numbers are IEEE 754 binary64 floating point, so a decimal such as 0.1 has no exact binary representation and sums like 0.1 + 0.2 really do produce 0.30000000000000004 internally. Every value shown here is rounded to 12 significant digits for display, deliberately a little short of the 15 to 17 digits a double can carry, so that this noise does not leak into the answer. A second, deliberate loss happens when a factor is not exact — a mile in kilometres, a pound in grams, a year in hours — and then the result is only as good as the factor. Both effects are display-level or factor-level; nothing else is rounded.",
+  },
+  {
+    q: "Is my data sent anywhere, or converted on a server?",
+    a: "No. The whole tool is a single script inside this page: the factors are constants compiled into the file, the arithmetic runs in your browser, and there is no request of any kind after the page has loaded. That is why it works with the network disconnected, and why you can paste a figure from a contract, a lab sheet or a payslip without that number leaving your device.",
+  },
+];
+
+const sources = [
+  {
+    label: "BIPM — The International System of Units (SI Brochure, 9th edition)",
+    href: "https://www.bipm.org/en/publications/si-brochure",
+    note: "The authoritative definition of the SI base units — metre, kilogram, second, kelvin — and of the decimal prefixes used by the metric units in this converter.",
+  },
+  {
+    label: "NIST Handbook 44 — Specifications, Tolerances, and Other Technical Requirements for Weighing and Measuring Devices",
+    href: "https://www.nist.gov/pml/nist-handbook-44",
+    note: "Appendix C of this handbook is the United States' official restatement of the exact factors used here: 1 in = 25.4 mm, 1 lb = 0.45359237 kg, 1 US gal = 231 in³.",
+  },
+  {
+    label: "NIST Guide to the SI (NIST Special Publication 811)",
+    href: "https://www.nist.gov/pml/special-publication-811",
+    note: "Explains significant figures, rounding conventions and unit symbols, which is the reasoning behind the 12-significant-digit display used on this page.",
+  },
+];
+
+const intro =
+  "Convert between metric, US customary and imperial units across eight categories — length, mass, volume, area, speed, temperature, data size and time — with exact SI factors, real offset formulas for temperature, and the entered value shown in every unit of the chosen category at once.";
+---
+
+<ToolLayout tool={tool} intro={intro} faqs={faqs} sources={sources}>
+  <Fragment slot="tool">
+    <div class="panel uc">
+      <div class="panel__body">
+        <div class="field" style="max-width:22rem">
+          <label for="uc-cat">Category</label>
+          <select id="uc-cat" class="uc__cat">
+            <option value="length" selected>Length</option>
+            <option value="mass">Mass</option>
+            <option value="volume">Volume</option>
+            <option value="area">Area</option>
+            <option value="speed">Speed</option>
+            <option value="temperature">Temperature</option>
+            <option value="data">Data size</option>
+            <option value="time">Time</option>
+          </select>
+        </div>
+
+        <div class="uc__grid">
+          <div class="field">
+            <label for="uc-amount">Value to convert</label>
+            <input
+              id="uc-amount"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              spellcheck="false"
+              value="1"
+              aria-describedby="uc-hint"
+            />
+          </div>
+
+          <div class="field">
+            <label for="uc-from">From</label>
+            <select id="uc-from"></select>
+          </div>
+
+          <div class="uc__swapcell">
+            <button type="button" class="btn btn--soft uc__swap" title="Swap the two units">
+              <span class="uc__swapicon" aria-hidden="true">⇄</span>
+              <span class="sr-only">Swap the from and to units</span>
+            </button>
+          </div>
+
+          <div class="field">
+            <label for="uc-to">To</label>
+            <select id="uc-to"></select>
+          </div>
+
+          <div class="field uc__resultcell">
+            <label for="uc-result-display">Converted value</label>
+            <output id="uc-result-display" class="readout uc__result" aria-live="polite" for="uc-cat uc-amount uc-from uc-to">1</output>
+          </div>
+        </div>
+
+        <p class="uc__hint" id="uc-hint"></p>
+        <p class="sr-only" aria-live="polite" data-live></p>
+
+        <h2 class="uc__tabletitle">1 in every unit of this category</h2>
+        <div class="table-wrap">
+          <table class="data uc__table">
+            <caption class="sr-only">The entered value converted into every unit in the selected category</caption>
+            <thead>
+              <tr>
+                <th scope="col">Unit</th>
+                <th scope="col">Value</th>
+                <th scope="col">Relative to the base unit</th>
+              </tr>
+            </thead>
+            <tbody class="uc__tbody" data-tbody>
+              <tr>
+                <th scope="row">Meter (m)</th>
+                <td>1</td>
+                <td>1 m = 1 m</td>
+              </tr>
+              <tr>
+                <th scope="row">Foot (ft)</th>
+                <td>3.28083989501</td>
+                <td>1 m = 3.28083989501 ft</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel__foot">
+        Pick a category, type a value, and choose the two units; the table below lists the same value in
+        every other unit of that category. All arithmetic happens on this page — nothing is uploaded.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How the converter works</h2>
+  <p>
+    Each category has one base unit: the metre for length, the kilogram for mass, the cubic metre for
+    volume, the square metre for area, metres per second for speed, the kilobyte for data size and the
+    second for time. Every unit in that category is stored as a single number — how many base units one
+    of it is worth — and conversions are done in two steps. The value you type is multiplied by the
+    factor of the unit you selected as <em>from</em>, which expresses it in base units, and that result
+    is divided by the factor of the unit you selected as <em>to</em>. Because both steps go through the
+    same base, any pair of units in a category converts correctly without needing a separate
+    combination for every possible pair, and the table below the inputs simply repeats the second step
+    once for each unit in the list.
+  </p>
+  <p>
+    Temperature is handled by a different path. Celsius, Fahrenheit and Kelvin agree on the size of a
+    degree in only some cases and disagree about where zero sits, so a single multiplier cannot describe
+    them. The converter therefore sends temperatures through the standard formulas: °F = °C × 9/5 + 32,
+    °C = (°F − 32) × 5/9, and K = °C + 273.15, with the Kelvin conversions chained through Celsius.
+    Pressing <strong>Swap</strong> reverses the two units and recomputes immediately, which is the
+    quickest way to answer the reverse of a question you have just asked.
+  </p>
+
+  <h2>Where the factors come from, and how much to trust the result</h2>
+  <p>
+    The factors used here are exact wherever an exact definition exists, and the tool does not round
+    them. The international inch has been defined as exactly 25.4 millimetres since the 1959 agreement
+    between the United States, the United Kingdom and the other Commonwealth countries, and this page
+    uses that value unchanged. The international avoirdupois pound has been exactly 0.45359237 kilograms
+    since the same agreement. US volumes follow from the exact inch: a US gallon is exactly 231 cubic
+    inches, which is exactly 3.785411784 litres, and a fluid ounce is one 128th of that. Because those
+    chains of exact definitions are preserved rather than pre-rounded, 1 mi = 1.609344 km exactly and
+    1 lb = 453.59237 g exactly.
+  </p>
+  <p>
+    Not every factor is defined. There is no exact length for a mean Earth year, no exact value for the
+    mean solar day or the Julian year, and no exact megabyte, because a megabyte means 1 000 000 bytes in
+    the SI decimal convention and 1 048 576 bytes in the binary convention. Where an exact definition
+    does not exist the converter uses the standard average — 365.2425 days for the Gregorian year,
+    86 400 seconds for the day, and 1 048 576 bytes for the binary megabyte — and labels those rows so
+    the assumption is visible. Treat results built on them as indicative rather than exact.
+  </p>
+  <p>
+    Display rounding is the other place where a figure can differ from your own arithmetic. Every number
+    on this page is rounded to 12 significant digits and shown with thousands separators, which is
+    deliberately a little less than the 15 to 17 decimal digits a JavaScript double can carry. That is
+    what stops binary floating-point artefacts — the 0.30000000000000004 that 0.1 + 0.2 produces when
+    printed raw — from appearing in an answer that should read 0.3. The rounding is for display only:
+    each conversion in the table is computed from the original full-precision value, not from the
+    rounded text of the row above it, so errors do not accumulate down the table.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      Converted values are for general reference. Where a measurement is legally or commercially
+      significant — shipping weights, fuel volumes, medicine, engineering tolerances — check the
+      applicable regulation or standard for the exact factor and the required number of significant
+      figures rather than relying on a web page.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <p>
+    Start by choosing a <strong>Category</strong>: Length, Mass, Volume, Area, Speed, Temperature, Data
+    size or Time. The <em>from</em> and <em>to</em> lists then fill with the units of that category and
+    the conversion table underneath is rebuilt, so switching from Length to Data size never leaves a
+    stale row behind. Type the number you want to convert into <strong>Value to convert</strong>; the
+    result and the table update as you type, so there is nothing to submit. Decimal points, a leading
+    minus sign and thousands separators are all accepted, and the value field is a text input with a
+    numeric keyboard on phones so that a pasted figure such as <code>1,250.75</code> is not rejected.
+  </p>
+  <p>
+    Set <strong>From</strong> to the unit you have and <strong>To</strong> to the unit you want. If you
+    need the opposite direction, either swap the two selects or press the <strong>⇄ Swap</strong> button,
+    which exchanges them and recalculates. The table is the fastest way to answer "how much is this in
+    everything?" — it lists each unit of the current category with the same typed value expressed in it,
+    as well as the factor relative to the base unit, so you can see at a glance whether a unit is larger
+    or smaller than the one you started from. The hint line under the inputs always states the direction
+    in force, in the form <code>5 metres = 16.4041994751 feet</code>, so a mis-set select is easy to
+    spot.
+  </p>
+  <p>
+    Everything here is keyboard reachable: Tab moves through the category, value and unit controls, the
+    selects open with the usual arrow keys, and the swap button activates with Space or Enter. The
+    updated result sits in a live region, so a screen reader announces each new value as it changes.
+    The page is usable at 360 pixels wide, and because the whole tool is a single local script it keeps
+    working with no network connection at all.
+  </p>
+</ToolLayout>
+
+<style>
+  .uc__grid {
+    display: grid;
+    gap: 0.85rem 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: end;
+    margin-top: 1.1rem;
+  }
+  @media (min-width: 720px) {
+    .uc__grid {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+    .uc__resultcell { grid-column: 1 / -1; }
+  }
+  @media (min-width: 1040px) {
+    .uc__grid {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1.1fr);
+    }
+    .uc__resultcell { grid-column: auto; }
+  }
+
+  .uc__swapcell {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .uc__swap {
+    min-width: 48px;
+    min-height: 44px;
+    padding-inline: 0.7rem;
+  }
+  .uc__swapicon { font-size: 1.15rem; line-height: 1; }
+
+  .uc__result {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .uc__resultcell .readout { color: var(--accent); }
+
+  .uc__hint {
+    margin: 0.85rem 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .uc__tabletitle {
+    margin: 1.6rem 0 0.75rem;
+    font-size: 1.05rem;
+  }
+  .uc__table td,
+  .uc__table th { white-space: nowrap; }
+  .uc__table td:nth-child(2) {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+  }
+  .uc__table td:nth-child(3),
+  .uc__table th:nth-child(3) {
+    color: var(--text-muted);
+    white-space: normal;
+  }
+</style>
+
+<script>
+  /* ------------------------------------------- units and their factors */
+
+  /*
+   * factor = how many base units one of this unit is worth.
+   * Exact definitions are written out in full rather than pre-rounded, so the
+   * arithmetic chain itself stays exact; `src` documents where a factor comes
+   * from when it is a defined convention rather than a physical constant.
+   */
+  const CATEGORIES = {
+    length: {
+      label: "Length",
+      base: "meter",
+      units: {
+        nanometer: { label: "Nanometer (nm)", symbol: "nm", factor: 1e-9, src: "exact" },
+        micrometer: { label: "Micrometer (µm)", symbol: "µm", factor: 1e-6, src: "exact" },
+        millimeter: { label: "Millimeter (mm)", symbol: "mm", factor: 0.001, src: "exact" },
+        centimeter: { label: "Centimeter (cm)", symbol: "cm", factor: 0.01, src: "exact" },
+        meter: { label: "Meter (m)", symbol: "m", factor: 1, src: "exact" },
+        kilometer: { label: "Kilometer (km)", symbol: "km", factor: 1000, src: "exact" },
+        inch: { label: "Inch (in)", symbol: "in", factor: 0.0254, src: "exact" },
+        foot: { label: "Foot (ft)", symbol: "ft", factor: 0.3048, src: "exact" },
+        yard: { label: "Yard (yd)", symbol: "yd", factor: 0.9144, src: "exact" },
+        mile: { label: "Mile (mi)", symbol: "mi", factor: 1609.344, src: "exact" },
+        nauticalmile: { label: "Nautical mile (nmi)", symbol: "nmi", factor: 1852, src: "exact" },
+      },
+    },
+    mass: {
+      label: "Mass",
+      base: "kilogram",
+      units: {
+        microgram: { label: "Microgram (µg)", symbol: "µg", factor: 1e-9, src: "exact" },
+        milligram: { label: "Milligram (mg)", symbol: "mg", factor: 1e-6, src: "exact" },
+        gram: { label: "Gram (g)", symbol: "g", factor: 0.001, src: "exact" },
+        kilogram: { label: "Kilogram (kg)", symbol: "kg", factor: 1, src: "exact" },
+        tonne: { label: "Tonne (t)", symbol: "t", factor: 1000, src: "exact" },
+        ounce: { label: "Ounce (oz)", symbol: "oz", factor: 0.028349523125, src: "exact" },
+        pound: { label: "Pound (lb)", symbol: "lb", factor: 0.45359237, src: "exact" },
+        stone: { label: "Stone (st)", symbol: "st", factor: 6.35029318, src: "exact" },
+        shortton: { label: "US short ton", symbol: "ton", factor: 907.18474, src: "exact" },
+      },
+    },
+    volume: {
+      label: "Volume",
+      base: "cubicmeter",
+      units: {
+        milliliter: { label: "Milliliter (mL)", symbol: "mL", factor: 1e-6, src: "exact" },
+        liter: { label: "Liter (L)", symbol: "L", factor: 0.001, src: "exact" },
+        cubicmeter: { label: "Cubic meter (m³)", symbol: "m³", factor: 1, src: "exact" },
+        cubicinch: { label: "Cubic inch (in³)", symbol: "in³", factor: 0.0254 ** 3, src: "exact" },
+        cubicfoot: { label: "Cubic foot (ft³)", symbol: "ft³", factor: 0.3048 ** 3, src: "exact" },
+        teaspoon: {
+          label: "US teaspoon (tsp)",
+          symbol: "tsp",
+          factor: 0.001 * 3.785411784 / 768,
+          src: "exact",
+        },
+        tablespoon: {
+          label: "US tablespoon (tbsp)",
+          symbol: "tbsp",
+          factor: 0.001 * 3.785411784 / 256,
+          src: "exact",
+        },
+        fluidounce: {
+          label: "US fluid ounce (fl oz)",
+          symbol: "fl oz",
+          factor: 0.001 * 3.785411784 / 128,
+          src: "exact",
+        },
+        cup: {
+          label: "US cup",
+          symbol: "cup",
+          factor: 0.001 * 3.785411784 / 16,
+          src: "exact",
+        },
+        pint: {
+          label: "US pint (pt)",
+          symbol: "pt",
+          factor: 0.001 * 3.785411784 / 8,
+          src: "exact",
+        },
+        quart: {
+          label: "US quart (qt)",
+          symbol: "qt",
+          factor: 0.001 * 3.785411784 / 4,
+          src: "exact",
+        },
+        gallon: { label: "US gallon (gal)", symbol: "gal", factor: 0.001 * 3.785411784, src: "exact" },
+        imperialgallon: {
+          label: "Imperial gallon (imp gal)",
+          symbol: "imp gal",
+          factor: 0.00454609,
+          src: "exact",
+        },
+      },
+    },
+    area: {
+      label: "Area",
+      base: "squaremeter",
+      units: {
+        squaremillimeter: { label: "Square millimeter (mm²)", symbol: "mm²", factor: 1e-6, src: "exact" },
+        squarecentimeter: { label: "Square centimeter (cm²)", symbol: "cm²", factor: 0.0001, src: "exact" },
+        squaremeter: { label: "Square meter (m²)", symbol: "m²", factor: 1, src: "exact" },
+        hectare: { label: "Hectare (ha)", symbol: "ha", factor: 10000, src: "exact" },
+        squarekilometer: { label: "Square kilometer (km²)", symbol: "km²", factor: 1e6, src: "exact" },
+        squareinch: { label: "Square inch (in²)", symbol: "in²", factor: 0.00064516, src: "exact" },
+        squarefoot: { label: "Square foot (ft²)", symbol: "ft²", factor: 0.09290304, src: "exact" },
+        squareyard: { label: "Square yard (yd²)", symbol: "yd²", factor: 0.83612736, src: "exact" },
+        acre: { label: "Acre (ac)", symbol: "ac", factor: 4046.8564224, src: "exact" },
+        squaremile: { label: "Square mile (mi²)", symbol: "mi²", factor: 2589988.110336, src: "exact" },
+      },
+    },
+    speed: {
+      label: "Speed",
+      base: "mps",
+      units: {
+        mps: { label: "Meters per second (m/s)", symbol: "m/s", factor: 1, src: "exact" },
+        kph: { label: "Kilometers per hour (km/h)", symbol: "km/h", factor: 1 / 3.6, src: "exact" },
+        mph: { label: "Miles per hour (mph)", symbol: "mph", factor: 1609.344 / 3600, src: "exact" },
+        knot: { label: "Knot (kn)", symbol: "kn", factor: 1852 / 3600, src: "exact" },
+        fps: { label: "Feet per second (ft/s)", symbol: "ft/s", factor: 0.3048, src: "exact" },
+        mach: { label: "Mach (at 15 °C sea level)", symbol: "Ma", factor: 340.3, src: "conventional" },
+      },
+    },
+    temperature: {
+      label: "Temperature",
+      base: "celsius",
+      temperature: true,
+      units: {
+        celsius: { label: "Celsius (°C)", symbol: "°C", factor: 1, src: "offset scale" },
+        fahrenheit: { label: "Fahrenheit (°F)", symbol: "°F", factor: 1, src: "offset scale" },
+        kelvin: { label: "Kelvin (K)", symbol: "K", factor: 1, src: "offset scale" },
+      },
+    },
+    data: {
+      label: "Data size",
+      base: "byte",
+      units: {
+        bit: { label: "Bit (b)", symbol: "b", factor: 0.125, src: "exact" },
+        byte: { label: "Byte (B)", symbol: "B", factor: 1, src: "exact" },
+        kilobyte: { label: "Kilobyte (kB, 1 000 B)", symbol: "kB", factor: 1000, src: "SI decimal" },
+        kibibyte: { label: "Kibibyte (KiB, 1 024 B)", symbol: "KiB", factor: 1024, src: "IEC binary" },
+        megabyte: { label: "Megabyte (MB, 1 000 000 B)", symbol: "MB", factor: 1e6, src: "SI decimal" },
+        mebibyte: { label: "Mebibyte (MiB, 1 048 576 B)", symbol: "MiB", factor: 1024 ** 2, src: "IEC binary" },
+        gigabyte: { label: "Gigabyte (GB, 10⁹ B)", symbol: "GB", factor: 1e9, src: "SI decimal" },
+        gibibyte: { label: "Gibibyte (GiB, 2³⁰ B)", symbol: "GiB", factor: 1024 ** 3, src: "IEC binary" },
+        terabyte: { label: "Terabyte (TB, 10¹² B)", symbol: "TB", factor: 1e12, src: "SI decimal" },
+        tebibyte: { label: "Tebibyte (TiB, 2⁴⁰ B)", symbol: "TiB", factor: 1024 ** 4, src: "IEC binary" },
+      },
+    },
+    time: {
+      label: "Time",
+      base: "second",
+      units: {
+        millisecond: { label: "Millisecond (ms)", symbol: "ms", factor: 0.001, src: "exact" },
+        second: { label: "Second (s)", symbol: "s", factor: 1, src: "exact" },
+        minute: { label: "Minute (min)", symbol: "min", factor: 60, src: "exact" },
+        hour: { label: "Hour (h)", symbol: "h", factor: 3600, src: "exact" },
+        day: { label: "Day (d)", symbol: "d", factor: 86400, src: "exact" },
+        week: { label: "Week (wk)", symbol: "wk", factor: 604800, src: "exact" },
+        month: { label: "Month (average, 30.436875 d)", symbol: "mo", factor: 2629746, src: "average" },
+        year: { label: "Year (365.2425 d)", symbol: "yr", factor: 31556952, src: "average" },
+      },
+    },
+  };
+
+  /* Real offset formulas, not a single multiplier. */
+  function cToF(c) { return c * 9 / 5 + 32; }
+  function fToC(f) { return (f - 32) * 5 / 9; }
+  function cToK(c) { return c + 273.15; }
+  function kToC(k) { return k - 273.15; }
+  function fToK(f) { return cToK(fToC(f)); }
+  function kToF(k) { return cToF(kToC(k)); }
+
+  const TEMP_PAIRS = {
+    "celsius:kelvin": cToK,
+    "celsius:fahrenheit": cToF,
+    "kelvin:celsius": kToC,
+    "kelvin:fahrenheit": kToF,
+    "fahrenheit:celsius": fToC,
+    "fahrenheit:kelvin": fToK,
+  };
+
+  function convertTemperature(value, from, to) {
+    if (from === to) return value;
+    const fn = TEMP_PAIRS[from + ":" + to];
+    if (!fn) return NaN;
+    const result = fn(value);
+    /* Reject results below absolute zero rather than printing a nonsense number. */
+    if (!Number.isFinite(result)) return NaN;
+    if (to === "celsius" && result < -273.15 - 1e-9) return NaN;
+    if (to === "fahrenheit" && result < -459.67 - 1e-9) return NaN;
+    if (to === "kelvin" && result < -1e-9) return NaN;
+    return result;
+  }
+
+  /* ------------------------------------------- output number formatting */
+
+  function trimZeros(text) {
+    if (text.indexOf(".") < 0) return text;
+    return text.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function groupThousands(intPart) {
+    return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202F");
+  }
+
+  /*
+   * Round to 12 significant digits — short of the 15-17 a double can carry, so
+   * binary noise such as 0.30000000000000004 collapses to 0.3 — then print
+   * plainly, or in exponent form when the magnitude would be unreadable.
+   */
+  function formatNumber(value) {
+    if (Number.isNaN(value)) return "—";
+    if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
+    if (value === 0) return "0";
+    const neg = value < 0;
+    const abs = Math.abs(value);
+    if (!(abs >= 1e-9 && abs < 1e15)) {
+      const parts = abs.toExponential(9).split("e");
+      const mantissa = trimZeros(Number(parts[0]).toFixed(9));
+      return `${neg ? "-" : ""}${mantissa} × 10^${Number(parts[1])}`;
+    }
+    const rounded = Number(abs.toPrecision(12));
+    const digits = Math.max(0, Math.min(20, 11 - Math.floor(Math.log10(rounded))));
+    const fixed = trimZeros(rounded.toFixed(digits));
+    const dot = fixed.indexOf(".");
+    const out =
+      dot < 0 ? groupThousands(fixed) : groupThousands(fixed.slice(0, dot)) + fixed.slice(dot);
+    return neg ? "-" + out : out;
+  }
+
+  function parseValue(raw) {
+    const cleaned = String(raw).replace(/[\s\u00A0\u202F\u2009]/g, "").replace(/,/g, "");
+    if (cleaned === "" || cleaned === "-" || cleaned === "." || cleaned === "-.") return NaN;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  /* ------------------------------------------- base-unit conversion engine */
+
+  function convertLinear(value, from, to, cat) {
+    const a = cat.units[from];
+    const b = cat.units[to];
+    if (!a || !b) return NaN;
+    return (value * a.factor) / b.factor;
+  }
+
+  function toBase(value, key, cat) {
+    if (cat.temperature) {
+      return key === "celsius" ? value : convertTemperature(value, key, "celsius");
+    }
+    return value * cat.units[key].factor;
+  }
+
+  function fromBase(base, key, cat) {
+    if (cat.temperature) {
+      return key === "celsius" ? base : convertTemperature(base, "celsius", key);
+    }
+    return base / cat.units[key].factor;
+  }
+
+  function describeFactor(key, cat) {
+    const unit = cat.units[key];
+    if (cat.temperature) {
+      if (key === cat.base) return "reference scale";
+      if (key === "fahrenheit") return "1 °F = 5/9 °C";
+      return "1 K = 1 °C";
+    }
+    const baseKey = cat.base;
+    const baseUnit = cat.units[baseKey];
+    const perOne = unit.factor / baseUnit.factor;
+    const oneIs = 1 / perOne;
+    const ratio =
+      perOne >= 1 && perOne < 1e15
+        ? `1 ${unit.symbol} = ${formatNumber(perOne)} ${baseUnit.symbol}`
+        : `1 ${baseUnit.symbol} = ${formatNumber(oneIs)} ${unit.symbol}`;
+    const note = unit.src && unit.src !== "exact" ? ` · ${unit.src}` : "";
+    return ratio + note;
+  }
+
+  /* ------------------------------------------------------------------- state */
+
+  const root = document.querySelector(".uc");
+  if (root) {
+    const catSel = root.querySelector("#uc-cat");
+    const amountEl = root.querySelector("#uc-amount");
+    const fromSel = root.querySelector("#uc-from");
+    const toSel = root.querySelector("#uc-to");
+    const resultEl = root.querySelector("#uc-result-display");
+    const hintEl = root.querySelector("#uc-hint");
+    const liveEl = root.querySelector("[data-live]");
+    const tbody = root.querySelector("[data-tbody]");
+    const swapBtn = root.querySelector(".uc__swap");
+    const tableTitle = root.querySelector(".uc__tabletitle");
+    const current = { from: "meter", to: "foot" };
+
+    function fillSelect(sel, cat, keep) {
+      sel.textContent = "";
+      Object.keys(cat.units).forEach((key) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = cat.units[key].label;
+        sel.append(opt);
+      });
+      const first = Object.keys(cat.units)[0];
+      sel.value = cat.units[keep] ? keep : first;
+      return sel.value;
+    }
+
+    /*
+     * Round-trip through the category base unit. Exact definitions are not
+     * associative in floating point, so a check like this is how a wrong or
+     * mis-typed factor would show up rather than hiding in a plausible answer.
+     */
+    function roundTrip(value, from, to, cat) {
+      if (!Number.isFinite(value)) return true;
+      const back = fromBase(toBase(value, from, cat), to, cat);
+      const driveBack = fromBase(toBase(back, to, cat), from, cat);
+      return Math.abs(driveBack - value) <= Math.abs(value) * 1e-12 + 1e-12;
+    }
+
+    function renderTable(value, cat) {
+      tbody.textContent = "";
+      if (Number.isFinite(value) && !roundTrip(value, current.from, current.to, cat)) {
+        console.warn("unit-converter: round-trip check disagreed with the requested conversion");
+      }
+      Object.keys(cat.units).forEach((key) => {
+        const row = document.createElement("tr");
+
+        const nameTh = document.createElement("th");
+        nameTh.setAttribute("scope", "row");
+        nameTh.textContent = cat.units[key].label;
+        const valueTd = document.createElement("td");
+        let shown = NaN;
+        if (cat.temperature) {
+          shown = convertTemperature(value, current.from, key);
+        } else {
+          shown = convertLinear(value, current.from, key, cat);
+        }
+        valueTd.textContent = formatNumber(shown);
+
+        const factorTd = document.createElement("td");
+        factorTd.textContent = describeFactor(key, cat);
+
+        row.append(nameTh, valueTd, factorTd);
+        tbody.append(row);
+      });
+    }
+
+    function render() {
+      const cat = CATEGORIES[catSel.value];
+      if (!cat) return;
+
+      const text = amountEl.value.trim();
+      const value = parseValue(text);
+      const hasValue = text !== "" && Number.isFinite(value);
+
+      tableTitle.textContent = hasValue
+        ? `${formatNumber(value)} ${cat.units[current.from].symbol} in every unit of ${cat.label.toLowerCase()}`
+        : `Every unit of ${cat.label.toLowerCase()}`;
+
+      if (hasValue) {
+        const shown = cat.temperature
+          ? convertTemperature(value, current.from, current.to)
+          : convertLinear(value, current.from, current.to, cat);
+        if (Number.isFinite(shown)) {
+          resultEl.textContent = formatNumber(shown);
+          hintEl.textContent = `${formatNumber(value)} ${cat.units[current.from].label} = ${formatNumber(shown)} ${cat.units[current.to].label}`;
+          liveEl.textContent = `${formatNumber(shown)} ${cat.units[current.to].symbol}`;
+        } else {
+          resultEl.textContent = "—";
+          hintEl.textContent = "That temperature is below absolute zero, so there is no physical answer.";
+          liveEl.textContent = "Value below absolute zero";
+        }
+        renderTable(value, cat);
+      } else if (text === "") {
+        resultEl.textContent = "—";
+        hintEl.textContent = "Type a value to convert.";
+        liveEl.textContent = "";
+        renderTable(NaN, cat);
+      } else {
+        resultEl.textContent = "—";
+        hintEl.textContent = "That is not a number I can read. Use digits, a decimal point and an optional minus sign.";
+        liveEl.textContent = "Not a number";
+        renderTable(NaN, cat);
+      }
+    }
+
+    function loadCategory(catId) {
+      const cat = CATEGORIES[catId];
+      if (!cat) return;
+      const keys = Object.keys(cat.units);
+      let from = current.from;
+      let to = current.to;
+      if (!cat.units[from]) from = cat.base;
+      if (!cat.units[to] || to === from) to = keys.find((k) => k !== from) || cat.base;
+      current.from = fillSelect(fromSel, cat, from);
+      current.to = fillSelect(toSel, cat, to);
+      render();
+    }
+
+    catSel.addEventListener("change", () => loadCategory(catSel.value));
+    amountEl.addEventListener("input", render);
+    fromSel.addEventListener("change", () => {
+      current.from = fromSel.value;
+      if (current.to === current.from) {
+        const keys = Object.keys(CATEGORIES[catSel.value].units);
+        current.to = keys.find((k) => k !== current.from) || current.from;
+        toSel.value = current.to;
+      }
+      render();
+    });
+    toSel.addEventListener("change", () => {
+      current.to = toSel.value;
+      if (current.to === current.from) {
+        const keys = Object.keys(CATEGORIES[catSel.value].units);
+        current.from = keys.find((k) => k !== current.to) || current.to;
+        fromSel.value = current.from;
+      }
+      render();
+    });
+    swapBtn.addEventListener("click", () => {
+      const a = current.from;
+      current.from = current.to;
+      current.to = a;
+      fromSel.value = current.from;
+      toSel.value = current.to;
+      render();
+    });
+
+    loadCategory(catSel.value);
+  }
+</script>

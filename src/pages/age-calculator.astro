@@ -1,0 +1,618 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { allTools } from "../data/tools";
+const tool = allTools.find((t) => t.slug === "age-calculator")!;
+
+const faqs = [
+  {
+    q: "How is my age in years, months and days calculated?",
+    a: "By walking the calendar, not by dividing the number of days lived. The tool adds whole years to your date of birth while they still fit inside the comparison date, then whole months, and finally counts the leftover days one at a time. If you were born on 3 March 1990 and today is 18 July 2025, one year takes you to 3 March 2025, four months take you to 3 July 2025, and fifteen more days land on 18 July — so your age is 35 years, 4 months and 15 days. Months are clamped when the target month is shorter: someone born on 31 January is one month old on 28 February.",
+  },
+  {
+    q: "What happens if I was born on 29 February?",
+    a: "You are still one year older on 1 March in an ordinary year, because that is the day the anniversary legally falls on in most countries that have ruled on it, and the tool counts that way. The tile that reports whether your birth date is a leap day tells you explicitly, and when the next birthday actually falls on 29 February it says so. If you prefer to treat 28 February as your birthday, subtract one from the days-until figure on the 28th; on every other day of a non-leap year the difference is one day either way until you reach 1 March.",
+  },
+  {
+    q: "Why might my age differ from another calculator by a day?",
+    a: "Almost always because of what “today” means. This page reads the clock of the device you are using and interprets both dates in that device's local time zone, so the answer changes at your local midnight rather than at midnight UTC — which can be up to fourteen hours earlier or later. A site running on a server in California, or one that compares UTC dates, can therefore disagree with this page for part of the day, especially if you are far from UTC. Refresh well after midnight if a figure looks stale, and if the date you typed is today, remember that no time is stored: a birth date is treated as the start of that day.",
+  },
+  {
+    q: "Can I use this for a legal, medical or official age?",
+    a: "No. It is a convenience calculator, not an authority. Retirement ages, pension eligibility, school admission cut-offs, minimum ages for driving, consent or employment, and clinical age used for dosing or screening are all defined against a specific clock, often the national time zone and sometimes a specific cut-off date rather than the exact birthday. Where an exact age matters, take this figure as a sanity check and confirm it against the wording of the rule that applies and the time zone it names, or with the issuing institution.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — Date",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date",
+    note: "The reference for the local-time date construction and millisecond arithmetic used here, including why new Date(y, m, d) is preferred to parsing a date string.",
+  },
+  {
+    label: "IANA time zone database (tz database)",
+    href: "https://www.iana.org/time-zones",
+    note: "The authoritative list of time zone offsets and daylight-saving rules, which is why an age can differ by a day depending on the clock and zone the calculation runs in.",
+  },
+  {
+    label: "Wikipedia — ISO 8601",
+    href: "https://en.wikipedia.org/wiki/ISO_8601",
+    note: "Documents the YYYY-MM-DD date format used by the date fields as well as the ISO duration and calendar conventions this page follows.",
+  },
+];
+
+const intro =
+  "Turn a date of birth into an exact age in years, months and days, plus totals in days, weeks, hours and minutes, the weekday you were born and a countdown to your next birthday.";
+---
+
+<ToolLayout tool={tool} intro={intro} faqs={faqs} sources={sources}>
+  <Fragment slot="tool">
+    <div class="panel age">
+      <div class="panel__body">
+        <fieldset class="fieldset">
+          <legend>Your dates</legend>
+          <div class="field-grid">
+            <div class="field">
+              <label for="age-dob">Date of birth</label>
+              <input id="age-dob" type="date" autocomplete="bday" max="9999-12-31" data-dob />
+            </div>
+            <div class="field">
+              <label for="age-asof">Age as of <span class="hint">(leave empty to use today)</span></label>
+              <input id="age-asof" type="date" autocomplete="off" max="9999-12-31" data-asof />
+            </div>
+          </div>
+          <div class="age__controls">
+            <button type="button" class="btn btn--ghost btn--sm" data-today>Use today</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-clear>Clear the as-of date</button>
+            <button type="button" class="btn btn--primary btn--sm" data-copy>Copy result</button>
+            <span class="age__copied" role="status" aria-live="polite" data-copied></span>
+          </div>
+        </fieldset>
+
+        <div class="age__out">
+          <p class="result-box age__summary" role="status" aria-live="polite" data-summary></p>
+
+          <div class="stat-grid age__stats" data-stats></div>
+
+          <div class="callout age__leap" data-leap-box hidden>
+            <p data-leap-note></p>
+          </div>
+
+          <p class="age__detail" data-detail></p>
+        </div>
+      </div>
+      <div class="panel__foot">
+        The result follows the clock and time zone of the device you are using, and updates the moment
+        you change either date. Nothing is stored or sent anywhere.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How it works</h2>
+  <p>
+    Two dates drive everything. <strong>Date of birth</strong> is the only required one, and
+    <strong>age as of</strong> is the date you want the age measured against. Left empty it means
+    today, read from your device clock the moment the page loads; fill it in and you can find out how
+    old someone was on a past date, or will be on a future one, which is useful for forms with a
+    cut-off date, for marking a milestone, or for working out an age at a specific event.
+  </p>
+  <p>
+    The headline age is a calendar difference, not a division. Starting at the date of birth, the tool
+    adds whole years while they still fit inside the comparison date, then whole months, and finally
+    counts the remaining days one by one. That is the borrowing a person does when they say "thirty-five
+    years, four months and fifteen days". When a month is shorter than the day number you were born on,
+    the step is clamped to the end of that month, so 31 January plus one month is 28 February in an
+    ordinary year and 29 February in a leap year.
+  </p>
+  <p>
+    The totals come from a separate calculation: the exact number of milliseconds between the two dates,
+    converted to days, weeks, hours and minutes. A birth date is treated as the very start of that day,
+    so the figures represent complete elapsed time rather than a rounded guess. This is why the totals
+    tile and the years/months/days tile can only ever agree to within a day or so — they answer
+    different questions. The weekday you were born comes from the browser's own calendar, and the
+    countdown to your next birthday simply finds the next occurrence of your birth month and day and
+    measures the distance to it.
+  </p>
+  <p>
+    No date library is loaded and no network request is made. Plain <code>Date</code> arithmetic builds
+    each date with <code>new Date(y, m, d)</code> so everything stays on your local calendar, and no
+    date string is ever handed to <code>Date.parse</code>, which would risk an off-by-one from UTC
+    interpretation.
+  </p>
+
+  <h2>The leap-day case, and what "correct" means here</h2>
+  <p>
+    Someone born on 29 February has no birthday in three years out of four, and different places
+    resolve that differently. Most legal systems that have addressed it treat the anniversary as
+    falling on 1 March in an ordinary year, which is also the day that is exactly one calendar year
+    after the birth date; a minority, and many everyday usages, prefer 28 February as the last day of
+    the birth month. This page follows the 1 March convention for the countdown and says so explicitly
+    when it applies. The leap-day tile tells you plainly whether the date of birth is 29 February, and
+    the detailed line names the date and weekday of the next birthday so there is never any doubt about
+    which day was used.
+  </p>
+  <p>
+    Two smaller limits are worth stating plainly. Ages before the Gregorian calendar was adopted, and
+    dates far in the past or future, rely on the browser's proleptic Gregorian implementation, which
+    can differ from historical records by the days that were skipped at the reform. And a birth date
+    is treated as midnight, so a person born at 23:50 and someone born at 00:10 the same day are the
+    same age here — the tool has no time of birth to work with.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      This page is not a legal, medical or administrative authority. Eligibility ages, pension and
+      benefit cut-offs, school entry dates and clinical age are defined by specific rules, often pinned
+      to a national time zone or a fixed annual cut-off rather than to the exact birthday. Treat the
+      figure here as a quick check and confirm anything official with the body that sets the rule.
+    </p>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li>
+      Enter the date of birth in the first field. The figures appear immediately and recalculate as you
+      change any field — there is no button to press.
+    </li>
+    <li>
+      Leave <strong>age as of</strong> empty to measure against today, or type a date to measure against
+      that day instead. <strong>Use today</strong> refills it, <strong>Clear the as-of date</strong>
+      puts it back to today's live clock.
+    </li>
+    <li>
+      Read the headline sentence first: it states the age in years, months and days and names the date
+      it was measured on. The tiles underneath break the same interval into totals.
+    </li>
+    <li>
+      Check the tiles that answer the questions people usually actually have — the weekday of birth for
+      a bit of trivia, the next birthday and the number of days until it for planning, and the leap-day
+      note if the birth date is 29 February.
+    </li>
+    <li>
+      Press <strong>Copy result</strong> to put a plain-text summary on your clipboard: the age, the
+      measurement date, the weekday of birth, the next birthday and the total days. It is handy for
+      pasting into a form, an email or a note. If your browser blocks clipboard access, the button says
+      so and you can select the text on screen instead.
+    </li>
+  </ol>
+  <p>
+    For a birthday countdown that stays accurate, leave the as-of field empty. The page reads your
+    device clock once when it loads, so reopening or refreshing it tomorrow gives the countdown as of
+    tomorrow rather than a stale figure.
+  </p>
+</ToolLayout>
+
+<style>
+  .age__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1rem;
+  }
+  .age__copied {
+    font-size: 0.85rem;
+    color: var(--ok);
+    min-height: 1.2em;
+    overflow-wrap: anywhere;
+  }
+  .age__copied[data-state="bad"] {
+    color: var(--danger);
+  }
+  .age__out {
+    margin-top: 1.3rem;
+  }
+  .age__summary {
+    margin: 0 0 1rem;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+  .age__leap {
+    margin-top: 1rem;
+  }
+  .age__detail {
+    margin: 0.9rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+  .age .hint {
+    font-weight: 500;
+    color: var(--text-faint);
+  }
+  @media (max-width: 400px) {
+    .age__controls {
+      gap: 0.5rem;
+    }
+    .age__controls .btn {
+      flex: 1 1 auto;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    const root = document.querySelector(".age");
+    if (!root) return;
+
+    const dobEl = root.querySelector("[data-dob]");
+    const asOfEl = root.querySelector("[data-asof]");
+    const summaryEl = root.querySelector("[data-summary]");
+    const statsEl = root.querySelector("[data-stats]");
+    const detailEl = root.querySelector("[data-detail]");
+    const copiedEl = root.querySelector("[data-copied]");
+    const leapBox = root.querySelector("[data-leap-box]");
+    const leapNote = root.querySelector("[data-leap-note]");
+    const copyBtn = root.querySelector("[data-copy]");
+    const todayBtn = root.querySelector("[data-today]");
+    const clearBtn = root.querySelector("[data-clear]");
+
+    const MS_DAY = 86400000;
+    const MS_HOUR = 3600000;
+    const MS_MINUTE = 60000;
+
+    const MONTHS = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ];
+    const WEEKDAYS = [
+      "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    ];
+
+    let lastCopyText = "";
+
+    /* ---------------------------------------------------------------- dates */
+
+    function pad2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function makeDate(y, m, d) {
+      return new Date(y, m, d, 0, 0, 0, 0);
+    }
+
+    function parseYmd(value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+      if (!match) return null;
+      const y = Number(match[1]);
+      const m = Number(match[2]);
+      const d = Number(match[3]);
+      if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+      const date = makeDate(y, m - 1, d);
+      if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+      return date;
+    }
+
+    function isLeapYear(y) {
+      return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    }
+
+    function lastDayOfMonth(y, m) {
+      return new Date(y, m + 1, 0).getDate();
+    }
+
+    function addMonthsClamped(date, months) {
+      const y = date.getFullYear();
+      const m = date.getMonth() + months;
+      const targetY = y + Math.floor(m / 12);
+      const targetM = ((m % 12) + 12) % 12;
+      const day = Math.min(date.getDate(), lastDayOfMonth(targetY, targetM));
+      return makeDate(targetY, targetM, day);
+    }
+
+    function addDays(date, days) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, 0, 0, 0, 0);
+    }
+
+    function compareDay(a, b) {
+      const av = a.getFullYear() * 10000 + (a.getMonth() + 1) * 100 + a.getDate();
+      const bv = b.getFullYear() * 10000 + (b.getMonth() + 1) * 100 + b.getDate();
+      return av === bv ? 0 : av < bv ? -1 : 1;
+    }
+
+    function formatLong(date) {
+      return date.getDate() + " " + MONTHS[date.getMonth()] + " " + date.getFullYear();
+    }
+
+    function formatNumber(value) {
+      return Number(value).toLocaleString("en-GB", { maximumFractionDigits: 0 });
+    }
+
+    function plural(n, word) {
+      return n + " " + word + (n === 1 ? "" : "s");
+    }
+
+    /* Calendar age: whole years, whole months, then leftover days. */
+    function borrowCalendar(from, to) {
+      if (compareDay(from, to) > 0) return { years: 0, months: 0, days: 0 };
+
+      let months =
+        (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+      if (months < 0) months = 0;
+
+      let anchor = addMonthsClamped(from, months);
+      while (months > 0 && compareDay(anchor, to) > 0) {
+        months--;
+        anchor = addMonthsClamped(from, months);
+      }
+
+      let days = 0;
+      let cursor = anchor;
+      while (compareDay(cursor, to) < 0) {
+        cursor = addDays(cursor, 1);
+        days++;
+        if (days > 400) break;
+      }
+
+      return { years: Math.floor(months / 12), months: months % 12, days: days };
+    }
+
+    function breakdownText(years, months, days) {
+      const parts = [];
+      if (years > 0) parts.push(plural(years, "year"));
+      if (months > 0) parts.push(plural(months, "month"));
+      if (days > 0 || parts.length === 0) parts.push(plural(days, "day"));
+      if (parts.length === 1) return parts[0];
+      if (parts.length === 2) return parts[0] + " and " + parts[1];
+      return parts[0] + ", " + parts[1] + " and " + parts[2];
+    }
+
+    /* -------------------------------------------------------------- stats */
+
+    function makeStat(label) {
+      const wrap = document.createElement("div");
+      wrap.className = "stat";
+      const valueWrap = document.createElement("div");
+      valueWrap.className = "stat__value";
+      const value = document.createElement("span");
+      value.setAttribute("data-value", "");
+      valueWrap.appendChild(value);
+      const labelEl = document.createElement("div");
+      labelEl.className = "stat__label";
+      labelEl.textContent = label;
+      wrap.append(valueWrap, labelEl);
+      return { wrap: wrap, value: value };
+    }
+
+    const STATS = [
+      { key: "age", label: "Age (years, months, days)" },
+      { key: "days", label: "Total days" },
+      { key: "weeks", label: "Total weeks" },
+      { key: "hours", label: "Total hours" },
+      { key: "minutes", label: "Total minutes" },
+      { key: "born", label: "Born on a" },
+      { key: "next", label: "Next birthday" },
+      { key: "until", label: "Days until next birthday" },
+      { key: "leap", label: "Leap day birth" },
+    ];
+
+    const statNodes = {};
+    STATS.forEach(function (entry) {
+      const node = makeStat(entry.label);
+      statNodes[entry.key] = node.value;
+      statsEl.appendChild(node.wrap);
+    });
+
+    function setStat(key, text, unit) {
+      const node = statNodes[key];
+      if (!node) return;
+      node.textContent = "";
+      node.appendChild(document.createTextNode(text));
+      if (unit) {
+        const small = document.createElement("small");
+        small.textContent = " " + unit;
+        node.appendChild(small);
+      }
+    }
+
+    function blank(message) {
+      summaryEl.textContent = message;
+      STATS.forEach(function (entry) {
+        setStat(entry.key, "—");
+      });
+      detailEl.textContent = "";
+      leapBox.hidden = true;
+      lastCopyText = "";
+      copyBtn.disabled = true;
+    }
+
+    /* --------------------------------------------------------- next birthday */
+
+    /*
+     * The next occurrence of the birth month and day on or after `from`.
+     * For a 29 February birth in a non-leap year the anniversary is taken as
+     * 1 March, the day that is one calendar year after the birth date.
+     */
+    function nextBirthday(dob, from) {
+      const month = dob.getMonth();
+      const day = dob.getDate();
+      let year = from.getFullYear();
+      let date;
+      for (let attempts = 0; attempts < 4; attempts++) {
+        const candidateDay = Math.min(day, lastDayOfMonth(year, month));
+        date = makeDate(year, month, candidateDay);
+        if (candidateDay !== day) date = makeDate(year, month + 1, 1);
+        if (compareDay(date, from) >= 0) break;
+        year++;
+      }
+      return date;
+    }
+
+    function birthdayLabel(dob, date) {
+      if (dob.getMonth() === 1 && dob.getDate() === 29 && !(date.getMonth() === 1 && date.getDate() === 29)) {
+        return formatLong(date) + " (29 February is observed on 1 March)";
+      }
+      return formatLong(date);
+    }
+
+    /* ------------------------------------------------------------ compute */
+
+    function todayIso() {
+      const now = new Date();
+      return now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate());
+    }
+
+    function compute() {
+      const dob = parseYmd(dobEl.value);
+      const asOfRaw = parseYmd(asOfEl.value);
+      const today = parseYmd(todayIso());
+      const asOf = asOfRaw || today;
+
+      if (!dob) {
+        blank("Enter a date of birth to see the age.");
+        return;
+      }
+      if (!asOf) {
+        blank("Enter a valid date in the “age as of” field, or clear it to use today.");
+        return;
+      }
+      if (compareDay(asOf, dob) < 0) {
+        blank("The “age as of” date is before the date of birth, so there is no age to report yet.");
+        return;
+      }
+
+      copyBtn.disabled = false;
+
+      const calendar = borrowCalendar(dob, asOf);
+      const deltaMs = asOf.getTime() - dob.getTime();
+      const totalDays = deltaMs / MS_DAY;
+      const totalWeeks = totalDays / 7;
+      const totalHours = deltaMs / MS_HOUR;
+      const totalMinutes = deltaMs / MS_MINUTE;
+
+      const bornDow = WEEKDAYS[dob.getDay()];
+      const isLeapBirth = dob.getMonth() === 1 && dob.getDate() === 29;
+      const next = nextBirthday(dob, asOf);
+      const daysUntil = Math.round((next.getTime() - asOf.getTime()) / MS_DAY);
+
+      setStat("age", breakdownText(calendar.years, calendar.months, calendar.days));
+      setStat("days", formatNumber(totalDays), "days");
+      setStat("weeks", formatNumber(totalWeeks), "weeks");
+      setStat("hours", formatNumber(totalHours), "hours");
+      setStat("minutes", formatNumber(totalMinutes), "minutes");
+      setStat("born", bornDow);
+      setStat("next", formatLong(next) + ", " + WEEKDAYS[next.getDay()]);
+      setStat("until", daysUntil === 0 ? "Today" : formatNumber(daysUntil), daysUntil === 0 ? "" : "days");
+      setStat("leap", isLeapBirth ? "Yes — 29 February" : "No");
+
+      const measuredToday = !asOfRaw;
+      let summary =
+        "Age is " + breakdownText(calendar.years, calendar.months, calendar.days) +
+        " as of " + formatLong(asOf) + (measuredToday ? " (today)" : "") + ".";
+      if (daysUntil === 0) {
+        summary += " Happy birthday — today is the birthday.";
+      } else {
+        summary += " The next birthday is " + birthdayLabel(dob, next) +
+          ", which is " + plural(daysUntil, "day") + " away and falls on a " +
+          WEEKDAYS[next.getDay()] + ".";
+      }
+      summaryEl.textContent = summary;
+
+      if (isLeapBirth) {
+        leapBox.hidden = false;
+        leapNote.textContent =
+          "This date of birth is 29 February, a leap day that exists only in leap years. " +
+          "In an ordinary year the anniversary is taken here as 1 March, the day that is exactly one " +
+          "calendar year after the birth date, which is the rule most legal systems use. Some families " +
+          "and some registers instead treat 28 February as the birthday; if you use that convention, " +
+          "subtract one day from the countdown on 28 February of a non-leap year. The next leap year is " +
+          (isLeapYear(asOf.getFullYear()) ? asOf.getFullYear() : nextLeapYearAfter(asOf.getFullYear())) +
+          ".";
+      } else {
+        leapBox.hidden = true;
+      }
+
+      detailEl.textContent =
+        "Measured on this device's clock and calendar: " + formatLong(dob) + " (" + bornDow + ") to " +
+        formatLong(asOf) + " (" + WEEKDAYS[asOf.getDay()] + "). " +
+        formatNumber(totalDays) + " days lived is " + formatNumber(totalWeeks) + " weeks and " +
+        plural(Math.round(totalDays - Math.floor(totalWeeks) * 7), "day") + " over." +
+        (measuredToday ? " The as-of date defaults to today and is not stored." : "");
+
+      lastCopyText =
+        "Age: " + breakdownText(calendar.years, calendar.months, calendar.days) + "\n" +
+        "Measured as of: " + formatLong(asOf) + " (" + WEEKDAYS[asOf.getDay()] + ")\n" +
+        "Date of birth: " + formatLong(dob) + " (" + bornDow + ")\n" +
+        "Total: " + formatNumber(totalDays) + " days, " + formatNumber(totalWeeks) + " weeks, " +
+        formatNumber(totalHours) + " hours, " + formatNumber(totalMinutes) + " minutes\n" +
+        "Next birthday: " + next.toDateString() + ", " + plural(daysUntil, "day") + " away\n" +
+        "Leap day birth: " + (isLeapBirth ? "yes (29 February)" : "no");
+    }
+
+    function nextLeapYearAfter(year) {
+      let y = year + 1;
+      while (!isLeapYear(y) && y < year + 10) y++;
+      return y;
+    }
+
+    /* ---------------------------------------------------------- clipboard */
+
+    function setCopied(text, state) {
+      copiedEl.textContent = text;
+      if (state) copiedEl.setAttribute("data-state", state);
+      else copiedEl.removeAttribute("data-state");
+    }
+
+    function fallbackCopy(text) {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "readonly");
+      area.setAttribute("aria-hidden", "true");
+      area.style.position = "fixed";
+      area.style.top = "-1000px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      let ok = false;
+      try {
+        area.select();
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      document.body.removeChild(area);
+      return ok;
+    }
+
+    copyBtn.addEventListener("click", function () {
+      if (!lastCopyText) {
+        setCopied("Nothing to copy yet — enter a date of birth first.", "bad");
+        return;
+      }
+      const text = lastCopyText;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(text).then(
+          function () {
+            setCopied("Result copied to the clipboard.", "");
+          },
+          function () {
+            if (fallbackCopy(text)) setCopied("Result copied to the clipboard.", "");
+            else setCopied("Copying was blocked by the browser — select the text on screen instead.", "bad");
+          }
+        );
+        return;
+      }
+      if (fallbackCopy(text)) setCopied("Result copied to the clipboard.", "");
+      else setCopied("Copying was blocked by the browser — select the text on screen instead.", "bad");
+    });
+
+    todayBtn.addEventListener("click", function () {
+      asOfEl.value = todayIso();
+      setCopied("", "");
+      compute();
+    });
+
+    clearBtn.addEventListener("click", function () {
+      asOfEl.value = "";
+      setCopied("", "");
+      compute();
+    });
+
+    dobEl.addEventListener("change", compute);
+    dobEl.addEventListener("input", compute);
+    asOfEl.addEventListener("change", compute);
+    asOfEl.addEventListener("input", compute);
+
+    compute();
+  })();
+</script>
