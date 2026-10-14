@@ -173,6 +173,20 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
   max-width: 62ch;
 }
 
+/* Collective attribution line: never a personal name, always the team. */
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-faint);
+}
+.byline__team { color: var(--text-muted); font-weight: 650; }
+.byline__sep { color: var(--border-strong); }
+.byline time { font-variant-numeric: tabular-nums; }
+
 /* ---------- header ---------- */
 
 .site-header {

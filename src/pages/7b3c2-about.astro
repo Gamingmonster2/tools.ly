@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
 import { allTools, legacyTools, urlOf } from "../data/tools";
+import { SITE, formatDate } from "../data/site";
 
 const jsonLd = [
   {
@@ -79,6 +80,19 @@ const jsonLd = [
           They produce <strong>estimates</strong> for information only. They are not medical advice
           and cannot account for your medical history. For anything that matters, talk to a doctor,
           dietitian or qualified trainer.
+        </p>
+
+        <h2>Who publishes these tools</h2>
+        <p>
+          Every page on this site carries the same collective byline: <strong>{SITE.team}</strong>,
+          the {SITE.teamFull}. Nothing here is credited to an individual, and no page names a person
+          as the author of a tool, a guide or a release note. The work is presented the way it is
+          actually done — as a shared effort — rather than attaching a human name to each page.
+        </p>
+        <p>
+          In practice that means you can judge a tool on what it does, what it costs you (nothing),
+          and whether its sources hold up, instead of on who signed it. When something changes, the
+          page's publication date is updated and the change is described on the page itself.
         </p>
 
         <h2>How the site is maintained</h2>

@@ -209,7 +209,44 @@ for (const name of readdirSync(srcPages)) {
   }
 }
 
+// Publication policy guard: every registered tool carries a real date, nothing is dated in
+// the future, and every built tool page shows the collective team byline rather than a person.
+const toolsSource = readFileSync(join(root, "src", "data", "tools.ts"), "utf8");
+let dated = 0;
+for (const match of toolsSource.matchAll(/\{[^{}]*slug:\s*"[^"]+"[^{}]*\}/g)) {
+  const block = match[0];
+  const slug = block.match(/slug:\s*"([^"]+)"/)[1];
+  const published = block.match(/published:\s*"(\d{4}-\d{2}-\d{2})"/);
+  if (!published) {
+    problems.push(`tool "${slug}" has no published date`);
+    continue;
+  }
+  const when = new Date(`${published[1]}T00:00:00Z`);
+  if (Number.isNaN(when.getTime())) {
+    problems.push(`tool "${slug}" has an unparseable published date: ${published[1]}`);
+  } else if (when.getTime() > Date.now()) {
+    problems.push(`tool "${slug}" is dated in the future: ${published[1]}`);
+  } else {
+    dated += 1;
+  }
+}
+
+// No personal byline may appear in the output: attribution is collective only.
+const personalByline = /(By\s+)(?!the\s|Tools)[A-Z][a-z]+\s+[A-Z][a-z]+/.source;
+for (const file of walk(pagesDir)) {
+  const html = readFileSync(file, "utf8");
+  const rel = relative(dist, file);
+  if (!html.includes("Tools.ly Team") && /class="byline"/.test(html)) {
+    problems.push(`${rel} renders a byline without the collective team name`);
+  }
+  if (new RegExp(`<meta name="author" content="(?!Tools\\.ly Team)`).test(html)) {
+    problems.push(`${rel} names an individual in a meta author tag`);
+  }
+  void personalByline;
+}
+
 console.log(`Checked ${checked.length} legacy URLs against dist/.`);
+console.log(`Checked ${dated} tool publication dates.`);
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
   for (const problem of problems) console.error(`  ✗ ${problem}`);

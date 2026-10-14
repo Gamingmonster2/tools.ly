@@ -1,9 +1,10 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
-import { legacyTools, categories, urlOf } from "../data/tools";
+import { byNewest, categories, urlOf } from "../data/tools";
+import { SITE, formatDate, isoDateTime } from "../data/site";
 
-const sorted = [...legacyTools].sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""));
+const sorted = byNewest();
 
 const jsonLd = [
   {
@@ -12,12 +13,14 @@ const jsonLd = [
     name: "Tools.ly Blog",
     url: "https://tools.ly/7b3c2-blog-archive/",
     description: "Every tool guide and release note published on Tools.ly.",
+    publisher: { "@type": "Organization", name: SITE.name, url: "https://tools.ly/" },
     blogPost: sorted.map((t) => ({
       "@type": "BlogPosting",
       headline: t.title,
       url: new URL(urlOf(t), "https://tools.ly").href,
-      ...(t.updated ? { dateModified: t.updated } : {}),
-      author: { "@type": "Organization", name: "Tools.ly" },
+      datePublished: isoDateTime(t.published, t.publishedTime),
+      ...(t.updated ? { dateModified: isoDateTime(t.updated) } : {}),
+      author: { "@type": "Organization", name: SITE.team, url: "https://tools.ly/" },
     })),
   },
   {
@@ -43,7 +46,8 @@ const jsonLd = [
       <h1>Guides and release notes</h1>
       <p class="lede">
         Every tool page also acts as its own guide: what it does, how the maths works, where the
-        formulas come from and what the results mean. These are the latest entries.
+        formulas come from and what the results mean. Everything here is written and maintained by
+        the {SITE.team}, and new tools are added as they are finished.
       </p>
     </div>
   </div>
@@ -57,12 +61,19 @@ const jsonLd = [
             <article class="card">
               <div class="tag-row" style="margin-bottom:0.6rem">
                 {category && <span class="badge badge--accent">{category.label}</span>}
-                {tool.updated && <span class="badge">Updated {tool.updated}</span>}
+                <span class="badge">
+                  <time datetime={isoDateTime(tool.published, tool.publishedTime)}>
+                    {formatDate(tool.published)}
+                  </time>
+                </span>
               </div>
               <h2 style="margin-bottom:0.4rem">
                 <a href={urlOf(tool)}>{tool.title}</a>
               </h2>
-              <p style="color:var(--text-muted);margin-bottom:0.85rem">{tool.description}</p>
+              <p style="color:var(--text-muted);margin-bottom:0.35rem">{tool.description}</p>
+              <p class="byline" style="margin-top:0">
+                By <span class="byline__team">{SITE.team}</span>
+              </p>
               <a class="btn btn--soft btn--sm" href={urlOf(tool)}>
                 Open the tool <Icon name="arrow" size={15} />
               </a>

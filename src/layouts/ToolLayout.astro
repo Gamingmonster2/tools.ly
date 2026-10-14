@@ -3,6 +3,7 @@ import Base from "./Base.astro";
 import Breadcrumbs from "../components/Breadcrumbs.astro";
 import Icon from "../components/Icon.astro";
 import { relatedTools, urlOf, categories, type Tool } from "../data/tools";
+import { SITE, formatDate, isoDateTime } from "../data/site";
 
 export interface FaqItem {
   q: string;
@@ -40,7 +41,11 @@ const jsonLd: Record<string, unknown>[] = [
     operatingSystem: "Any modern browser",
     description: tool.description,
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    ...(tool.updated ? { dateModified: tool.updated } : {}),
+    // Attribution is always the collective team, never an individual.
+    author: { "@type": "Organization", name: SITE.team, url: new URL("/", Astro.site ?? "https://tools.ly").href },
+    publisher: { "@type": "Organization", name: SITE.name, url: new URL("/", Astro.site ?? "https://tools.ly").href },
+    datePublished: isoDateTime(tool.published, tool.publishedTime),
+    ...(tool.updated ? { dateModified: isoDateTime(tool.updated) } : {}),
   },
   {
     "@context": "https://schema.org",
@@ -81,10 +86,22 @@ const jsonLd: Record<string, unknown>[] = [
       <div class="tag-row" style="margin-bottom:0.65rem">
         {category && <span class="badge badge--accent">{category.label}</span>}
         <span class="badge badge--ok"><Icon name="check" size={13} /> Works offline</span>
-        {tool.updated && <span class="badge">Updated {tool.updated}</span>}
       </div>
       <h1>{tool.title}</h1>
       <p class="lede">{intro ?? tool.description}</p>
+      <p class="byline">
+        By <span class="byline__team">{SITE.team}</span>
+        <span class="byline__sep" aria-hidden="true">·</span>
+        Published <time datetime={isoDateTime(tool.published, tool.publishedTime)}>{formatDate(tool.published)}</time>
+        {
+          tool.updated && tool.updated !== tool.published && (
+            <>
+              <span class="byline__sep" aria-hidden="true">·</span>
+              Updated <time datetime={isoDateTime(tool.updated)}>{formatDate(tool.updated)}</time>
+            </>
+          )
+        }
+      </p>
     </div>
   </div>
 
