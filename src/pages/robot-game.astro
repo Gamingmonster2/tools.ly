@@ -1,0 +1,1198 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find((t) => t.slug === "robot-game")!;
+
+const faqs = [
+  {
+    q: "Does Robo use AI, or send anything to a server?",
+    a: "No. Robo has a fixed list of twelve friendly lines and three yes/no questions, and the two mini-games are generated with plain JavaScript. The page makes no network requests at all: there is no analytics, no API call and no upload. Everything you see is inline SVG, CSS and a small script that runs on your device.",
+  },
+  {
+    q: "Is my friendship level saved?",
+    a: "Yes, but only on this device. Friendship and energy are written to localStorage under a versioned key (toolsly:robot-game:v1) inside a try/catch block, so a browser that blocks storage simply plays without saving. Pressing Reset clears that key after a confirmation. Nothing is ever synced or uploaded.",
+  },
+  {
+    q: "Why did Robo stop responding to my clicks?",
+    a: "Robo runs on energy. Every interaction costs a few percent, and energy regenerates by about one percent every four seconds. When energy is too low, Robo says so instead of reacting. Press Rest to refill the battery to 100 percent instantly, then carry on.",
+  },
+  {
+    q: "Is there sound?",
+    a: "Sound is off by default and stays off until you turn it on with the Sound button. When it is on, the beeps are synthesized on the fly with the Web Audio API — a short oscillator tone with a gain envelope — so no audio file is downloaded and no autoplay is attempted before you ask for it.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Web Audio API",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API",
+    note: "Reference for the oscillators and gain envelope used to synthesize Robo's short beeps without any audio files.",
+  },
+  {
+    label: "MDN — prefers-reduced-motion",
+    href: "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion",
+    note: "The media query the page checks before creating confetti particles, and the rule that collapses the site's CSS animations.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="A tiny friendly robot you can poke, chat with and play two 20-second mini-games with — friendship and energy are saved on your device."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="robo">
+          <div class="robo-confetti" id="roboConfetti" aria-hidden="true"></div>
+
+          <div class="robo-stage">
+            <p class="robo-bubble" id="roboBubble" aria-hidden="true">
+              Hi! I am Robo. Activate me to say hello.
+            </p>
+
+            <button
+              class="robo-btn"
+              id="roboBtn"
+              type="button"
+              aria-label="Interact with Robo the robot"
+            >
+              <svg class="robo-svg" viewBox="0 0 200 320" role="presentation" focusable="false" aria-hidden="true">
+                <g class="robo-float">
+                  <!-- antenna -->
+                  <line x1="100" y1="34" x2="100" y2="14"></line>
+                  <circle cx="100" cy="11" r="6" fill="var(--surface)"></circle>
+                  <path d="M 88 26 Q 100 20 112 26" fill="none"></path>
+                  <path d="M 90 31 Q 100 26 110 31" fill="none" stroke-width="1.5"></path>
+
+                  <!-- ears -->
+                  <rect x="20" y="54" width="16" height="30" rx="6" fill="var(--surface)"></rect>
+                  <rect x="164" y="54" width="16" height="30" rx="6" fill="var(--surface)"></rect>
+                  <line x1="20" y1="64" x2="36" y2="64" stroke-width="1.5"></line>
+                  <line x1="20" y1="74" x2="36" y2="74" stroke-width="1.5"></line>
+                  <line x1="164" y1="64" x2="180" y2="64" stroke-width="1.5"></line>
+                  <line x1="164" y1="74" x2="180" y2="74" stroke-width="1.5"></line>
+
+                  <!-- head -->
+                  <rect x="40" y="32" width="120" height="80" rx="16" fill="var(--surface)"></rect>
+
+                  <!-- eyes -->
+                  <g class="robo-eyes">
+                    <circle cx="72" cy="64" r="11" fill="var(--surface)"></circle>
+                    <circle cx="128" cy="64" r="11" fill="var(--surface)"></circle>
+                    <circle cx="72" cy="64" r="4" fill="currentColor" stroke="none"></circle>
+                    <circle cx="128" cy="64" r="4" fill="currentColor" stroke="none"></circle>
+                  </g>
+
+                  <!-- mouth -->
+                  <path class="robo-mouth" d="M 78 92 Q 100 104 122 92" fill="none"></path>
+
+                  <!-- neck -->
+                  <rect x="90" y="110" width="20" height="16" rx="4" fill="var(--surface)"></rect>
+
+                  <!-- body -->
+                  <rect x="52" y="124" width="96" height="98" rx="16" fill="var(--surface)"></rect>
+
+                  <!-- chest screen -->
+                  <g class="robo-screen" id="roboScreen" data-mode="idle">
+                    <rect class="robo-screen__panel" x="66" y="138" width="68" height="56" rx="9" fill="var(--bg-sunken)"></rect>
+
+                    <g class="robo-screen__state robo-screen__state--idle is-on">
+                      <circle cx="88" cy="160" r="3.5" fill="currentColor" stroke="none"></circle>
+                      <circle cx="112" cy="160" r="3.5" fill="currentColor" stroke="none"></circle>
+                      <path d="M 88 176 Q 100 184 112 176" fill="none" stroke-width="2"></path>
+                    </g>
+
+                    <g class="robo-screen__state robo-screen__state--shape">
+                      <path class="robo-target robo-target--triangle" d="M 100 150 L 113 175 L 87 175 Z" fill="none"></path>
+                      <circle class="robo-target robo-target--circle" cx="100" cy="163" r="12" fill="none"></circle>
+                      <rect class="robo-target robo-target--diamond" x="91" y="154" width="18" height="18" rx="2" transform="rotate(45 100 163)" fill="none"></rect>
+                    </g>
+
+                    <g class="robo-screen__state robo-screen__state--math">
+                      <text class="robo-screen__text" id="roboMathText" x="100" y="172" text-anchor="middle">7 + 5</text>
+                    </g>
+
+                    <g class="robo-screen__state robo-screen__state--mark">
+                      <text class="robo-screen__text robo-screen__text--mark" id="roboMarkText" x="100" y="174" text-anchor="middle">&#10003;</text>
+                    </g>
+                  </g>
+
+                  <!-- body lights -->
+                  <circle cx="78" cy="208" r="2.5" fill="currentColor" stroke="none"></circle>
+                  <circle cx="100" cy="208" r="2.5" fill="currentColor" stroke="none"></circle>
+                  <circle cx="122" cy="208" r="2.5" fill="currentColor" stroke="none"></circle>
+
+                  <!-- left arm -->
+                  <g class="robo-arm robo-arm--left">
+                    <path d="M 54 140 Q 30 156 26 192" fill="none"></path>
+                    <line x1="46" y1="146" x2="40" y2="149" stroke-width="1.5"></line>
+                    <line x1="34" y1="160" x2="28" y2="164" stroke-width="1.5"></line>
+                    <circle cx="26" cy="194" r="7" fill="var(--surface)"></circle>
+                  </g>
+
+                  <!-- right arm -->
+                  <g class="robo-arm robo-arm--right">
+                    <path d="M 146 140 Q 170 156 174 192" fill="none"></path>
+                    <line x1="154" y1="146" x2="160" y2="149" stroke-width="1.5"></line>
+                    <line x1="166" y1="160" x2="172" y2="164" stroke-width="1.5"></line>
+                    <circle cx="174" cy="194" r="7" fill="var(--surface)"></circle>
+                  </g>
+
+                  <!-- legs -->
+                  <path d="M 80 222 L 69 268" fill="none"></path>
+                  <path d="M 120 222 L 131 268" fill="none"></path>
+                  <line x1="77" y1="232" x2="69" y2="232" stroke-width="1.5"></line>
+                  <line x1="123" y1="232" x2="131" y2="232" stroke-width="1.5"></line>
+                  <rect x="52" y="266" width="36" height="17" rx="8" fill="var(--surface)"></rect>
+                  <rect x="112" y="266" width="36" height="17" rx="8" fill="var(--surface)"></rect>
+                </g>
+              </svg>
+            </button>
+
+            <p class="robo-hint-inline">
+              Click or tap the robot, or focus it and press <kbd>Space</kbd> / <kbd>Enter</kbd>.
+            </p>
+          </div>
+
+          <div class="robo-side stack" style="--gap:1rem">
+            <div class="stat-grid">
+              <div class="stat">
+                <div class="stat__label">Friendship</div>
+                <div class="stat__value readout"><span id="friendVal">0</span><small>%</small></div>
+                <div
+                  class="robo-bar"
+                  id="friendBar"
+                  role="progressbar"
+                  aria-label="Friendship level"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="0"
+                >
+                  <span class="robo-bar__fill" id="friendFill"></span>
+                </div>
+              </div>
+
+              <div class="stat">
+                <div class="stat__label">Energy</div>
+                <div class="stat__value readout"><span id="energyVal">100</span><small>%</small></div>
+                <div
+                  class="robo-bar robo-bar--energy"
+                  id="energyBar"
+                  role="progressbar"
+                  aria-label="Energy level"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="100"
+                >
+                  <span class="robo-bar__fill" id="energyFill"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="robo-prompt" id="roboPrompt" hidden>
+              <div class="robo-prompt__row">
+                <strong id="roboPromptLabel">Shape match</strong>
+                <span class="readout" id="roboTimer">20.0 s</span>
+              </div>
+              <div class="robo-bar robo-bar--timer" aria-hidden="true">
+                <span class="robo-bar__fill" id="roboTimerFill"></span>
+              </div>
+              <p class="robo-prompt__text" id="roboPromptText"></p>
+              <div class="robo-choices" id="roboChoices"></div>
+            </div>
+
+            <div class="robo-controls">
+              <button class="btn btn--primary" id="restBtn" type="button">Rest</button>
+              <button class="btn btn--soft" id="shapeBtn" type="button">Shape match</button>
+              <button class="btn btn--soft" id="mathBtn" type="button">Quick math</button>
+              <button class="btn btn--ghost" id="soundBtn" type="button" aria-pressed="false">Sound: off</button>
+              <button class="btn btn--ghost" id="resetBtn" type="button">Reset</button>
+            </div>
+
+            <p class="robo-note">
+              Each interaction costs energy, and energy regenerates slowly on its own. The two
+              mini-games last 20 seconds each; correct answers raise the friendship level.
+            </p>
+          </div>
+
+          <p class="sr-only" id="roboLive" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="panel__foot">
+        Robo is a scripted toy, not an assistant: the lines are fixed, the mini-games are short
+        practice rounds, and friendship and energy are stored only in this browser.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How to play</h2>
+  <p>
+    Robo is a single button with a small state machine behind it. There is nothing to install and
+    nothing to sign up for — the whole toy lives in this page.
+  </p>
+  <ol>
+    <li>
+      <strong>Say hello.</strong> Click or tap the robot. With a keyboard, focus the robot and press
+      <kbd>Space</kbd> or <kbd>Enter</kbd> — it is a real button, so both work by default.
+    </li>
+    <li>
+      <strong>Watch the reaction.</strong> Each activation rolls one of four outcomes: Robo waves,
+      Robo says one of twelve friendly lines, Robo asks a yes/no question, or Robo starts one of the
+      two mini-games.
+    </li>
+    <li>
+      <strong>Answer when asked.</strong> Yes/no questions and mini-game rounds render real buttons
+      under the stats. Pick one; feedback appears on the chest screen and in the announcement region.
+    </li>
+    <li>
+      <strong>Play a round.</strong> <em>Shape match</em> shows a target shape on the chest screen and
+      asks you to tap the matching name; <em>Quick math</em> shows a small addition or subtraction and
+      offers four answers. Both last 20 seconds and count how many you get right.
+    </li>
+    <li>
+      <strong>Mind the battery.</strong> Every interaction costs a few percent of energy and energy
+      trickles back up by about one percent every four seconds. When it is too low, Robo refuses to
+      play until you press <strong>Rest</strong>, which refills it to 100 percent.
+    </li>
+    <li>
+      <strong>Track the friendship bar.</strong> Warm greetings, good answers and finished rounds
+      raise friendship towards 100 percent. It is flavour, not a score you can lose — wrong answers
+      cost you nothing but the time on the clock.
+    </li>
+    <li>
+      <strong>Clear it if you want.</strong> <strong>Reset</strong> asks for confirmation and then
+      deletes the saved friendship and energy from this browser.
+    </li>
+  </ol>
+
+  <h2>What the mini-games teach</h2>
+  <p>
+    Honestly: not much, and that is fine. Both mini-games are 20-second warm-ups rather than a
+    curriculum. <em>Shape match</em> is simple visual matching — a triangle, a circle or a diamond is
+    drawn on the chest screen and you pick the matching word, which is light practice at holding a
+    shape in mind while scanning a row of options. <em>Quick math</em> is single-digit addition and
+    subtraction with four choices, the kind of arithmetic you already do when splitting a bill.
+  </p>
+  <p>
+    Neither game adapts its difficulty, tracks accuracy over time, or claims to improve anything
+    measurable. There are no levels, streaks or rewards beyond the friendship bar going up, and the
+    answers are generated fresh each round with no stored history. Treat the whole page as a
+    two-minute break: the interesting part is the interaction loop, not the difficulty.
+  </p>
+
+  <h2>Accessibility and reduced motion</h2>
+  <p>
+    Every control on this page is a real <code>&lt;button&gt;</code> element, so it is reachable with
+    <kbd>Tab</kbd>, activates with <kbd>Space</kbd> or <kbd>Enter</kbd>, and shows the site's normal
+    focus ring. The robot itself is one labelled button; the drawing inside it is decorative and
+    hidden from assistive technology, so screen-reader users hear "Interact with Robo the robot"
+    rather than a pile of shapes.
+  </p>
+  <p>
+    State changes are written to a visually hidden <code>aria-live="polite"</code> region: "Robo waves
+    at you", "Correct! Friendship 42 percent", "Not quite. The answer was 9". The visible speech
+    bubble carries the same text but is marked <code>aria-hidden</code> so nothing is announced twice.
+    The two progress bars expose <code>role="progressbar"</code> with live
+    <code>aria-valuenow</code> values, and the sound toggle reports its state with
+    <code>aria-pressed</code>.
+  </p>
+  <p>
+    The page respects <code>prefers-reduced-motion: reduce</code> in two ways. The site-wide stylesheet
+    already collapses CSS animations and transitions, and the script additionally checks the media
+    query before creating anything: the confetti burst is skipped entirely rather than merely
+    shortened, and the floating, blinking and waving animations are switched off. Nothing in the game
+    depends on animation — the shapes, the numbers, the timer text and the announcements all carry the
+    same information in static form.
+  </p>
+  <p>
+    The layout is fluid: the robot is an inline SVG that scales with its column and never overflows a
+    360&nbsp;px viewport, the stats stack into a single column, and the answer buttons wrap into a grid
+    of at least 120&nbsp;px. No external assets are loaded — no fonts, images, scripts or audio files —
+    so the toy works fully offline.
+  </p>
+
+</ToolLayout>
+
+<style>
+    .robo {
+      position: relative;
+      display: grid;
+      gap: clamp(1rem, 3vw, 1.75rem);
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+    }
+
+    @media (min-width: 640px) {
+      .robo { grid-template-columns: minmax(0, 250px) minmax(0, 1fr); }
+    }
+
+    .robo-stage { display: grid; gap: 0.75rem; align-content: start; }
+
+    .robo-bubble {
+      position: relative;
+      margin: 0;
+      min-height: 3.75rem;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 0.6rem 0.85rem;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      font-size: 0.925rem;
+      color: var(--text);
+    }
+
+    .robo-bubble::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -6px;
+      width: 11px;
+      height: 11px;
+      background: var(--surface);
+      border-right: 1px solid var(--border-strong);
+      border-bottom: 1px solid var(--border-strong);
+      transform: translateX(-50%) rotate(45deg);
+    }
+
+    .robo-btn {
+      display: block;
+      width: 100%;
+      max-width: 230px;
+      margin-inline: auto;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--text);
+      cursor: pointer;
+      border-radius: var(--radius);
+    }
+
+    .robo-btn:disabled { cursor: not-allowed; opacity: 0.65; }
+
+    .robo-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .robo-screen__text {
+      fill: currentColor;
+      stroke: none;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .robo-screen__text--mark { font-size: 26px; }
+
+    .robo-screen__state { display: none; }
+    .robo-screen__state.is-on { display: block; }
+    .robo-target { display: none; }
+    .robo-target.is-on { display: block; }
+
+    .robo-screen[data-mode="correct"] .robo-screen__text { fill: var(--ok); }
+    .robo-screen[data-mode="wrong"] .robo-screen__text { fill: var(--danger); }
+
+    .robo-float {
+      transform-box: view-box;
+      transform-origin: 100px 160px;
+      animation: robo-float 4.5s ease-in-out infinite;
+    }
+
+    .robo-eyes {
+      transform-box: view-box;
+      transform-origin: 100px 64px;
+      animation: robo-blink 5.5s ease-in-out infinite;
+    }
+
+    .robo-mouth { transform-box: view-box; transform-origin: 100px 96px; }
+
+    .robo-arm { transform-box: view-box; }
+    .robo-arm--left { transform-origin: 54px 140px; }
+    .robo-arm--right { transform-origin: 146px 140px; }
+
+    .robo-btn.is-talking .robo-mouth { animation: robo-talk 0.3s ease-in-out infinite alternate; }
+    .robo-btn.is-waving .robo-arm--right { animation: robo-wave 0.5s ease-in-out 3; }
+    .robo-btn.is-waving .robo-arm--left { animation: robo-wave 0.5s ease-in-out 3 reverse; }
+
+    @keyframes robo-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-7px); }
+    }
+
+    @keyframes robo-blink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.12); }
+    }
+
+    @keyframes robo-talk {
+      from { transform: scaleY(1); }
+      to { transform: scaleY(0.35); }
+    }
+
+    @keyframes robo-wave {
+      0%, 100% { transform: rotate(0deg); }
+      40% { transform: rotate(-24deg); }
+      70% { transform: rotate(6deg); }
+    }
+
+    .robo-hint-inline {
+      margin: 0;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .robo-hint-inline kbd {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      background: var(--bg-sunken);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.05rem 0.3rem;
+    }
+
+    .robo-bar {
+      height: 10px;
+      margin-top: 0.55rem;
+      background: var(--bg-sunken);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      overflow: hidden;
+    }
+
+    .robo-bar__fill {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .robo-bar--energy .robo-bar__fill { background: var(--ok); }
+    .robo-bar--timer .robo-bar__fill { background: var(--warn); }
+
+    .robo-prompt {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem 0.95rem;
+    }
+    .robo-prompt[hidden] { display: none; }
+
+    .robo-prompt__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    .robo-prompt__text {
+      margin: 0.6rem 0 0;
+      font-size: 0.925rem;
+      color: var(--text-muted);
+    }
+
+    .robo-choices {
+      display: grid;
+      gap: 0.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      margin-top: 0.7rem;
+    }
+    .robo-choices:empty { display: none; }
+
+    .robo-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+    .robo-note {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .robo-confetti {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .robo-float,
+      .robo-eyes,
+      .robo-btn.is-talking .robo-mouth,
+      .robo-btn.is-waving .robo-arm--right,
+      .robo-btn.is-waving .robo-arm--left { animation: none; }
+      .robo-bar__fill { transition: none; }
+    }
+  </style>
+
+  <style is:global>
+    .robo-confetti__bit {
+      position: absolute;
+      top: 28%;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      opacity: 0;
+      animation-name: robo-confetti-fall;
+      animation-timing-function: cubic-bezier(0.3, 0.6, 0.5, 1);
+      animation-fill-mode: forwards;
+    }
+
+    @keyframes robo-confetti-fall {
+      0% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg); }
+      100% { opacity: 0; transform: translate3d(var(--dx, 0px), var(--dy, 160px), 0) rotate(var(--rot, 180deg)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .robo-confetti__bit { display: none; }
+    }
+  </style>
+
+  <script>
+    const STORAGE_KEY = "toolsly:robot-game:v1";
+    const FRIEND_MAX = 100;
+    const ENERGY_MAX = 100;
+    const INTERACT_COST = 4;
+    const GAME_COST = 6;
+    const GAME_SECONDS = 20;
+    const REGEN_MS = 4000;
+
+    const LINES = [
+      "Beep boop! All systems happy.",
+      "Hello! I am Robo.",
+      "You look great today.",
+      "My antenna is very proud of me.",
+      "Processing... processing... friend detected.",
+      "I like your keyboard. It clicks nicely.",
+      "Life is better with a full battery.",
+      "01001000 01001001 — that means hi.",
+      "Let's be friends. I already decided.",
+      "I dream of electric confetti.",
+      "Warning: cuteness levels critical.",
+      "You click, therefore I am.",
+    ];
+
+    const QUESTIONS = [
+      {
+        q: "Do you like robots?",
+        yes: "Excellent choice. Friendship approved.",
+        no: "That is fine. I will be patient.",
+      },
+      {
+        q: "Should I wiggle my antenna?",
+        yes: "Wiggling now. Very dignified.",
+        no: "Understood. Antenna stays still.",
+      },
+      {
+        q: "Are you having a good day?",
+        yes: "Then it is a good day for both of us.",
+        no: "I will keep you company anyway.",
+      },
+      {
+        q: "May I tell you a joke?",
+        yes: "My humour is 100 percent recycled, like me.",
+        no: "No joke then. Just quiet beeping.",
+      },
+    ];
+
+    const SHAPES = [
+      { id: "triangle", label: "Triangle" },
+      { id: "circle", label: "Circle" },
+      { id: "diamond", label: "Diamond" },
+    ];
+
+    const state = { friendship: 0, energy: ENERGY_MAX, sound: false };
+
+    const game = { active: false, kind: null, endsAt: 0, timerId: null, score: 0 };
+    let awaitingAnswer = false;
+    let feedbackId = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      bubble: $("roboBubble"),
+      robot: $("roboBtn"),
+      screen: $("roboScreen"),
+      mathText: $("roboMathText"),
+      markText: $("roboMarkText"),
+      friendVal: $("friendVal"),
+      friendFill: $("friendFill"),
+      friendBar: $("friendBar"),
+      energyVal: $("energyVal"),
+      energyFill: $("energyFill"),
+      energyBar: $("energyBar"),
+      prompt: $("roboPrompt"),
+      promptLabel: $("roboPromptLabel"),
+      promptText: $("roboPromptText"),
+      choices: $("roboChoices"),
+      timer: $("roboTimer"),
+      timerFill: $("roboTimerFill"),
+      restBtn: $("restBtn"),
+      shapeBtn: $("shapeBtn"),
+      mathBtn: $("mathBtn"),
+      soundBtn: $("soundBtn"),
+      resetBtn: $("resetBtn"),
+      live: $("roboLive"),
+      confetti: $("roboConfetti"),
+    };
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    /* ---------- persistence (versioned key, never throws) ---------- */
+
+    function loadState() {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (!saved || typeof saved !== "object") return;
+        if (typeof saved.friendship === "number" && Number.isFinite(saved.friendship)) {
+          state.friendship = clamp(Math.round(saved.friendship), 0, FRIEND_MAX);
+        }
+        if (typeof saved.energy === "number" && Number.isFinite(saved.energy)) {
+          state.energy = clamp(Math.round(saved.energy), 0, ENERGY_MAX);
+        }
+      } catch (error) {
+        /* storage blocked or corrupted: the toy still works, it just does not remember */
+      }
+    }
+
+    function saveState() {
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ v: 1, friendship: state.friendship, energy: state.energy })
+        );
+      } catch (error) {
+        /* ignore */
+      }
+    }
+
+    /* ---------- rendering ---------- */
+
+    function render() {
+      els.friendVal.textContent = String(state.friendship);
+      els.friendFill.style.width = state.friendship + "%";
+      els.friendBar.setAttribute("aria-valuenow", String(state.friendship));
+
+      els.energyVal.textContent = String(state.energy);
+      els.energyFill.style.width = state.energy + "%";
+      els.energyBar.setAttribute("aria-valuenow", String(state.energy));
+
+      els.restBtn.disabled = state.energy >= ENERGY_MAX;
+    }
+
+    let liveTimer = null;
+    function announce(message) {
+      window.clearTimeout(liveTimer);
+      els.live.textContent = "";
+      liveTimer = window.setTimeout(() => {
+        els.live.textContent = message;
+      }, 40);
+    }
+
+    function setBubble(text) {
+      els.bubble.textContent = text;
+    }
+
+    function setScreen(mode) {
+      const state_ = mode === "correct" || mode === "wrong" ? "mark" : mode;
+      els.screen.setAttribute("data-mode", mode);
+      const groups = els.screen.querySelectorAll(".robo-screen__state");
+      for (let i = 0; i < groups.length; i += 1) {
+        const group = groups[i];
+        group.classList.toggle(
+          "is-on",
+          group.classList.contains("robo-screen__state--" + state_)
+        );
+      }
+    }
+
+    function addFriendship(amount) {
+      const before = state.friendship;
+      state.friendship = clamp(state.friendship + amount, 0, FRIEND_MAX);
+      const justReachedTop = before < FRIEND_MAX && state.friendship >= FRIEND_MAX;
+      render();
+      saveState();
+      if (justReachedTop) {
+        confetti();
+        beep(1040, 0.16);
+      }
+      return justReachedTop;
+    }
+
+    /* ---------- sound (off by default, synthesized on demand) ---------- */
+
+    let audioCtx = null;
+
+    function beep(frequency, duration, type) {
+      if (!state.sound) return;
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return;
+      try {
+        if (!audioCtx) audioCtx = new Ctor();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const now = audioCtx.currentTime;
+        osc.type = type || "sine";
+        osc.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.07, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.03);
+      } catch (error) {
+        /* audio is a bonus, never a requirement */
+      }
+    }
+
+    /* ---------- confetti (skipped entirely with reduced motion) ---------- */
+
+    function confetti() {
+      if (reduceMotion.matches || !els.confetti) return;
+      const colors = [
+        "var(--accent)",
+        "var(--ok)",
+        "var(--warn)",
+        "var(--danger)",
+        "var(--accent-hover)",
+      ];
+      for (let i = 0; i < 20; i += 1) {
+        const bit = document.createElement("span");
+        bit.className = "robo-confetti__bit";
+        bit.style.left = (8 + Math.random() * 84).toFixed(2) + "%";
+        bit.style.background = colors[i % colors.length];
+        bit.style.setProperty("--dx", (Math.random() * 70 - 35).toFixed(1) + "px");
+        bit.style.setProperty("--dy", (130 + Math.random() * 130).toFixed(0) + "px");
+        bit.style.setProperty("--rot", (Math.random() * 540 - 270).toFixed(0) + "deg");
+        bit.style.animationDelay = (Math.random() * 0.15).toFixed(2) + "s";
+        bit.style.animationDuration = (0.9 + Math.random() * 0.6).toFixed(2) + "s";
+        bit.addEventListener("animationend", () => bit.remove(), { once: true });
+        els.confetti.appendChild(bit);
+      }
+      window.setTimeout(() => {
+        if (els.confetti) els.confetti.textContent = "";
+      }, 2400);
+    }
+
+    /* ---------- shared helpers ---------- */
+
+    function busy() {
+      return game.active || awaitingAnswer;
+    }
+
+    function setBusyControls(on) {
+      els.robot.disabled = on;
+      els.shapeBtn.disabled = on;
+      els.mathBtn.disabled = on;
+    }
+
+    function showPrompt(label, text, withTimer) {
+      els.promptLabel.textContent = label;
+      els.promptText.textContent = text;
+      els.choices.textContent = "";
+      els.timer.textContent = withTimer ? GAME_SECONDS.toFixed(1) + " s" : "—";
+      els.timerFill.style.width = withTimer ? "100%" : "0%";
+      els.prompt.hidden = false;
+    }
+
+    function hidePrompt() {
+      els.prompt.hidden = true;
+      els.choices.textContent = "";
+      els.timerFill.style.width = "0%";
+    }
+
+    function renderChoices(options) {
+      els.choices.textContent = "";
+      options.forEach((option) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn--ghost btn--block";
+        button.textContent = option.label;
+        button.setAttribute("aria-label", option.ariaLabel || option.label);
+        button.addEventListener("click", option.onPick);
+        els.choices.appendChild(button);
+      });
+    }
+
+    function disableChoices() {
+      const buttons = els.choices.querySelectorAll("button");
+      for (let i = 0; i < buttons.length; i += 1) buttons[i].disabled = true;
+    }
+
+    function clearFeedback() {
+      if (feedbackId !== null) {
+        window.clearTimeout(feedbackId);
+        feedbackId = null;
+      }
+    }
+
+    function tired() {
+      setBubble("Battery low... I need a rest. Press Rest to recharge.");
+      announce("Robo is out of energy. Press the Rest button.");
+      beep(220, 0.2, "sawtooth");
+    }
+
+    /* ---------- reactions ---------- */
+
+    let waveId = null;
+
+    function doWave() {
+      els.robot.classList.add("is-waving");
+      window.clearTimeout(waveId);
+      waveId = window.setTimeout(() => els.robot.classList.remove("is-waving"), 1700);
+      setBubble("Robo waves hello!");
+      addFriendship(1);
+      beep(620, 0.1);
+      announce("Robo waves at you. Friendship " + state.friendship + " percent.");
+    }
+
+    let talkId = null;
+
+    function doSpeak() {
+      const line = LINES[Math.floor(Math.random() * LINES.length)];
+      els.robot.classList.add("is-talking");
+      window.clearTimeout(talkId);
+      talkId = window.setTimeout(() => els.robot.classList.remove("is-talking"), 1600);
+      setBubble(line);
+      addFriendship(1);
+      beep(760, 0.09);
+      announce("Robo says: " + line + " Friendship " + state.friendship + " percent.");
+    }
+
+    function doQuestion() {
+      const question = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
+      awaitingAnswer = true;
+      setBusyControls(true);
+      setBubble(question.q);
+      showPrompt("Robo asks", question.q, false);
+      renderChoices([
+        {
+          label: "Yes",
+          ariaLabel: "Answer yes to: " + question.q,
+          onPick: () => answerQuestion(question, true),
+        },
+        {
+          label: "No",
+          ariaLabel: "Answer no to: " + question.q,
+          onPick: () => answerQuestion(question, false),
+        },
+      ]);
+      beep(560, 0.1);
+      announce("Robo asks: " + question.q);
+    }
+
+    function answerQuestion(question, saidYes) {
+      if (!awaitingAnswer) return;
+      awaitingAnswer = false;
+      disableChoices();
+      const reply = saidYes ? question.yes : question.no;
+      els.promptText.textContent = reply;
+      setBubble(reply);
+      addFriendship(3);
+      beep(saidYes ? 880 : 480, 0.12);
+      announce(
+        "You answered " + (saidYes ? "yes" : "no") + ". " + reply +
+          " Friendship " + state.friendship + " percent."
+      );
+      clearFeedback();
+      feedbackId = window.setTimeout(() => {
+        hidePrompt();
+        setScreen("idle");
+        setBusyControls(false);
+      }, 1600);
+    }
+
+    /* ---------- mini-games ---------- */
+
+    function startGame(kind) {
+      if (busy()) return;
+      if (state.energy < GAME_COST) {
+        tired();
+        return;
+      }
+      state.energy = clamp(state.energy - GAME_COST, 0, ENERGY_MAX);
+      game.active = true;
+      game.kind = kind;
+      game.score = 0;
+      game.endsAt = Date.now() + GAME_SECONDS * 1000;
+      setBusyControls(true);
+      setBubble(kind === "shape" ? "Shape match! Find the matching shape." : "Quick math! Pick the right answer.");
+      announce(
+        kind === "shape"
+          ? "Shape match starting. You have 20 seconds."
+          : "Quick math starting. You have 20 seconds."
+      );
+      nextRound();
+      game.timerId = window.setInterval(tick, 200);
+      render();
+      saveState();
+    }
+
+    function tick() {
+      if (!game.active) return;
+      const remaining = Math.max(0, game.endsAt - Date.now());
+      els.timer.textContent = (remaining / 1000).toFixed(1) + " s";
+      els.timerFill.style.width = (remaining / (GAME_SECONDS * 1000)) * 100 + "%";
+      if (remaining <= 0) endGame();
+    }
+
+    function endGame() {
+      if (!game.active) return;
+      window.clearInterval(game.timerId);
+      const kind = game.kind;
+      const score = game.score;
+      game.active = false;
+      game.kind = null;
+      game.timerId = null;
+      clearFeedback();
+      setBusyControls(false);
+      setScreen("idle");
+
+      const label = kind === "shape" ? "shape match" : "quick math";
+      if (score > 0) addFriendship(2);
+
+      const summary =
+        score === 0
+          ? "Time is up. No correct answers in that " + label + " round."
+          : "Time is up. " + score + " correct in " + label + ". Friendship " +
+            state.friendship + " percent.";
+      setBubble(summary);
+      showPrompt("Round over", summary, false);
+      renderChoices([
+        {
+          label: "Play again",
+          ariaLabel: "Play " + label + " again",
+          onPick: () => {
+            hidePrompt();
+            startGame(kind);
+          },
+        },
+        {
+          label: "Close",
+          ariaLabel: "Close the round summary",
+          onPick: () => {
+            hidePrompt();
+          },
+        },
+      ]);
+      beep(520, 0.18);
+      announce(summary);
+      render();
+      saveState();
+    }
+
+    function nextRound() {
+      if (!game.active) return;
+      clearFeedback();
+      if (game.kind === "shape") shapeRound();
+      else mathRound();
+    }
+
+    function shapeRound() {
+      const target = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+      setScreen("shape");
+      const targets = els.screen.querySelectorAll(".robo-target");
+      for (let i = 0; i < targets.length; i += 1) {
+        targets[i].classList.toggle(
+          "is-on",
+          targets[i].classList.contains("robo-target--" + target.id)
+        );
+      }
+      els.promptLabel.textContent = "Shape match";
+      els.promptText.textContent = "Which shape is on the chest screen?";
+      renderChoices(
+        SHAPES.map((shape) => ({
+          label: shape.label,
+          ariaLabel: "Answer " + shape.label,
+          onPick: () => judgeShape(shape.label === target.label, target.label),
+        }))
+      );
+    }
+
+    function judgeShape(correct, correctLabel) {
+      if (!game.active) return;
+      if (correct) scoreHit("Correct! Friendship ");
+      else scoreMiss(correctLabel);
+    }
+
+    function mathRound() {
+      const a = 2 + Math.floor(Math.random() * 18);
+      const b = 1 + Math.floor(Math.random() * 12);
+      const subtract = a > b && Math.random() < 0.5;
+      const answer = subtract ? a - b : a + b;
+      const prompt = a + (subtract ? " − " : " + ") + b;
+
+      const options = [answer];
+      let guard = 0;
+      while (options.length < 4 && guard < 200) {
+        guard += 1;
+        const candidate = answer + (Math.floor(Math.random() * 11) - 5);
+        if (candidate >= 0 && options.indexOf(candidate) === -1) options.push(candidate);
+      }
+      for (let i = options.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const swap = options[i];
+        options[i] = options[j];
+        options[j] = swap;
+      }
+
+      setScreen("math");
+      els.mathText.textContent = prompt;
+      els.promptLabel.textContent = "Quick math";
+      els.promptText.textContent = "What is " + prompt + "?";
+      renderChoices(
+        options.map((value) => ({
+          label: String(value),
+          ariaLabel: "Answer " + value,
+          onPick: () => judgeMath(value === answer, answer),
+        }))
+      );
+    }
+
+    function judgeMath(correct, answer) {
+      if (!game.active) return;
+      if (correct) scoreHit("Correct! Friendship ");
+      else scoreMiss(String(answer));
+    }
+
+    function scoreHit(prefix) {
+      game.score += 1;
+      disableChoices();
+      const toppedOut = addFriendship(5);
+      setScreen("correct");
+      els.markText.textContent = "\u2713";
+      confetti();
+      beep(920, 0.12);
+      const message =
+        prefix + state.friendship + " percent. " +
+        (toppedOut ? "You reached best friends!" : "Score " + game.score + ".");
+      announce(message);
+      clearFeedback();
+      feedbackId = window.setTimeout(() => {
+        if (game.active) nextRound();
+      }, 620);
+    }
+
+    function scoreMiss(answer) {
+      disableChoices();
+      setScreen("wrong");
+      els.markText.textContent = "\u2717";
+      beep(300, 0.18, "square");
+      announce("Not quite. The answer was " + answer + ". Score " + game.score + ".");
+      clearFeedback();
+      feedbackId = window.setTimeout(() => {
+        if (game.active) nextRound();
+      }, 720);
+    }
+
+    /* ---------- interaction loop ---------- */
+
+    function interact() {
+      if (busy()) return;
+      if (state.energy < INTERACT_COST + 2) {
+        tired();
+        return;
+      }
+
+      const roll = Math.floor(Math.random() * 4);
+
+      if (roll === 3) {
+        startGame(Math.random() < 0.5 ? "shape" : "math");
+        return;
+      }
+
+      state.energy = clamp(state.energy - INTERACT_COST, 0, ENERGY_MAX);
+      if (roll === 0) doWave();
+      else if (roll === 1) doSpeak();
+      else doQuestion();
+
+      render();
+      saveState();
+    }
+
+    function rest() {
+      state.energy = ENERGY_MAX;
+      render();
+      saveState();
+      setBubble("Robo rests and recharges to full.");
+      if (!busy()) setScreen("idle");
+      beep(440, 0.16);
+      announce("Robo recharged to 100 percent energy.");
+    }
+
+    /* ---------- wiring ---------- */
+
+    els.robot.addEventListener("click", interact);
+    els.restBtn.addEventListener("click", rest);
+    els.shapeBtn.addEventListener("click", () => startGame("shape"));
+    els.mathBtn.addEventListener("click", () => startGame("math"));
+
+    els.soundBtn.addEventListener("click", () => {
+      state.sound = !state.sound;
+      els.soundBtn.setAttribute("aria-pressed", state.sound ? "true" : "false");
+      els.soundBtn.textContent = state.sound ? "Sound: on" : "Sound: off";
+      if (state.sound) beep(720, 0.12);
+      announce(state.sound ? "Sound on." : "Sound off.");
+    });
+
+    els.resetBtn.addEventListener("click", () => {
+      const confirmed = window.confirm(
+        "Reset Robo's friendship level and energy? This deletes the progress saved in this browser."
+      );
+      if (!confirmed) return;
+      window.clearInterval(game.timerId);
+      game.active = false;
+      game.kind = null;
+      game.timerId = null;
+      awaitingAnswer = false;
+      clearFeedback();
+      state.friendship = 0;
+      state.energy = ENERGY_MAX;
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        /* ignore */
+      }
+      hidePrompt();
+      setScreen("idle");
+      setBusyControls(false);
+      render();
+      setBubble("Memory cleared. Hello again — I am Robo.");
+      announce("Progress reset. Friendship 0 percent, energy 100 percent.");
+    });
+
+    window.setInterval(() => {
+      if (state.energy >= ENERGY_MAX) return;
+      state.energy = clamp(state.energy + 1, 0, ENERGY_MAX);
+      render();
+      saveState();
+    }, REGEN_MS);
+
+    loadState();
+    render();
+    setScreen("idle");
+    hidePrompt();
+  </script>

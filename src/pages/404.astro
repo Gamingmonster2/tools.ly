@@ -1,0 +1,49 @@
+---
+import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
+import ToolDirectory from "../components/ToolDirectory.astro";
+import { legacyTools, urlOf } from "../data/tools";
+---
+
+<Base
+  title="Page not found"
+  description="That address does not exist on Tools.ly. Browse the full tool directory instead."
+  canonical="/404/"
+  noindex
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">Error 404</p>
+      <h1>That page does not exist</h1>
+      <p class="lede">
+        The address you followed is not on this site. It may have been mistyped, or it may have
+        belonged to the old version of the site. Every tool has a permanent address — the ones below
+        still work exactly as before.
+      </p>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="container">
+      <h2>Popular tools</h2>
+      <div class="tool-grid" style="margin-top:1rem">
+        {
+          legacyTools.slice(0, 6).map((tool) => (
+            <a class="tool-card" href={urlOf(tool)}>
+              <span class="tool-card__icon" aria-hidden="true"><Icon name={tool.icon} size={20} /></span>
+              <span>
+                <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+                <span class="tool-card__desc">{tool.description}</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+      <p style="margin-top:1.5rem">
+        <a class="btn btn--primary" href="/all-tools/">See every tool <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
+
+  <ToolDirectory heading="Or search the directory" />
+</Base>

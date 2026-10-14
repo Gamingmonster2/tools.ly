@@ -1,0 +1,23 @@
+# Cloudflare Pages redirects (https://developers.cloudflare.com/pages/configuration/redirects/)
+# These keep addresses that used to exist on the old WordPress site working after the
+# migration, without changing a single already-indexed tool URL.
+
+# Leftover demo page from the previous theme.
+/home/                  /                                  301
+
+# The old contact page had a second address in the navigation.
+/homepage/              /                                  301
+
+# WordPress taxonomy and author archives: no unique content, fold them into the directory.
+/category/*             /all-tools/                        301
+/tag/*                  /all-tools/                        301
+/author/*               /7b3c2-about/                      301
+
+# Feeds used to exist; send readers to the blog index instead.
+/feed/                  /7b3c2-blog-archive/               301
+/comments/feed/         /7b3c2-blog-archive/               301
+
+# WordPress plumbing that should never be reachable on a static site.
+/wp-login.php           /                                  301
+/wp-admin/*             /                                  301
+/xmlrpc.php             /                                  301

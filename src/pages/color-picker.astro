@@ -1,0 +1,1325 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find((t) => t.slug === "color-picker")!;
+
+const faqs = [
+  {
+    q: "Is the color picker free and offline?",
+    a: "Yes. The whole studio — conversions, palettes and contrast checks — runs as JavaScript inside your browser. There is no upload, no account and no network request, so it keeps working on a plane or on a locked-down work machine.",
+  },
+  {
+    q: "Which color format should I use in my CSS?",
+    a: "Use HEX for solid brand colors, rgb() when you already work with channel values (for example from a design hand-off), and hsl() when you want to create variations by hand. All three describe the same color; HSL is simply easier to reason about because hue, saturation and lightness are separate numbers.",
+  },
+  {
+    q: "Why does my HSL value not match the HEX value exactly?",
+    a: "HSL holds the same information as RGB but rounds differently. The tool converts HSL to RGB with standard rounding, so a hue of 210.4° or a lightness of 42.6% becomes a discrete 8-bit color. Round-tripping a color through HSL and back can shift one channel by a single step, which is invisible on screen.",
+  },
+  {
+    q: "What contrast ratio do I need for WCAG compliance?",
+    a: "Normal-sized body text needs at least 4.5:1 against its background (AA) or 7:1 (AAA). Large text — roughly 24px regular or 18.66px bold and up — needs only 3:1 at the AA level. User-interface parts such as buttons, borders on inputs and focus rings need 3:1 under the non-text contrast rule.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — <color>",
+    href: "https://developer.mozilla.org/en-US/docs/Web/CSS/color_value",
+    note: "Reference for every CSS color notation, including the sRGB HEX functions and legacy comma syntax used by the copy buttons.",
+  },
+  {
+    label: "W3C — Understanding Success Criterion 1.4.3: Contrast (Minimum)",
+    href: "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+    note: "The normative explanation of the 4.5:1 and 3:1 thresholds the contrast checker applies.",
+  },
+  {
+    label: "W3C — CSS Color Module Level 4",
+    href: "https://www.w3.org/TR/css-color-4/",
+    note: "Defines hsl(), the sRGB transfer function and the relative-luminance formula behind the WCAG contrast ratio.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Pick a color with the native picker or type a HEX, RGB or HSL value, then check its contrast, generate a matching palette and copy ready-to-paste CSS — all offline."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body cp">
+        <!-- Picker + preview -->
+        <section class="cp__block" aria-labelledby="cp-pick-h">
+          <h2 class="cp__h" id="cp-pick-h">Pick your color</h2>
+          <div class="cp__pick">
+            <div class="cp__swatch" id="cp-swatch" style="background:#2456e6">
+              <span class="cp__swatch-code readout" id="cp-swatch-code">#2456E6</span>
+            </div>
+            <div class="cp__pick-side">
+              <div class="field">
+                <label for="cp-native">Native color picker</label>
+                <input type="color" id="cp-native" value="#2456e6" />
+              </div>
+              <div class="cp__actions">
+                <button type="button" class="btn btn--soft btn--sm" id="cp-random">Random color</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="cp-reset">Reset</button>
+              </div>
+              <div class="field">
+                <label for="cp-recent">Recent colors</label>
+                <div class="cp__recent" id="cp-recent" role="group" aria-label="Recently picked colors" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Channels -->
+        <section class="cp__block cp__block--split" aria-labelledby="cp-values-h">
+          <h2 class="cp__h" id="cp-values-h">Values, kept in sync</h2>
+
+          <div class="cp__col">
+            <div class="fieldset">
+              <legend>HEX</legend>
+              <div class="field">
+                <label for="cp-hex">Hexadecimal code</label>
+                <input
+                  type="text"
+                  id="cp-hex"
+                  value="#2456E6"
+                  spellcheck="false"
+                  autocomplete="off"
+                  inputmode="text"
+                  maxlength="7"
+                  aria-describedby="cp-hex-help"
+                />
+              </div>
+              <p class="cp__help" id="cp-hex-help">
+                3 or 6 digits, with or without <code>#</code>. Shorthand such as <code>#f0a</code> is expanded.
+              </p>
+            </div>
+
+            <div class="fieldset">
+              <legend>RGB</legend>
+              <div class="cp__chan">
+                <label for="cp-r">R</label>
+                <input type="range" id="cp-r-range" min="0" max="255" step="1" value="36" aria-label="Red slider, 0 to 255" />
+                <input type="number" id="cp-r" min="0" max="255" step="1" value="36" aria-label="Red value, 0 to 255" />
+              </div>
+              <div class="cp__chan">
+                <label for="cp-g">G</label>
+                <input type="range" id="cp-g-range" min="0" max="255" step="1" value="86" aria-label="Green slider, 0 to 255" />
+                <input type="number" id="cp-g" min="0" max="255" step="1" value="86" aria-label="Green value, 0 to 255" />
+              </div>
+              <div class="cp__chan">
+                <label for="cp-b">B</label>
+                <input type="range" id="cp-b-range" min="0" max="255" step="1" value="230" aria-label="Blue slider, 0 to 255" />
+                <input type="number" id="cp-b" min="0" max="255" step="1" value="230" aria-label="Blue value, 0 to 255" />
+              </div>
+            </div>
+          </div>
+
+          <div class="cp__col">
+            <div class="fieldset">
+              <legend>HSL</legend>
+              <div class="cp__chan">
+                <label for="cp-h">H</label>
+                <input type="range" id="cp-h-range" min="0" max="360" step="1" value="225" aria-label="Hue slider, 0 to 360 degrees" />
+                <input type="number" id="cp-h" min="0" max="360" step="1" value="225" aria-label="Hue in degrees, 0 to 360" />
+              </div>
+              <div class="cp__chan">
+                <label for="cp-s">S</label>
+                <input type="range" id="cp-s-range" min="0" max="100" step="1" value="80" aria-label="Saturation slider, 0 to 100 percent" />
+                <input type="number" id="cp-s" min="0" max="100" step="1" value="80" aria-label="Saturation in percent, 0 to 100" />
+              </div>
+              <div class="cp__chan">
+                <label for="cp-l">L</label>
+                <input type="range" id="cp-l-range" min="0" max="100" step="1" value="52" aria-label="Lightness slider, 0 to 100 percent" />
+                <input type="number" id="cp-l" min="0" max="100" step="1" value="52" aria-label="Lightness in percent, 0 to 100" />
+              </div>
+            </div>
+
+            <div class="fieldset cp__preview-set">
+              <legend>In context</legend>
+              <div class="cp__demo" id="cp-demo">
+                <button type="button" class="cp__demo-btn" id="cp-demo-btn">Primary button</button>
+                <p class="cp__demo-text" id="cp-demo-text">
+                  Body text in your color — check how it reads at normal size before you commit to it.
+                </p>
+                <div class="cp__demo-card" id="cp-demo-card">
+                  <strong id="cp-demo-heading">A card heading</strong>
+                  <span>A surface with a colored border and heading.</span>
+                </div>
+                <div class="cp__demo-box" id="cp-demo-box">A bordered box</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Contrast -->
+        <section class="cp__block" aria-labelledby="cp-contrast-h">
+          <h2 class="cp__h" id="cp-contrast-h">Contrast checker</h2>
+          <div class="cp__contrast" id="cp-contrast">
+            <article class="cp__cc cp__cc--light" data-bg="#ffffff" id="cp-cc-light">
+              <p class="cp__cc-label">On white</p>
+              <p class="cp__cc-ratio readout" id="cp-ratio-light">—</p>
+              <div class="cp__cc-badges" id="cp-badges-light"></div>
+            </article>
+            <article class="cp__cc cp__cc--dark" data-bg="#000000" id="cp-cc-dark">
+              <p class="cp__cc-label">On black</p>
+              <p class="cp__cc-ratio readout" id="cp-ratio-dark">—</p>
+              <div class="cp__cc-badges" id="cp-badges-dark"></div>
+            </article>
+          </div>
+          <p class="cp__help">
+            AA normal text needs 4.5:1, AA large text 3:1 and AAA normal text 7:1. Ratios run from
+            1:1 (no contrast) to 21:1 (black on white).
+          </p>
+        </section>
+
+        <!-- Palettes -->
+        <section class="cp__block" aria-labelledby="cp-palette-h">
+          <h2 class="cp__h" id="cp-palette-h">Palette generator</h2>
+          <div id="cp-palettes"></div>
+        </section>
+
+        <!-- Copy -->
+        <section class="cp__block" aria-labelledby="cp-copy-h">
+          <h2 class="cp__h" id="cp-copy-h">Copy the color</h2>
+          <div class="cp__copy" id="cp-copy">
+            <button type="button" class="btn btn--soft btn--sm" data-copy="hex">Copy #HEX</button>
+            <button type="button" class="btn btn--soft btn--sm" data-copy="rgb">Copy rgb()</button>
+            <button type="button" class="btn btn--soft btn--sm" data-copy="hsl">Copy hsl()</button>
+            <button type="button" class="btn btn--soft btn--sm" data-copy="css">Copy CSS variables</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="cp-eyedropper" hidden>Pick from screen</button>
+          </div>
+          <div class="result-box cp__css" id="cp-css-out" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="panel__foot">
+        Everything updates as you type — no Apply button. Contrast is measured with the WCAG relative
+        luminance formula, and copied text goes straight to your clipboard without a network round-trip.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How to use the color picker</h2>
+  <p>
+    The studio has three ways to set a color, and they always agree with each other. Open the native
+    picker for a visual choice, type a code into the HEX field, or drag the RGB and HSL sliders.
+    Whatever you touch, the other controls follow immediately: change the hue slider and the red,
+    green and blue numbers move with it; paste <code>#1e7a53</code> into the HEX field and the
+    sliders jump to that position.
+  </p>
+  <ol>
+    <li><strong>Choose a starting color.</strong> Use the native picker, type a value, or press <em>Random color</em> to explore.</li>
+    <li><strong>Read it in context.</strong> The preview block renders your color as a button, body text, a card and a border, so you can judge it as a UI color instead of an abstract chip.</li>
+    <li><strong>Check the contrast.</strong> The checker reports the exact ratio against both white and black with AA and AAA verdicts for normal and large text.</li>
+    <li><strong>Grow a palette.</strong> The generator produces complementary, analogous, triadic and split-complementary partners plus a 50–950 shade ramp of the base hue.</li>
+    <li><strong>Copy what you need.</strong> Grab <code>#HEX</code>, <code>rgb()</code>, <code>hsl()</code> or a complete CSS custom-property block. Click any generated swatch to make it the current color.</li>
+  </ol>
+  <p>
+    Nothing is uploaded. The tool is a single static page, so it also works when you are offline or
+    behind a firewall that blocks third-party services.
+  </p>
+
+  <h2>Understanding HEX, RGB and HSL</h2>
+  <p>
+    All three notations describe the same sRGB color space; they differ only in how they describe it.
+    HEX and RGB are the machine's view — three 8-bit channels. HSL is the designer's view — a hue
+    angle on the color wheel plus saturation and lightness percentages, which makes it far easier to
+    create a lighter tint or a desaturated variant by hand.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Notation</th>
+          <th scope="col">Shape</th>
+          <th scope="col">Example</th>
+          <th scope="col">Channel range</th>
+          <th scope="col">Best for</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HEX</td>
+          <td>Shortest, no function syntax</td>
+          <td><code>#2456e6</code></td>
+          <td>00–ff per channel</td>
+          <td>Design tokens, brand colors, anywhere brevity matters</td>
+        </tr>
+        <tr>
+          <td>RGB</td>
+          <td><code>rgb(r g b)</code></td>
+          <td><code>rgb(36 86 230)</code></td>
+          <td>0–255 per channel</td>
+          <td>Values arriving from code, canvas or image data</td>
+        </tr>
+        <tr>
+          <td>HSL</td>
+          <td><code>hsl(h s% l%)</code></td>
+          <td><code>hsl(224 72% 52%)</code></td>
+          <td>0–360°, 0–100%, 0–100%</td>
+          <td>Building tints, shades and palettes by hand</td>
+        </tr>
+        <tr>
+          <td>Alpha</td>
+          <td>Optional fourth value</td>
+          <td><code>rgb(36 86 230 / 0.6)</code></td>
+          <td>0–1 or 0–100%</td>
+          <td>Overlays, disabled states, glass effects</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Two practical notes. First, a HEX code is just base-16 RGB: <code>#2456e6</code> means red 0x24,
+    green 0x56, blue 0xe6, or <code>rgb(36 86 230)</code>. Second, HSL is a mathematical transform of
+    that RGB triplet, not a wider color space, so converting a color to HSL and back can shift a
+    channel by one step because of rounding. If exact fidelity matters, keep the value you started
+    with — for example the HEX code you copied out of a brand guide.
+  </p>
+
+  <h2>Choosing accessible colors</h2>
+  <p>
+    WCAG contrast is computed from relative luminance, a weighted measure of how much light a color
+    emits after the sRGB channels are linearised. The ratio between the lighter and darker of two
+    colors is <code>(L1 + 0.05) / (L2 + 0.05)</code>, which runs from 1:1 for two identical colors to
+    21:1 for black on white. Two thresholds do most of the work in practice:
+  </p>
+  <ul>
+    <li>
+      <strong>4.5:1 for normal text (AA).</strong> This is the baseline for paragraphs, labels, links
+      and anything else read at body size. The contrast checker above shows a <em>PASS</em> badge for
+      each background once your color clears it.
+    </li>
+    <li>
+      <strong>3:1 for large text (AA).</strong> Text at roughly 24&nbsp;px regular or 18.66&nbsp;px
+      bold counts as large, and the relaxed threshold recognises that thicker strokes are easier to
+      resolve. The same 3:1 floor applies to non-text interface parts — input borders, icons that
+      carry meaning and focus indicators.
+    </li>
+    <li>
+      <strong>7:1 for AAA.</strong> The enhanced level for normal text. It is a good target for
+      long-form reading, dense data tables and any interface used in bright sunlight.
+    </li>
+  </ul>
+  <p>
+    A few habits make hitting those numbers easier. Check the color against <em>both</em> white and
+    black before you commit — a mid-tone blue may pass on white and fail on a dark theme. Remember
+    that transparency lowers effective contrast, so a 60%-opacity overlay should be checked against
+    the color actually rendered beneath it. And never rely on color alone to carry meaning: pair it
+    with an icon, a label or an underline so the information survives for color-blind readers.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      Contrast ratios describe legibility, not taste. Two colors can pass 4.5:1 and still look muddy
+      together. Use the palette generator to find a partner that keeps enough contrast while staying
+      in the same family.
+    </p>
+  </div>
+
+  <h2>Copying colors into CSS</h2>
+  <p>
+    The copy buttons produce values you can paste without editing. A reliable pattern is to declare
+    your color once as a custom property and reference it everywhere, so a rebrand is a one-line
+    change:
+  </p>
+  <pre><code>:root &#123;
+  --brand: #2456e6;
+  --brand-soft: #eaefff;
+  --brand-ink: #ffffff;
+&#125;
+
+.button &#123;
+  background: var(--brand);
+  color: var(--brand-ink);
+&#125;
+
+.notice &#123;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand);
+  color: #0d1526;
+&#125;</code></pre>
+  <p>
+    The <em>Copy CSS variables</em> button emits exactly this shape, using your current color plus a
+    light companion derived from it. A few details worth knowing when you paste color values:
+  </p>
+  <ul>
+    <li>Modern CSS accepts space-separated channels — <code>rgb(36 86 230)</code> — and reserves commas for the legacy syntax. Both still work; pick one and stay consistent.</li>
+    <li>Alpha can be written either way: <code>rgb(36 86 230 / 60%)</code> or <code>hsl(224 72% 52% / 0.6)</code>.</li>
+    <li>Custom properties are inherited and untyped, so they can hold any notation you like as long as you use the value in a position that accepts it.</li>
+    <li>For theming, define the dark-mode overrides under <code>@media (prefers-color-scheme: dark)</code> and change only the variables, not the rules that consume them.</li>
+  </ul>
+</ToolLayout>
+
+<style is:global>
+  .cp {
+    display: grid;
+    gap: clamp(1.1rem, 2.5vw, 1.75rem);
+  }
+  .cp__block {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .cp__block--split {
+    gap: 1rem;
+  }
+  @media (min-width: 900px) {
+    .cp__block--split {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+    .cp__block--split > .cp__h {
+      grid-column: 1 / -1;
+    }
+  }
+  .cp__h {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0;
+  }
+  .cp__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .cp__help code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+
+  /* picker + big preview */
+  .cp__pick {
+    display: grid;
+    gap: 1rem;
+  }
+  @media (min-width: 760px) {
+    .cp__pick {
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    }
+  }
+  .cp__swatch {
+    position: relative;
+    min-height: 200px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: flex-end;
+    padding: 0.85rem 1rem;
+  }
+  .cp__swatch-code {
+    background: rgba(255, 255, 255, 0.92);
+    color: #0d1526;
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  .cp__pick-side {
+    display: grid;
+    gap: 0.85rem;
+    align-content: start;
+  }
+  .cp__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  input[type="color"] {
+    width: 100%;
+    height: 3rem;
+    padding: 0.2rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+  }
+  .cp__recent {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-height: 2.1rem;
+  }
+  .cp__recent-btn {
+    min-width: 2.1rem;
+    height: 2.1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+  }
+
+  /* channel controls */
+  .cp__col {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+  .cp__chan {
+    display: grid;
+    grid-template-columns: 1.4rem minmax(0, 1fr) 4.6rem;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.45rem;
+  }
+  .cp__chan:last-child {
+    margin-bottom: 0;
+  }
+  .cp__chan label {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .cp__chan input[type="number"] {
+    text-align: center;
+    font-family: var(--font-mono);
+    padding: 0.4rem 0.4rem;
+    font-size: 0.9rem;
+  }
+
+  /* context preview */
+  .cp__demo {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .cp__demo-btn {
+    justify-self: start;
+    padding: 0.6rem 1.1rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .cp__demo-text {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+  .cp__demo-card {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .cp__demo-card strong {
+    font-size: 1rem;
+  }
+  .cp__demo-box {
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-sm);
+    border-width: 2px;
+    border-style: solid;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  /* contrast */
+  .cp__contrast {
+    display: grid;
+    gap: 0.85rem;
+  }
+  @media (min-width: 620px) {
+    .cp__contrast {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .cp__cc {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.95rem 1.1rem;
+    display: grid;
+    gap: 0.5rem;
+    box-shadow: var(--shadow-xs);
+  }
+  .cp__cc--light {
+    background: #ffffff;
+  }
+  .cp__cc--dark {
+    background: #000000;
+    border-color: var(--border-strong);
+  }
+  .cp__cc-label {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  .cp__cc-ratio {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .cp__cc-ratio small {
+    font-size: 0.85rem;
+    font-weight: 600;
+    opacity: 0.75;
+  }
+  .cp__cc-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  /* palettes */
+  .cp__pal {
+    margin-bottom: 1.2rem;
+  }
+  .cp__pal:last-child {
+    margin-bottom: 0;
+  }
+  .cp__pal-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  .cp__pal-title span {
+    font-weight: 500;
+    color: var(--text-faint);
+  }
+  .cp__swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+    gap: 0.5rem;
+  }
+  .cp__sw {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+  .cp__sw-chip {
+    display: block;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
+  }
+  .cp__sw:hover .cp__sw-chip,
+  .cp__sw:focus-visible .cp__sw-chip {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .cp__sw-code {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+  .cp__sw--on .cp__sw-code {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* copy */
+  .cp__copy {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .cp__copy .btn {
+    min-width: 9.5rem;
+  }
+  .cp__css {
+    margin: 0;
+    white-space: pre;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var $ = function (id) {
+      return document.getElementById(id);
+    };
+
+    var DEFAULT = "#2456e6";
+    var MAX_RECENT = 12;
+
+    var state = { r: 36, g: 86, b: 230, h: 225, s: 80, l: 52 };
+    var recent = [];
+    var copyTimers = new WeakMap();
+
+    // ---------- color maths ----------
+
+    function clamp(n, lo, hi) {
+      if (!isFinite(n)) return lo;
+      return n < lo ? lo : n > hi ? hi : n;
+    }
+
+    function toHex2(n) {
+      var v = clamp(Math.round(n), 0, 255).toString(16);
+      return v.length === 1 ? "0" + v : v;
+    }
+
+    function hexOf(c) {
+      return ("#" + toHex2(c.r) + toHex2(c.g) + toHex2(c.b)).toUpperCase();
+    }
+
+    function parseHex(text) {
+      var raw = String(text).trim().replace(/^#/, "");
+      if (!/^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw)) return null;
+      if (raw.length === 3) {
+        raw = raw.charAt(0) + raw.charAt(0) + raw.charAt(1) + raw.charAt(1) + raw.charAt(2) + raw.charAt(2);
+      }
+      return {
+        r: parseInt(raw.slice(0, 2), 16),
+        g: parseInt(raw.slice(2, 4), 16),
+        b: parseInt(raw.slice(4, 6), 16),
+      };
+    }
+
+    function rgbToHsl(r, g, b) {
+      var rr = r / 255;
+      var gg = g / 255;
+      var bb = b / 255;
+      var max = Math.max(rr, gg, bb);
+      var min = Math.min(rr, gg, bb);
+      var d = max - min;
+      var h = 0;
+      var l = (max + min) / 2;
+      var s = 0;
+      if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        if (max === rr) h = 60 * (((gg - bb) / d) % 6);
+        else if (max === gg) h = 60 * ((bb - rr) / d + 2);
+        else h = 60 * ((rr - gg) / d + 4);
+      }
+      if (h < 0) h += 360;
+      return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    function hslToRgb(h, s, l) {
+      var hh = ((h % 360) + 360) % 360;
+      var ss = clamp(s, 0, 100) / 100;
+      var ll = clamp(l, 0, 100) / 100;
+      var c = (1 - Math.abs(2 * ll - 1)) * ss;
+      var x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+      var m = ll - c / 2;
+      var rp = 0;
+      var gp = 0;
+      var bp = 0;
+      if (hh < 60) {
+        rp = c; gp = x;
+      } else if (hh < 120) {
+        rp = x; gp = c;
+      } else if (hh < 180) {
+        gp = c; bp = x;
+      } else if (hh < 240) {
+        gp = x; bp = c;
+      } else if (hh < 300) {
+        rp = x; bp = c;
+      } else {
+        rp = c; bp = x;
+      }
+      return {
+        r: Math.round((rp + m) * 255),
+        g: Math.round((gp + m) * 255),
+        b: Math.round((bp + m) * 255),
+      };
+    }
+
+    function luminance(c) {
+      var ch = [c.r, c.g, c.b].map(function (v) {
+        var s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+
+    function contrastRatio(a, b) {
+      var l1 = luminance(a);
+      var l2 = luminance(b);
+      var hi = Math.max(l1, l2);
+      var lo = Math.min(l1, l2);
+      return (hi + 0.05) / (lo + 0.05);
+    }
+
+    // ---------- writable strings ----------
+
+    function rgbText(c) {
+      return "rgb(" + c.r + ", " + c.g + ", " + c.b + ")";
+    }
+
+    function hslText(c) {
+      return "hsl(" + Math.round(c.h) + ", " + Math.round(c.s) + "%, " + Math.round(c.l) + "%)";
+    }
+
+    function cssVarsText(c) {
+      var hex = hexOf(c);
+      var soft = hslToRgb(c.h, c.s, Math.min(97, Math.max(88, Math.round(c.l * 0.35 + 70))));
+      return [
+        ":root {",
+        "  --color: " + hex + ";",
+        "  --color-rgb: " + rgbText(c) + ";",
+        "  --color-hsl: " + hslText(c) + ";",
+        "  --color-soft: " + hexOf(soft) + ";",
+        "}",
+        "",
+        ".button { background: var(--color); }",
+        ".notice { background: var(--color-soft); border: 1px solid var(--color); }",
+      ].join("\n");
+    }
+
+    // ---------- render ----------
+
+    function syncColorFromRgb(skipId) {
+      var hsl = rgbToHsl(state.r, state.g, state.b);
+      state.h = hsl.h;
+      state.s = hsl.s;
+      state.l = hsl.l;
+      paint(skipId);
+    }
+
+    function paint(skipId) {
+      var c = { r: state.r, g: state.g, b: state.b };
+      var hex = hexOf(c);
+      var active = document.activeElement;
+
+      // native picker + big swatch
+      if ($("cp-native") !== active) $("cp-native").value = hex.toLowerCase();
+      $("cp-swatch").style.background = hex;
+      var code = $("cp-swatch-code");
+      code.textContent = hex;
+      code.style.color = luminance(c) > 0.6 ? "#0d1526" : "#ffffff";
+      code.style.background = luminance(c) > 0.6 ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.55)";
+
+      // numeric fields (never fight the field the user is typing in)
+      if (skipId !== "cp-hex" && $("cp-hex") !== active) $("cp-hex").value = hex;
+      var pairs = [
+        ["cp-r", c.r, "cp-r-range"],
+        ["cp-g", c.g, "cp-g-range"],
+        ["cp-b", c.b, "cp-b-range"],
+        ["cp-h", Math.round(c.h), "cp-h-range"],
+        ["cp-s", Math.round(c.s), "cp-s-range"],
+        ["cp-l", Math.round(c.l), "cp-l-range"],
+      ];
+      for (var i = 0; i < pairs.length; i++) {
+        var el = $(pairs[i][0]);
+        if (el && el !== active) el.value = pairs[i][1];
+        var rng = $(pairs[i][2]);
+        if (rng) rng.value = pairs[i][1];
+      }
+
+      // in-context preview
+      var ink = luminance(c) > 0.45 ? "#101010" : "#ffffff";
+      var btn = $("cp-demo-btn");
+      btn.style.background = hex;
+      btn.style.color = ink;
+      var text = $("cp-demo-text");
+      text.style.color = hex;
+      var heading = $("cp-demo-heading");
+      heading.style.color = hex;
+      var card = $("cp-demo-card");
+      card.style.borderColor = hex;
+      $("cp-demo-box").style.borderColor = hex;
+
+      // contrast
+      updateContrast(c);
+
+      // palettes
+      renderPalettes();
+
+      // copy outputs
+      $("cp-css-out").textContent = cssVarsText(c);
+      var copyBtns = document.querySelectorAll("#cp-copy [data-copy]");
+      for (var j = 0; j < copyBtns.length; j++) {
+        var kind = copyBtns[j].getAttribute("data-copy");
+        var label = "";
+        if (kind === "hex") label = "Copy " + hex;
+        else if (kind === "rgb") label = "Copy " + rgbText(c);
+        else if (kind === "hsl") label = "Copy " + hslText(c);
+        if (!label) continue;
+        // never leave a stale "Copied!" (or an outdated value) on a button
+        var pending = copyTimers.get(copyBtns[j]);
+        if (pending) {
+          clearTimeout(pending);
+          copyTimers.delete(copyBtns[j]);
+        }
+        copyBtns[j].classList.remove("btn--primary");
+        copyBtns[j].textContent = label;
+        copyBtns[j].dataset.prevLabel = label;
+      }
+
+      var hash = "#c=" + hex.slice(1).toLowerCase();
+      if (window.history && window.history.replaceState) {
+        try {
+          window.history.replaceState(null, "", hash);
+        } catch (err) {
+          /* hash update is cosmetic */
+        }
+      }
+    }
+
+    function updateContrast(c) {
+      var entries = [
+        { key: "light", bg: { r: 255, g: 255, b: 255 } },
+        { key: "dark", bg: { r: 0, g: 0, b: 0 } },
+      ];
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        var ratio = contrastRatio(c, e.bg);
+        var card = $("cp-cc-" + e.key);
+        var ink = luminance(e.bg) > 0.4 ? "#101010" : "#ffffff";
+        card.style.color = ink;
+        var ratioEl = $("cp-ratio-" + e.key);
+        ratioEl.innerHTML = ratio.toFixed(2) + ":1 <small>contrast ratio</small>";
+        var host = $("cp-badges-" + e.key);
+        host.innerHTML = "";
+        var checks = [
+          ["AA normal 4.5:1", 4.5],
+          ["AA large 3:1", 3],
+          ["AAA normal 7:1", 7],
+        ];
+        for (var k = 0; k < checks.length; k++) {
+          var pass = ratio >= checks[k][1];
+          var b = document.createElement("span");
+          b.className = "badge " + (pass ? "badge--ok" : "");
+          if (!pass) {
+            b.style.background = "rgba(127,127,127,0.22)";
+            b.style.color = ink;
+          }
+          b.textContent = checks[k][0] + " " + (pass ? "PASS" : "FAIL");
+          host.appendChild(b);
+        }
+      }
+    }
+
+    // ---------- palettes ----------
+
+    function swatch(color, label, selected) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cp__sw" + (selected ? " cp__sw--on" : "");
+      btn.setAttribute("aria-label", label + ", select this color");
+      btn.setAttribute("aria-pressed", selected ? "true" : "false");
+      btn.setAttribute("data-hex", color);
+      var chip = document.createElement("span");
+      chip.className = "cp__sw-chip";
+      chip.style.background = color;
+      var code = document.createElement("span");
+      code.className = "cp__sw-code";
+      code.textContent = color;
+      btn.appendChild(chip);
+      btn.appendChild(code);
+      return btn;
+    }
+
+    function renderPalettes() {
+      var h = state.h;
+      var s = state.s;
+      var l = state.l;
+      var cur = hexOf(state);
+      var groups = [
+        {
+          title: "Complementary",
+          note: "base + 180°",
+          hues: [h, h + 180],
+        },
+        {
+          title: "Analogous",
+          note: "base ± 30°",
+          hues: [h - 30, h, h + 30],
+        },
+        {
+          title: "Triadic",
+          note: "base ± 120°",
+          hues: [h, h + 120, h + 240],
+        },
+        {
+          title: "Split complementary",
+          note: "base + 150° and + 210°",
+          hues: [h, h + 150, h + 210],
+        },
+      ];
+
+      var host = $("cp-palettes");
+      host.innerHTML = "";
+
+      for (var g = 0; g < groups.length; g++) {
+        var group = groups[g];
+        var wrap = document.createElement("div");
+        wrap.className = "cp__pal";
+        var title = document.createElement("p");
+        title.className = "cp__pal-title";
+        title.textContent = group.title + " ";
+        var note = document.createElement("span");
+        note.textContent = group.note;
+        title.appendChild(note);
+        var grid = document.createElement("div");
+        grid.className = "cp__swatches";
+        for (var i = 0; i < group.hues.length; i++) {
+          var rgb = hslToRgb(group.hues[i], s, l);
+          var hex = hexOf(rgb);
+          grid.appendChild(swatch(hex, group.title + " color " + hex, hex === cur));
+        }
+        wrap.appendChild(title);
+        wrap.appendChild(grid);
+        host.appendChild(wrap);
+      }
+
+      // shade ramp 50 -> 950
+      var steps = [
+        ["50", 97],
+        ["100", 94],
+        ["200", 86],
+        ["300", 76],
+        ["400", 66],
+        ["500", 56],
+        ["600", 46],
+        ["700", 37],
+        ["800", 28],
+        ["900", 19],
+        ["950", 12],
+      ];
+      var stepGrid = document.createElement("div");
+      stepGrid.className = "cp__swatches";
+      for (var t = 0; t < steps.length; t++) {
+        var shade = hslToRgb(h, s, steps[t][1]);
+        var shadeHex = hexOf(shade);
+        stepGrid.appendChild(swatch(shadeHex, "Shade " + steps[t][0] + " " + shadeHex, shadeHex === cur));
+      }
+      var rampTitle = document.createElement("p");
+      rampTitle.className = "cp__pal-title";
+      rampTitle.textContent = "Shade ramp ";
+      var rampNote = document.createElement("span");
+      rampNote.textContent = "base hue, lightness 97% → 12%";
+      rampTitle.appendChild(rampNote);
+      var rampWrap = document.createElement("div");
+      rampWrap.className = "cp__pal";
+      rampWrap.appendChild(rampTitle);
+      rampWrap.appendChild(stepGrid);
+      host.appendChild(rampWrap);
+    }
+
+    // ---------- recent ----------
+
+    function renderRecent() {
+      var host = $("cp-recent");
+      host.innerHTML = "";
+      if (!recent.length) {
+        var empty = document.createElement("span");
+        empty.className = "cp__help";
+        empty.textContent = "No colors yet — press Random color or change a value.";
+        host.appendChild(empty);
+        return;
+      }
+      for (var i = 0; i < recent.length; i++) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cp__recent-btn";
+        btn.style.background = recent[i];
+        btn.setAttribute("aria-label", "Recent color " + recent[i] + ", select it");
+        btn.title = recent[i];
+        btn.setAttribute("data-hex", recent[i]);
+        host.appendChild(btn);
+      }
+    }
+
+    function pushRecent(hex) {
+      var idx = recent.indexOf(hex);
+      if (idx !== -1) recent.splice(idx, 1);
+      recent.unshift(hex);
+      if (recent.length > MAX_RECENT) recent.length = MAX_RECENT;
+      renderRecent();
+    }
+
+    // ---------- clipboard ----------
+
+    function fallbackCopy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      var ok = false;
+      try {
+        ta.select();
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    function flash(btn, message) {
+      var prev = copyTimers.get(btn);
+      if (prev) clearTimeout(prev);
+      if (!btn.dataset.prevLabel) btn.dataset.prevLabel = btn.textContent;
+      btn.classList.add("btn--primary");
+      btn.textContent = message;
+      var timer = setTimeout(function () {
+        btn.classList.remove("btn--primary");
+        btn.textContent = btn.dataset.prevLabel;
+        copyTimers.delete(btn);
+      }, 1400);
+      copyTimers.set(btn, timer);
+    }
+
+    function copyText(text, btn) {
+      var done = function (ok) {
+        flash(btn, ok ? "Copied!" : "Press Ctrl+C");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          done(true);
+        }, function () {
+          done(copyViaFallback(text));
+        });
+      } else {
+        done(copyViaFallback(text));
+      }
+    }
+
+    function copyViaFallback(text) {
+      var ok = fallbackCopy(text);
+      if (!ok) window.prompt("Copy the value:", text);
+      return ok;
+    }
+
+    // ---------- commits ----------
+
+    function commitRgb() {
+      state.r = clamp(Math.round(state.r), 0, 255);
+      state.g = clamp(Math.round(state.g), 0, 255);
+      state.b = clamp(Math.round(state.b), 0, 255);
+      syncColorFromRgb(null);
+    }
+
+    function commitHsl() {
+      state.h = ((Math.round(state.h) % 360) + 360) % 360;
+      state.s = clamp(Math.round(state.s), 0, 100);
+      state.l = clamp(Math.round(state.l), 0, 100);
+      var rgb = hslToRgb(state.h, state.s, state.l);
+      state.r = rgb.r;
+      state.g = rgb.g;
+      state.b = rgb.b;
+      paint(null);
+    }
+
+    function setFromRgb(rgb, skipId) {
+      state.r = rgb.r;
+      state.g = rgb.g;
+      state.b = rgb.b;
+      syncColorFromRgb(skipId || null);
+    }
+
+    function selectHex(hex) {
+      var rgb = parseHex(hex);
+      if (!rgb) return;
+      pushRecent(hexOf(rgb));
+      setFromRgb(rgb, null);
+    }
+
+    // ---------- wiring ----------
+
+    function bindNumber(id, apply, commit) {
+      var el = $(id);
+      el.addEventListener("input", function () {
+        var v = parseFloat(el.value);
+        if (isFinite(v)) {
+          apply(v);
+          commit(id);
+        }
+      });
+      el.addEventListener("change", function () {
+        apply(parseFloat(el.value) || 0);
+        commit(null);
+      });
+      el.addEventListener("blur", function () {
+        commit(null);
+      });
+    }
+
+    function init() {
+      var hashMatch = /(?:^|[#&])c=([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/.exec(window.location.hash || "");
+      var start = parseHex(hashMatch ? hashMatch[1] : DEFAULT) || parseHex(DEFAULT);
+
+      // HEX field
+      var hexField = $("cp-hex");
+      hexField.addEventListener("input", function () {
+        var clean = hexField.value.trim().replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+        var rgb = parseHex(clean);
+        if (rgb) setFromRgb(rgb, "cp-hex");
+      });
+      hexField.addEventListener("change", function () {
+        var rgb = parseHex(hexField.value);
+        if (!rgb) {
+          hexField.value = hexOf(state);
+          return;
+        }
+        pushRecent(hexOf(rgb));
+        setFromRgb(rgb, null);
+      });
+      hexField.addEventListener("blur", function () {
+        hexField.value = hexOf(state);
+      });
+
+      // native picker
+      var native = $("cp-native");
+      native.addEventListener("input", function () {
+        var rgb = parseHex(native.value);
+        if (rgb) {
+          state.r = rgb.r;
+          state.g = rgb.g;
+          state.b = rgb.b;
+          syncColorFromRgb(null);
+        }
+      });
+      native.addEventListener("change", function () {
+        var rgb = parseHex(native.value);
+        if (rgb) {
+          pushRecent(hexOf(rgb));
+          setFromRgb(rgb, null);
+        }
+      });
+
+      // RGB sliders + numbers
+      ["r", "g", "b"].forEach(function (ch) {
+        var range = $("cp-" + ch + "-range");
+        range.addEventListener("input", function () {
+          state[ch] = parseFloat(range.value);
+          syncColorFromRgb("cp-" + ch);
+        });
+        range.addEventListener("change", function () {
+          pushRecent(hexOf(state));
+        });
+        bindNumber(
+          "cp-" + ch,
+          function (v) {
+            state[ch] = clamp(Math.round(v), 0, 255);
+          },
+          function (skipId) {
+            syncColorFromRgb(skipId || "cp-" + ch);
+          }
+        );
+      });
+
+      // HSL sliders + numbers
+      ["h", "s", "l"].forEach(function (ch) {
+        var range = $("cp-" + ch + "-range");
+        range.addEventListener("input", function () {
+          state[ch] = parseFloat(range.value);
+          commitHsl();
+        });
+        range.addEventListener("change", function () {
+          pushRecent(hexOf(state));
+        });
+        bindNumber(
+          "cp-" + ch,
+          function (v) {
+            state[ch] = v;
+          },
+          function (skipId) {
+            commitHsl();
+          }
+        );
+      });
+
+      // buttons
+      $("cp-random").addEventListener("click", function () {
+        var rgb = {
+          r: Math.floor(Math.random() * 256),
+          g: Math.floor(Math.random() * 256),
+          b: Math.floor(Math.random() * 256),
+        };
+        pushRecent(hexOf(rgb));
+        setFromRgb(rgb, null);
+      });
+
+      $("cp-reset").addEventListener("click", function () {
+        var rgb = parseHex(DEFAULT);
+        pushRecent(DEFAULT);
+        setFromRgb(rgb, null);
+      });
+
+      // copy buttons
+      var copyHost = $("cp-copy");
+      copyHost.addEventListener("click", function (event) {
+        var btn = event.target.closest("button[data-copy]");
+        if (!btn) return;
+        var c = { r: state.r, g: state.g, b: state.b, h: state.h, s: state.s, l: state.l };
+        var kind = btn.getAttribute("data-copy");
+        var payload =
+          kind === "hex" ? hexOf(c) : kind === "rgb" ? rgbText(c) : kind === "hsl" ? hslText(c) : cssVarsText(c);
+        copyText(payload, btn);
+      });
+
+      // palette + recent selection (delegated)
+      function handleSelect(event) {
+        var target = event.target.closest("[data-hex]");
+        if (!target) return;
+        var host = target.parentElement && target.parentElement.id === "cp-recent" ? "recent" : "palette";
+        selectHex(target.getAttribute("data-hex"));
+        if (host === "recent") pushRecent(target.getAttribute("data-hex").toUpperCase());
+      }
+      $("cp-palettes").addEventListener("click", handleSelect);
+      $("cp-recent").addEventListener("click", handleSelect);
+
+      // eyedropper when the browser supports it
+      if (window.EyeDropper) {
+        var eye = $("cp-eyedropper");
+        eye.hidden = false;
+        eye.addEventListener("click", function () {
+          var picker = new window.EyeDropper();
+          picker
+            .open()
+            .then(function (result) {
+              var rgb = parseHex(result.sRGBHex);
+              if (rgb) selectHex(hexOf(rgb));
+            })
+            .catch(function () {
+              /* the user cancelled the eyedropper */
+            });
+        });
+      }
+
+      // keyboard shortcuts
+      document.addEventListener("keydown", function (event) {
+        if (event.target.matches("input, textarea, select")) return;
+        if (event.key === "r" || event.key === "R") {
+          $("cp-random").click();
+        }
+      });
+
+      pushRecent(hexOf(start));
+      setFromRgb(start, null);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  })();
+</script>

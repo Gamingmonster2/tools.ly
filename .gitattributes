@@ -1,0 +1,10 @@
+# Keep the repository on LF everywhere: Cloudflare Pages builds on Linux, and mixed line
+# endings in .astro/.mjs files cause noisy diffs and occasional tooling surprises.
+* text=auto eol=lf
+
+# Binary-ish assets that must never be converted.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff2 binary

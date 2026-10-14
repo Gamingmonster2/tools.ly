@@ -1,0 +1,1057 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find((t) => t.slug === "مفكرتي-السريعة")!;
+
+const faqs = [
+  {
+    q: "Does this notepad work offline, and is anything uploaded?",
+    a: "Yes, it works offline and nothing is uploaded. The page is plain HTML, CSS and JavaScript with no analytics, no fonts and no images loaded from the network. Your notes are written to your own browser storage with localStorage, and the export buttons build files locally with Blob and URL.createObjectURL, so the tool keeps working even with the network switched off.",
+  },
+  {
+    q: "Where exactly are my notes stored, and are they encrypted?",
+    a: "Every note lives under one key, toolsly.notepad.v1, inside your browser's localStorage for this site, as plain readable JSON on your disk. It is not encrypted and it is not password protected: anyone who can use your browser profile, or read your disk, can read the notes. localStorage is also per browser and per origin, so notes saved in Chrome are invisible to Firefox, and notes saved on your laptop are invisible on your phone.",
+  },
+  {
+    q: "Why did my notes disappear?",
+    a: "The usual causes are clearing browsing data or site data for this site, using a private or incognito window (its storage is deleted when the window closes), a different browser or device, an aggressive cleanup extension, or storage being full. Nothing here syncs, so there is no copy on a server to restore. If a note matters, export it as .txt or .md and keep the file somewhere you back up.",
+  },
+  {
+    q: "Is there still a daily limit on how many notes I can save?",
+    a: "No. The old version of this tool refused to save after five notes per day, which punished people for writing. That counter is gone completely: save as many notes as you like, as often as you like, and updating or deleting old notes is never restricted either. The only real ceiling is your browser's storage quota for this site, which is typically around 5 MB of text, and the page warns you if a write is ever refused.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Window.localStorage",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage",
+    note: "the storage mechanism behind this notepad: per origin, persists until cleared, and throws when storage is disabled or full.",
+  },
+  {
+    label: "MDN — URL.createObjectURL()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static",
+    note: "how the export buttons turn a Blob of text into a downloadable file, and why the temporary URL must be released with revokeObjectURL().",
+  },
+  {
+    label: "MDN — Window: beforeunload event",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event",
+    note: "used to flush a pending autosave when the tab is closed or reloaded, so the last few keystrokes are not lost.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="A private notepad that keeps every note in your own browser, with autosaved drafts, search, sorting and one-click export to .txt or .md — and no daily limits of any kind."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="np" id="np">
+      <div class="callout callout--warn np-warn" id="np-warn" role="alert" hidden>
+        <p>
+          <strong>Storage is unavailable in this browser.</strong>
+          <span id="np-warn-msg">Notes cannot be kept between visits, so this page holds them in memory until you close the tab. Export or copy anything you need before leaving.</span>
+        </p>
+      </div>
+
+      <div class="np-grid">
+        <section class="panel" aria-labelledby="np-editor-heading">
+          <div class="panel__body">
+            <div class="np-head">
+              <h2 class="np-h" id="np-editor-heading">Write a note</h2>
+              <p class="np-editing" id="np-editing">New note.</p>
+            </div>
+
+            <div class="np-field">
+              <label class="label" for="np-text">Note text</label>
+              <textarea
+                id="np-text"
+                class="np-textarea"
+                spellcheck="true"
+                placeholder="Type anything here. The draft is saved to this browser about a second after you stop typing."
+              ></textarea>
+            </div>
+
+            <div class="stat-grid np-stats">
+              <div class="stat">
+                <div class="stat__label">Characters</div>
+                <div class="stat__value readout" id="np-chars">0</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">Words</div>
+                <div class="stat__value readout" id="np-words">0</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">Lines</div>
+                <div class="stat__value readout" id="np-lines">0</div>
+              </div>
+            </div>
+
+            <div class="np-actions">
+              <button type="button" class="btn btn--primary" id="np-save">Save note</button>
+              <button type="button" class="btn btn--soft" id="np-update" disabled>Update open note</button>
+              <button type="button" class="btn btn--ghost" id="np-clear">Clear editor</button>
+            </div>
+
+            <p class="np-status" id="np-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <div class="panel__foot">
+            <p class="np-foot-lead">
+              The draft autosaves about 0.8 seconds after you stop typing, so a refresh does not lose it. Saving a
+              note never has a daily limit.
+            </p>
+            <ul class="np-foot-kbd">
+              <li><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> save or update</li>
+              <li><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Enter</kbd> save as a new note</li>
+              <li><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>K</kbd> jump to search</li>
+              <li><kbd>Esc</kbd> clear search</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="np-list-heading">
+          <div class="panel__body">
+            <div class="np-head">
+              <h2 class="np-h" id="np-list-heading">
+                Saved notes <span class="badge badge--accent" id="np-count">0</span>
+              </h2>
+              <p class="np-editing" id="np-shown"></p>
+            </div>
+
+            <div class="np-tools">
+              <div class="np-field">
+                <label class="label" for="np-search">Search notes</label>
+                <input
+                  type="search"
+                  id="np-search"
+                  placeholder="Filter by any word"
+                  autocomplete="off"
+                  aria-describedby="np-search-hint"
+                />
+              </div>
+              <div class="np-field">
+                <label class="label" for="np-sort">Sort</label>
+                <select id="np-sort">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </div>
+            </div>
+            <p class="sr-only" id="np-search-hint">Results update as you type. Press Escape to clear the search.</p>
+
+            <div class="np-exports">
+              <button type="button" class="btn btn--sm btn--ghost" id="np-export-txt">Export .txt</button>
+              <button type="button" class="btn btn--sm btn--ghost" id="np-export-md">Export .md</button>
+              <button type="button" class="btn btn--sm btn--soft" id="np-copy">Copy all</button>
+            </div>
+
+            <div class="np-list" id="np-list"></div>
+            <p class="empty-state" id="np-empty">
+              No notes saved yet. Write something in the editor and choose Save note.
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <template id="np-note-tpl">
+      <article class="np-note">
+        <div class="np-note__top">
+          <h3 class="np-note__title"></h3>
+          <span class="badge np-note__badge"></span>
+        </div>
+        <p class="np-note__text"></p>
+        <p class="np-note__meta"></p>
+        <div class="np-note__actions">
+          <button type="button" class="btn btn--sm btn--soft" data-act="open">Open in editor</button>
+          <button type="button" class="btn btn--sm btn--ghost" data-act="delete">Delete</button>
+        </div>
+      </article>
+    </template>
+  </Fragment>
+
+  <h2>How this notepad works</h2>
+  <p>
+    This is a single text area in your browser. Whatever you type is written to the browser's
+    <code>localStorage</code> on your own device — not to a server, not to an account, not to a database. There is no
+    sign-up, no cookie wall and no request that leaves the page, which is why the tool keeps working with the network
+    unplugged.
+  </p>
+  <p>
+    Two things are stored for you. The <strong>draft</strong> is the exact contents of the editor, saved about 800
+    milliseconds after you stop typing, so an accidental refresh or a closed tab does not cost you the last paragraph.
+    The <strong>saved notes</strong> are the entries you deliberately kept: each one has a title taken from its first
+    line, a created date, an updated date and the full text. Everything sits under a single versioned key,
+    <code>toolsly.notepad.v1</code>, as JSON. The version in the key means a future format change can migrate your old
+    notes instead of silently discarding them.
+  </p>
+  <p>
+    The editor shows a live character, word and line count while you write. <strong>Save note</strong> appends a new
+    entry, <strong>Update open note</strong> overwrites the note you loaded from the list, <strong>Delete</strong>
+    removes an entry after asking you to confirm, and <strong>Clear editor</strong> empties only the text area — your
+    saved notes are never touched by it. The saved-notes panel filters as you type, sorts newest or oldest first, and
+    every read and write is wrapped in a <code>try/catch</code>: if the browser refuses to store anything, you get a
+    visible warning at the top instead of a silent failure.
+  </p>
+  <p>
+    One deliberate difference from the original version of this page: the old tool counted your notes and stopped
+    letting you save after five per day, which punished exactly the people who write most. That counter has been
+    removed entirely. Nothing here limits how much you can write, how many notes you keep, or how often you edit them.
+  </p>
+
+  <h2>Your notes never leave your device</h2>
+  <p>
+    "Local only" is a precise claim, so here is exactly what it does and does not buy you.
+  </p>
+  <p>
+    <strong>What it protects you from:</strong> a server-side breach, a company reading your notes, a third-party
+    analytics profile of what you wrote, and any network interception. There is no copy of your text anywhere except
+    your own machine, and an ad blocker or a proxy cannot see it because it is never transmitted.
+  </p>
+  <p>
+    <strong>What it does not protect you from:</strong> anyone with access to your device or your browser profile.
+    localStorage is not encrypted and not password protected — it is a plain file in your browser's profile directory,
+    readable by anyone who can open that profile, and readable by scripts running on this same origin. On a shared or
+    family computer, a colleague's laptop, or a machine you do not control, treat these notes as public. Do not keep
+    passwords, recovery codes or anything sensitive in them.
+  </p>
+  <p>
+    <strong>Clearing browser data deletes your notes permanently.</strong> Choosing "clear browsing data", "clear
+    cookies and site data", or "clear storage" for this site removes the key, and there is no backup to restore from.
+    Cleanup and privacy extensions can do the same thing without asking. <strong>Private or incognito windows</strong>
+    usually give the page temporary storage that is destroyed the moment the window closes, sometimes they refuse
+    storage outright, and in that case the warning at the top of the tool appears and your notes live only in the open
+    tab. Finally, <strong>there is no sync of any kind</strong>: notes written in one browser stay in that browser, and
+    notes written on one device are not visible on another. If a note matters, export it.
+  </p>
+
+  <h2>Keyboard shortcuts</h2>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Shortcut</th>
+          <th scope="col">What it does</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>Ctrl</kbd> + <kbd>S</kbd> or <kbd>Cmd</kbd> + <kbd>S</kbd></td>
+          <td>Save. Updates the note currently open in the editor, or creates a new note when none is open.</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> + <kbd>Enter</kbd> or <kbd>Cmd</kbd> + <kbd>Enter</kbd></td>
+          <td>Save as a new note, even when another note is open — handy for splitting one draft into two entries.</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> + <kbd>K</kbd> or <kbd>Cmd</kbd> + <kbd>K</kbd></td>
+          <td>Move focus to the search box and select what is already there.</td>
+        </tr>
+        <tr>
+          <td><kbd>Esc</kbd></td>
+          <td>Clear the search box and show every saved note again.</td>
+        </tr>
+        <tr>
+          <td><kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd></td>
+          <td>Walk through the editor, the counts, the buttons and every note in the list.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The browser's own <kbd>Ctrl</kbd> + <kbd>S</kbd> "save page" dialog is suppressed while you are on this page, so
+    the shortcut does what you expect a notepad to do.
+  </p>
+
+  <h2>Exporting and backing up your notes</h2>
+  <p>
+    Because browser storage is fragile, the export buttons are the important part of this tool. <strong>Export
+    .txt</strong> writes every note to a plain text file in the sort order you have selected, with the title, the saved and
+    updated timestamps, and a separator line before each entry. <strong>Export .md</strong> writes the same notes as
+    Markdown: each note becomes a level-two heading with its text underneath, which drops straight into Obsidian,
+    Joplin, Bear, Notion or any static-site generator. <strong>Copy all</strong> puts the text version on your
+    clipboard so you can paste it into an email or another document without touching the filesystem.
+  </p>
+  <p>
+    The files are assembled entirely in your browser. The text is wrapped in a <code>Blob</code>, handed to
+    <code>URL.createObjectURL()</code> to get a short-lived local URL, and clicked through a temporary link that is
+    removed immediately afterwards. The URL is then released with <code>revokeObjectURL()</code> so the browser can
+    free the memory instead of holding every export for the life of the tab. No upload happens at any point, and the
+    tool works offline.
+  </p>
+  <p>
+    A practical backup habit: export once a week to a folder that is itself backed up, and export again before you
+    clear your browsing data, reinstall your browser, or move to a new computer. Search first and sort as you like —
+    the export follows the current order and includes every note, filtered or not.
+  </p>
+</ToolLayout>
+
+<style is:global>
+  .np {
+    display: grid;
+    gap: 1rem;
+  }
+  .np [hidden] {
+    display: none !important;
+  }
+  .np-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    .np-grid {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+  }
+  .np-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.35rem 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+  .np-h {
+    margin: 0;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .np-editing {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+  .np-field {
+    display: grid;
+    gap: 0.35rem;
+  }
+  .np-textarea {
+    min-height: 15rem;
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .np-stats {
+    margin-top: 0.9rem;
+  }
+  .np-stats .stat__value {
+    font-size: 1.3rem;
+  }
+  .np-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+  }
+  .np-actions .btn {
+    flex: 1 1 auto;
+  }
+  .np-status {
+    margin: 0.8rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 1.25em;
+    overflow-wrap: anywhere;
+  }
+  .np-foot-lead {
+    margin: 0;
+  }
+  .np-foot-kbd {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.1rem;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85rem;
+  }
+  .np-tools {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  @media (min-width: 520px) {
+    .np-tools {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 10rem);
+    }
+  }
+  .np-exports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.9rem 0 1rem;
+  }
+  .np-list {
+    display: grid;
+    gap: 0.6rem;
+  }
+  .np-note {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: 0.85rem 0.95rem;
+  }
+  .np-note--open {
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
+  }
+  .np-note__top {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .np-note__title {
+    margin: 0;
+    font-size: 0.98rem;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .np-note__badge {
+    flex: none;
+  }
+  .np-note__text {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .np-note__meta {
+    margin: 0.5rem 0 0;
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    overflow-wrap: anywhere;
+  }
+  .np-note__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.7rem;
+  }
+  .np-warn {
+    margin: 0;
+  }
+  .np kbd,
+  .prose kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text);
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  (function () {
+    const STORAGE_KEY = "toolsly.notepad.v1";
+    const AUTOSAVE_MS = 800;
+
+    const $ = (id) => document.getElementById(id);
+
+    const root = $("np");
+    if (!root) return;
+
+    const textEl = $("np-text");
+    const charsEl = $("np-chars");
+    const wordsEl = $("np-words");
+    const linesEl = $("np-lines");
+    const statusEl = $("np-status");
+    const editingEl = $("np-editing");
+    const shownEl = $("np-shown");
+    const saveBtn = $("np-save");
+    const updateBtn = $("np-update");
+    const clearBtn = $("np-clear");
+    const searchEl = $("np-search");
+    const sortEl = $("np-sort");
+    const listEl = $("np-list");
+    const emptyEl = $("np-empty");
+    const countEl = $("np-count");
+    const warnEl = $("np-warn");
+    const warnMsgEl = $("np-warn-msg");
+    const tpl = $("np-note-tpl");
+
+    const state = { version: 1, draft: "", notes: [] };
+    let currentId = null;
+    let storageOk = true;
+    let autosaveTimer = null;
+    let draftDirty = false;
+
+    let fmt = null;
+    try {
+      fmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+    } catch (err) {
+      fmt = null;
+    }
+
+    const when = (ts) => {
+      const d = new Date(ts);
+      try {
+        return fmt ? fmt.format(d) : d.toLocaleString();
+      } catch (err) {
+        return d.toLocaleString();
+      }
+    };
+
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+    const pad = (n) => (n < 10 ? "0" + n : String(n));
+
+    const slug = (ts) => {
+      const d = new Date(ts);
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    };
+
+    function titleOf(value) {
+      const first =
+        String(value || "")
+          .split("\n")
+          .map((line) => line.trim())
+          .find((line) => line.length > 0) || "";
+      const clean = first.replace(/^#+\s*/, "").trim();
+      if (!clean) return "Untitled";
+      return clean.length > 60 ? clean.slice(0, 60).trim() + "\u2026" : clean;
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function flagStorage(message) {
+      storageOk = false;
+      warnEl.hidden = false;
+      if (message) warnMsgEl.textContent = message;
+    }
+
+    function storageAvailable() {
+      try {
+        const probe = STORAGE_KEY + ".probe";
+        window.localStorage.setItem(probe, "1");
+        window.localStorage.removeItem(probe);
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function readStore() {
+      let raw = null;
+      try {
+        raw = window.localStorage.getItem(STORAGE_KEY);
+      } catch (err) {
+        flagStorage("Your browser refused to read its local storage, so this page is working from memory only.");
+        return;
+      }
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return;
+        if (typeof parsed.draft === "string") state.draft = parsed.draft;
+        if (!Array.isArray(parsed.notes)) return;
+        state.notes = parsed.notes
+          .filter((n) => n && typeof n.text === "string")
+          .map((n) => {
+            const created = typeof n.createdAt === "number" ? n.createdAt : Date.now();
+            return {
+              id: typeof n.id === "string" && n.id ? n.id : uid(),
+              text: n.text,
+              title: typeof n.title === "string" && n.title ? n.title : titleOf(n.text),
+              createdAt: created,
+              updatedAt: typeof n.updatedAt === "number" ? n.updatedAt : created,
+            };
+          });
+      } catch (err) {
+        flagStorage(
+          "The saved data in this browser could not be read, so it was left untouched and this page started empty."
+        );
+      }
+    }
+
+    function writeStore() {
+      if (!storageOk) return false;
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ version: 1, draft: state.draft, notes: state.notes })
+        );
+        return true;
+      } catch (err) {
+        flagStorage(
+          "The browser refused to save, which usually means storage is full or blocked (private windows often limit it). Your notes stay in this tab only."
+        );
+        return false;
+      }
+    }
+
+    function updateCounts() {
+      const value = textEl.value;
+      charsEl.textContent = String(value.length);
+      const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+      wordsEl.textContent = String(words);
+      const lines = value.length ? value.split("\n").length : 0;
+      linesEl.textContent = String(lines);
+    }
+
+    function serialise(mode) {
+      const notes = state.notes.slice().sort((a, b) => {
+        if (sortEl.value === "oldest") return a.createdAt - b.createdAt || a.updatedAt - b.updatedAt;
+        return b.createdAt - a.createdAt || b.updatedAt - a.updatedAt;
+      });
+      const out = [];
+      if (mode === "md") {
+        out.push("# Secure Quick Notepad \u2014 exported notes");
+        out.push("");
+        out.push("_Exported " + when(Date.now()) + " \u00b7 " + notes.length + " note(s)_");
+      } else {
+        out.push("Secure Quick Notepad \u2014 exported notes");
+        out.push("Exported: " + when(Date.now()));
+        out.push("Notes: " + notes.length);
+      }
+      out.push("");
+      if (!notes.length) {
+        out.push("(No saved notes.)");
+        return out.join("\n");
+      }
+      notes.forEach((note, index) => {
+        if (mode === "md") {
+          out.push("## " + (index + 1) + ". " + note.title);
+          out.push("");
+          out.push(
+            "_Saved " + when(note.createdAt) + " \u00b7 updated " + when(note.updatedAt) + " \u00b7 " + note.text.length + " characters_"
+          );
+          out.push("");
+          out.push(note.text);
+          out.push("");
+          out.push("---");
+          out.push("");
+        } else {
+          out.push("========================================");
+          out.push((index + 1) + ". " + note.title);
+          out.push("Saved: " + when(note.createdAt) + "  |  Updated: " + when(note.updatedAt));
+          out.push("========================================");
+          out.push(note.text);
+          out.push("");
+          out.push("");
+        }
+      });
+      return out.join("\n");
+    }
+
+    function download(filename, content, type) {
+      let url = "";
+      try {
+        const blob = new Blob([content], { type: type });
+        url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return true;
+      } catch (err) {
+        setStatus("The download could not be started in this browser. Use Copy all instead.");
+        return false;
+      } finally {
+        if (url) {
+          const release = url;
+          window.setTimeout(function () {
+            try {
+              URL.revokeObjectURL(release);
+            } catch (err) {
+              /* already released */
+            }
+          }, 1000);
+        }
+      }
+    }
+
+    function noteNode(note, index) {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      node.dataset.id = note.id;
+      if (note.id === currentId) node.classList.add("np-note--open");
+
+      const titleEl = node.querySelector(".np-note__title");
+      const badgeEl = node.querySelector(".np-note__badge");
+      const textNode = node.querySelector(".np-note__text");
+      const metaEl = node.querySelector(".np-note__meta");
+      const openBtn = node.querySelector('[data-act="open"]');
+      const delBtn = node.querySelector('[data-act="delete"]');
+
+      titleEl.textContent = index + ". " + note.title;
+      badgeEl.textContent = note.id === currentId ? "Open" : "Saved";
+      textNode.textContent =
+        note.text.length > 320 ? note.text.slice(0, 320).trimEnd() + "\u2026" : note.text;
+      metaEl.textContent =
+        "Saved " +
+        when(note.createdAt) +
+        (note.updatedAt !== note.createdAt ? " \u00b7 updated " + when(note.updatedAt) : "") +
+        " \u00b7 " +
+        note.text.length +
+        " characters";
+
+      openBtn.setAttribute("aria-label", "Open note \u201c" + note.title + "\u201d in the editor");
+      delBtn.setAttribute("aria-label", "Delete note \u201c" + note.title + "\u201d");
+      return node;
+    }
+
+    function visibleNotes() {
+      const query = searchEl.value.trim().toLowerCase();
+      const filtered = state.notes.filter((note) => {
+        if (!query) return true;
+        return note.text.toLowerCase().includes(query) || note.title.toLowerCase().includes(query);
+      });
+      return filtered.sort((a, b) => {
+        if (sortEl.value === "oldest") return a.createdAt - b.createdAt || a.updatedAt - b.updatedAt;
+        return b.createdAt - a.createdAt || b.updatedAt - a.updatedAt;
+      });
+    }
+
+    function renderEditing() {
+      const note = state.notes.find((n) => n.id === currentId);
+      if (note) {
+        editingEl.textContent =
+          "Editing \u201c" +
+          note.title +
+          "\u201d, saved " +
+          when(note.createdAt) +
+          (note.updatedAt !== note.createdAt ? ", updated " + when(note.updatedAt) : "");
+        updateBtn.disabled = false;
+        updateBtn.setAttribute("aria-disabled", "false");
+      } else {
+        editingEl.textContent = "New note \u2014 the draft autosaves, but it is not in the saved list yet.";
+        updateBtn.disabled = true;
+        updateBtn.setAttribute("aria-disabled", "true");
+      }
+    }
+
+    function renderList() {
+      const list = visibleNotes();
+      const query = searchEl.value.trim();
+      listEl.textContent = "";
+      countEl.textContent = String(state.notes.length);
+
+      if (state.notes.length === 0) {
+        shownEl.textContent = "";
+      } else if (query && list.length === 0) {
+        shownEl.textContent = "Nothing matches \u201c" + query + "\u201d.";
+      } else if (query) {
+        shownEl.textContent = "Showing " + list.length + " of " + state.notes.length + " notes.";
+      } else {
+        shownEl.textContent = list.length + " note" + (list.length === 1 ? "" : "s") + " on this device.";
+      }
+
+      if (list.length === 0) {
+        emptyEl.hidden = false;
+        emptyEl.textContent =
+          state.notes.length === 0
+            ? "No notes saved yet. Write something in the editor and choose Save note."
+            : "No note contains \u201c" + query + "\u201d. Press Escape to clear the search.";
+        return;
+      }
+      emptyEl.hidden = true;
+      list.forEach((note, index) => {
+        listEl.appendChild(noteNode(note, index + 1));
+      });
+    }
+
+    function render() {
+      renderEditing();
+      renderList();
+    }
+
+    function saveDraft() {
+      state.draft = textEl.value;
+      draftDirty = false;
+      const ok = writeStore();
+      setStatus(
+        ok
+          ? "Draft autosaved to this browser at " + new Date().toLocaleTimeString() + "."
+          : "Draft kept in this tab only \u2014 browser storage is unavailable."
+      );
+    }
+
+    function flushDraft() {
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      if (draftDirty) saveDraft();
+    }
+
+    function scheduleAutosave() {
+      draftDirty = true;
+      if (autosaveTimer) window.clearTimeout(autosaveTimer);
+      autosaveTimer = window.setTimeout(function () {
+        autosaveTimer = null;
+        saveDraft();
+      }, AUTOSAVE_MS);
+    }
+
+    function saveNewNote() {
+      const value = textEl.value;
+      if (!value.trim()) {
+        setStatus("Nothing to save yet \u2014 write at least one character first.");
+        textEl.focus();
+        return;
+      }
+      const now = Date.now();
+      const note = {
+        id: uid(),
+        text: value,
+        title: titleOf(value),
+        createdAt: now,
+        updatedAt: now,
+      };
+      state.notes.push(note);
+      state.draft = value;
+      draftDirty = false;
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      currentId = note.id;
+      const ok = writeStore();
+      render();
+      setStatus(
+        ok
+          ? "Saved \u201c" + note.title + "\u201d at " + new Date().toLocaleTimeString() + "."
+          : "\u201c" + note.title + "\u201d is in this tab only \u2014 browser storage is unavailable."
+      );
+    }
+
+    function updateOpenNote() {
+      const note = state.notes.find((n) => n.id === currentId);
+      if (!note) {
+        setStatus("No saved note is open. Use Save note to create one.");
+        return;
+      }
+      if (!textEl.value.trim()) {
+        setStatus("The editor is empty, so the open note was left unchanged.");
+        textEl.focus();
+        return;
+      }
+      note.text = textEl.value;
+      note.title = titleOf(note.text);
+      note.updatedAt = Date.now();
+      state.draft = note.text;
+      draftDirty = false;
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      const ok = writeStore();
+      render();
+      setStatus(
+        ok
+          ? "Updated \u201c" + note.title + "\u201d."
+          : "\u201c" + note.title + "\u201d was updated in this tab only \u2014 browser storage is unavailable."
+      );
+    }
+
+    function deleteNote(id) {
+      const note = state.notes.find((n) => n.id === id);
+      if (!note) return;
+      const ok = window.confirm("Delete \u201c" + note.title + "\u201d permanently? This cannot be undone.");
+      if (!ok) {
+        setStatus("Delete cancelled.");
+        return;
+      }
+      state.notes = state.notes.filter((n) => n.id !== id);
+      if (currentId === id) currentId = null;
+      writeStore();
+      render();
+      setStatus(
+        "Deleted \u201c" +
+          note.title +
+          "\u201d. Its text is still in the editor if you want to save it again."
+      );
+    }
+
+    function openNote(id) {
+      const note = state.notes.find((n) => n.id === id);
+      if (!note) return;
+      currentId = id;
+      textEl.value = note.text;
+      state.draft = note.text;
+      draftDirty = false;
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      updateCounts();
+      render();
+      textEl.focus();
+      setStatus("Opened \u201c" + note.title + "\u201d. Update open note overwrites it.");
+    }
+
+    function clearEditor() {
+      if (!textEl.value) {
+        setStatus("The editor is already empty.");
+        textEl.focus();
+        return;
+      }
+      const ok = window.confirm(
+        "Clear the editor? The autosaved draft is erased too. Your saved notes are not affected."
+      );
+      if (!ok) {
+        setStatus("Clear cancelled.");
+        return;
+      }
+      textEl.value = "";
+      state.draft = "";
+      draftDirty = false;
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      writeStore();
+      updateCounts();
+      render();
+      textEl.focus();
+      setStatus("Editor cleared. Saved notes were left untouched.");
+    }
+
+    function copyAll() {
+      const content = serialise("txt");
+      const done = function () {
+        setStatus("Copied all " + state.notes.length + " note(s) to the clipboard.");
+      };
+      const fallback = function () {
+        let copied = false;
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = content;
+          ta.setAttribute("readonly", "readonly");
+          ta.className = "sr-only";
+          document.body.appendChild(ta);
+          ta.select();
+          copied = document.execCommand("copy");
+          ta.remove();
+        } catch (err) {
+          copied = false;
+        }
+        if (copied) {
+          done();
+        } else {
+          setStatus("The clipboard is not available here. Use Export .txt to save the notes as a file.");
+        }
+      };
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(content).then(done, fallback);
+          return;
+        }
+      } catch (err) {
+        /* fall through */
+      }
+      fallback();
+    }
+
+    saveBtn.addEventListener("click", saveNewNote);
+    updateBtn.addEventListener("click", updateOpenNote);
+    clearBtn.addEventListener("click", clearEditor);
+    $("np-export-txt").addEventListener("click", function () {
+      if (!state.notes.length) {
+        setStatus("There is nothing to export yet.");
+        return;
+      }
+      if (download("notepad-notes-" + slug(Date.now()) + ".txt", serialise("txt"), "text/plain;charset=utf-8")) {
+        setStatus("Exported " + state.notes.length + " note(s) as a .txt file.");
+      }
+    });
+    $("np-export-md").addEventListener("click", function () {
+      if (!state.notes.length) {
+        setStatus("There is nothing to export yet.");
+        return;
+      }
+      if (download("notepad-notes-" + slug(Date.now()) + ".md", serialise("md"), "text/markdown;charset=utf-8")) {
+        setStatus("Exported " + state.notes.length + " note(s) as a Markdown file.");
+      }
+    });
+    $("np-copy").addEventListener("click", copyAll);
+
+    textEl.addEventListener("input", function () {
+      updateCounts();
+      scheduleAutosave();
+    });
+
+    searchEl.addEventListener("input", renderList);
+    sortEl.addEventListener("change", renderList);
+
+    listEl.addEventListener("click", function (event) {
+      const button = event.target.closest("button[data-act]");
+      if (!button) return;
+      const item = button.closest(".np-note");
+      if (!item) return;
+      if (button.dataset.act === "open") openNote(item.dataset.id);
+      else if (button.dataset.act === "delete") deleteNote(item.dataset.id);
+    });
+
+    document.addEventListener("keydown", function (event) {
+      const mod = event.ctrlKey || event.metaKey;
+
+      if (!mod) {
+        if (event.key === "Escape" && searchEl.value) {
+          searchEl.value = "";
+          renderList();
+          setStatus("Search cleared.");
+        }
+        return;
+      }
+
+      const key = (event.key || "").toLowerCase();
+      if (key === "s") {
+        event.preventDefault();
+        if (currentId && state.notes.some((n) => n.id === currentId)) updateOpenNote();
+        else saveNewNote();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        saveNewNote();
+      } else if (key === "k") {
+        event.preventDefault();
+        searchEl.focus();
+        searchEl.select();
+      }
+    });
+
+    window.addEventListener("beforeunload", flushDraft);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") flushDraft();
+    });
+
+    storageOk = storageAvailable();
+    if (!storageOk) {
+      flagStorage(
+        "Note storage is blocked or full, so this page keeps your notes in memory until you close the tab. Export or copy anything you need before leaving."
+      );
+    }
+    readStore();
+
+    textEl.value = state.draft || "";
+    updateCounts();
+    render();
+    setStatus(
+      storageOk
+        ? "Ready. Everything you type stays in this browser and is never sent anywhere."
+        : "Working in memory only \u2014 storage is unavailable in this browser."
+    );
+  })();
+</script>

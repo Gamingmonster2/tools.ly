@@ -1,0 +1,19 @@
+# Dependencies and build output are regenerated, never committed.
+node_modules/
+dist/
+.astro/
+
+# Local caches created by the sandboxed install.
+.npm-cache/
+.npmrc
+.pnpm-store/
+
+# Local visual-QA output (design screenshots) and the throwaway Chrome profile.
+_shots/
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

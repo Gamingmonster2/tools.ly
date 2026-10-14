@@ -1,0 +1,626 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find(
+  (t) =>
+    t.slug ===
+    "find-your-perfect-fit-use-our-ideal-weight-calculator-to-know-your-healthy-weight-range"
+)!;
+
+const faqs = [
+  {
+    q: "Is there really such a thing as an ideal weight?",
+    a: "No single number is correct for everyone. What exists are population ranges: weights at which, on average, health risks are lowest for a given height. Within that range, two people of the same height can both be healthy with very different amounts of muscle and fat. That is why this page shows a range plus several formulas rather than one \"correct\" figure.",
+  },
+  {
+    q: "Why do the formulas give me different answers?",
+    a: "They were derived at different times from different populations and for different purposes. Devine and Hamwi came from medication-dosing work in the 1960s and 1970s; Robinson and Miller were later attempts to correct the same idea. A spread of a few kilograms between them is normal and is not evidence that one is wrong.",
+  },
+  {
+    q: "Does BMI apply to everyone?",
+    a: "No. Body mass index was designed for populations, not individuals. It overstates risk in very muscular people, who carry extra weight without extra fat, and it can understate risk in older adults who have lost muscle. Some health bodies also use different thresholds for people of South Asian descent, where risk rises at a lower BMI. Treat the number as one input, not a verdict.",
+  },
+  {
+    q: "Should I aim for the middle of the range?",
+    a: "Not necessarily. Anywhere inside the healthy range is a reasonable landing place, and where you sit within it should be guided by how you feel, your muscle mass, and clinical markers such as blood pressure, blood glucose and waist circumference. A target that requires permanent hunger is not a good target.",
+  },
+];
+
+const sources = [
+  {
+    label: "WHO — Body mass index (BMI)",
+    href: "https://www.who.int/data/gho/data/themes/topics/topic-details/GHO/body-mass-index",
+    note: "the source of the 18.5–24.9 healthy BMI band used here",
+  },
+  {
+    label: "NIH — Assessing Your Weight and Health Risk",
+    href: "https://www.nhlbi.nih.gov/health/educational/lose_wt/risk.htm",
+    note: "explains why waist circumference is used alongside BMI",
+  },
+  {
+    label: "Pai & Paloucek — The origin of the \"ideal\" body weight equations (Ann Pharmacother, 2000)",
+    href: "https://pubmed.ncbi.nlm.nih.gov/10981254/",
+    note: "the review that traces where the Devine, Robinson, Miller and Hamwi formulas came from",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+
+/** Rendered into the table so the rows carry Astro's style-scoping attribute. */
+const formulaMeta = [
+  { key: "devine", name: "Devine (1974)", year: 1974 },
+  { key: "hamwi", name: "Hamwi (1964)", year: 1964 },
+  { key: "robinson", name: "Robinson (1983)", year: 1983 },
+  { key: "miller", name: "Miller (1983)", year: 1983 },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Enter your height and current weight to see the healthy weight range for your height, four published ideal-weight estimates, and where your current weight sits between them."
+  faqs={faqs}
+  sources={sources}
+  notice="Estimates for information only. These formulas describe populations, not you, and they are not medical advice. Speak to a doctor or dietitian before acting on a weight target."
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <form id="iw-form" class="iw-form">
+          <fieldset class="fieldset">
+            <legend>Units</legend>
+            <div class="iw-toggle" role="radiogroup" aria-label="Unit system">
+              <label class="iw-toggle__opt">
+                <input type="radio" name="units" value="metric" checked />
+                <span>Metric (cm, kg)</span>
+              </label>
+              <label class="iw-toggle__opt">
+                <input type="radio" name="units" value="imperial" />
+                <span>Imperial (ft/in, lb)</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field-grid" style="margin-top:1rem">
+            <div class="field">
+              <label for="iw-sex">Sex used by the formulas</label>
+              <select id="iw-sex">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+              <small style="color:var(--text-faint);font-size:0.8rem">
+                The published formulas are defined only for male and female reference bodies.
+              </small>
+            </div>
+
+            <div class="field">
+              <label for="iw-age">Age (optional)</label>
+              <input id="iw-age" type="number" min="2" max="120" step="1" placeholder="e.g. 34" />
+              <small style="color:var(--text-faint);font-size:0.8rem">
+                Adults: the healthy range narrows slightly with age in some guidelines.
+              </small>
+            </div>
+          </div>
+
+          <div class="field-grid" style="margin-top:1rem">
+            <div class="field" data-units="metric">
+              <label for="iw-height-cm">Height (cm)</label>
+              <input id="iw-height-cm" type="number" min="100" max="250" step="0.5" value="175" inputmode="decimal" />
+            </div>
+
+            <div data-units="imperial" hidden>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="iw-height-ft">Height (ft)</label>
+                  <input id="iw-height-ft" type="number" min="3" max="8" step="1" value="5" inputmode="numeric" />
+                </div>
+                <div class="field">
+                  <label for="iw-height-in">(in)</label>
+                  <input id="iw-height-in" type="number" min="0" max="11.9" step="0.5" value="9" inputmode="decimal" />
+                </div>
+              </div>
+            </div>
+
+            <div class="field" data-units="metric">
+              <label for="iw-weight-kg">Current weight (kg)</label>
+              <input id="iw-weight-kg" type="number" min="20" max="400" step="0.1" value="80" inputmode="decimal" />
+            </div>
+
+            <div class="field" data-units="imperial" hidden>
+              <label for="iw-weight-lb">Current weight (lb)</label>
+              <input id="iw-weight-lb" type="number" min="44" max="880" step="0.1" value="176" inputmode="decimal" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:1rem;max-width:320px">
+            <label for="iw-waist">Waist circumference (optional, cm)</label>
+            <input id="iw-waist" type="number" min="40" max="200" step="0.5" placeholder="Adds a risk flag when elevated" />
+          </div>
+
+          <div style="margin-top:1.25rem;display:flex;gap:0.6rem;flex-wrap:wrap">
+            <button class="btn btn--primary" type="submit">Calculate</button>
+            <button class="btn btn--ghost" type="button" id="iw-reset">Reset</button>
+          </div>
+        </form>
+
+        <div class="iw-results" id="iw-results" aria-live="polite" hidden>
+          <div class="stat-grid" style="margin-top:1.5rem">
+            <div class="stat">
+              <div class="stat__label">Your BMI</div>
+              <div class="stat__value"><span id="iw-bmi">—</span></div>
+              <div class="stat__label" id="iw-bmi-cat" style="margin-top:0.25rem"></div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Healthy weight range</div>
+              <div class="stat__value" style="font-size:1.15rem"><span id="iw-range">—</span></div>
+              <div class="stat__label" style="margin-top:0.25rem">BMI 18.5 – 24.9</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Average of the formulas</div>
+              <div class="stat__value" style="font-size:1.15rem"><span id="iw-average">—</span></div>
+              <div class="stat__label" style="margin-top:0.25rem">4 published equations</div>
+            </div>
+          </div>
+
+          <div class="iw-scale" aria-hidden="true">
+            <div class="iw-scale__track">
+              <div class="iw-scale__healthy" id="iw-scale-healthy"></div>
+              <div class="iw-scale__marker" id="iw-scale-marker" title="Your current weight"></div>
+            </div>
+            <div class="iw-scale__labels">
+              <span id="iw-scale-min">—</span>
+              <span id="iw-scale-max">—</span>
+            </div>
+          </div>
+
+          <p class="iw-summary" id="iw-summary"></p>
+
+          <div class="table-wrap" style="margin-top:1.25rem">
+            <table class="data">
+              <caption style="text-align:start;padding:0.6rem 0.85rem;color:var(--text-faint);font-size:0.85rem">
+                Published ideal body weight estimates for your height
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Formula</th>
+                  <th scope="col">Year</th>
+                  <th scope="col">Estimate</th>
+                  <th scope="col">Difference from your weight</th>
+                </tr>
+              </thead>
+              <tbody id="iw-rows">
+                {
+                  formulaMeta.map((formula) => (
+                    <tr data-formula={formula.key}>
+                      <th scope="row">{formula.name}</th>
+                      <td>{formula.year}</td>
+                      <td data-cell="estimate">—</td>
+                      <td data-cell="diff">—</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <p class="iw-note" id="iw-risk" hidden></p>
+        </div>
+
+        <p class="iw-status" id="iw-status" role="status" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="panel__foot">
+        Body mass index uses the WHO healthy band of 18.5–24.9. The four ideal-weight equations are
+        the Devine, Robinson, Miller and Hamwi formulas, all expressed in kilograms.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>What this calculator actually does</h2>
+  <p>
+    There is no single ideal weight, so this page does not pretend to find one. It does two
+    separate, well-defined things and shows you both. First it computes your <strong>body mass
+    index</strong> and the weight range that corresponds to the healthy BMI band of 18.5 to 24.9 for
+    your height. That range is derived from population data collected by the World Health
+    Organization. Second, it lists four <strong>published ideal body weight equations</strong> —
+    Devine, Robinson, Miller and Hamwi — that were originally written for clinical dosing rather
+    than for personal targets, and shows how your current weight compares with each.
+  </p>
+  <p>
+    Seeing the numbers side by side is the point. If the four formulas disagree by five kilograms
+    and the healthy range is eleven kilograms wide, then the honest conclusion is that you have a
+    zone to aim at, not a target weight.
+  </p>
+
+  <h2>The formulas, and where they come from</h2>
+  <p>
+    The Devine equation was published in 1974 to dose gentamicin, an antibiotic whose distribution
+    depends on lean body mass. Robinson (1983), Miller (1983) and Hamwi (1964) are variations with
+    the same purpose and slightly different study populations. All four are linear in height and
+    assume a reference frame size, which is why they cannot describe a very muscular or very light
+    person accurately.
+  </p>
+  <p>
+    Because they are all built on the same idea, averaging them produces a stable-looking number
+    that is no more correct than any single equation. The average is shown because it is easy to
+    read at a glance, not because it carries extra authority.
+  </p>
+
+  <h2>Why the healthy range is wide</h2>
+  <p>
+    At 175 cm the healthy BMI band spans roughly 57 to 76 kg — about nineteen kilograms, or the
+    difference between a light and a heavy build. Between those two points you will find
+    endurance runners, dancers, lifters, and people who have simply never exercised, some of whom
+    are healthier than others. BMI cannot tell them apart, because it knows nothing about how much
+    of your weight is fat or where that fat sits. That is why the tool accepts an optional waist
+    measurement: central fat is a better predictor of metabolic risk than total body weight, and a
+    waist above the usual thresholds is worth mentioning to a clinician even when BMI looks fine.
+  </p>
+
+  <h2>How to use the result</h2>
+  <ol>
+    <li>
+      Look at the <strong>healthy range</strong> first. If your weight is inside it, you already have
+      your answer, and chasing the average of four formulas adds nothing.
+    </li>
+    <li>
+      If you are above the range, note the top of the range rather than the midpoint. Reaching the
+      upper end already puts you in a healthy BMI band and is a far less punishing first goal.
+    </li>
+    <li>
+      If you are below the range, take it seriously — being underweight carries its own risks,
+      including reduced bone density and impaired immune function.
+    </li>
+    <li>
+      Measure your waist alongside any weight change. Waist moving in the right direction while
+      weight stays flat usually means fat is being replaced by muscle, which is a good outcome that
+      a scale alone would hide.
+    </li>
+  </ol>
+
+  <h2>Limitations worth stating plainly</h2>
+  <ul>
+    <li>BMI thresholds are not universal: several health bodies use lower action points for people of South Asian descent.</li>
+    <li>Athletes with high muscle mass can register as "overweight" with low body fat.</li>
+    <li>Adults over about 65 lose muscle with age, so BMI can look normal while body fat is high.</li>
+    <li>Pregnancy makes both BMI and the weight equations inapplicable.</li>
+    <li>Children and teenagers need age- and sex-specific growth charts, not the adult formulas.</li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Weight is one measurement among many. Blood pressure, blood glucose, cholesterol, sleep,
+      strength and how you actually feel tell a fuller story than any single number on this page.
+    </p>
+  </div>
+</ToolLayout>
+
+<style>
+  .iw-toggle {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .iw-toggle__opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.85rem;
+    font-size: 0.92rem;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .iw-toggle__opt:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 650;
+  }
+
+  .iw-scale { margin-top: 1.5rem; }
+  .iw-scale__track {
+    position: relative;
+    height: 14px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+  }
+  .iw-scale__healthy {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--ok-soft);
+    border-inline: 1px solid var(--ok);
+    border-radius: 3px;
+  }
+  .iw-scale__marker {
+    position: absolute;
+    top: -6px;
+    width: 3px;
+    height: 26px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: translateX(-50%);
+  }
+  .iw-scale__labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    margin-top: 0.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .iw-summary {
+    margin-top: 1rem;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  .iw-summary strong { color: var(--accent); }
+
+  .iw-note {
+    margin-top: 1rem;
+    border-inline-start: 3px solid var(--warn);
+    background: var(--warn-soft);
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+  }
+
+  .iw-status { margin-top: 1rem; font-size: 0.9rem; color: var(--danger); }
+  td.iw-diff-up { color: var(--warn); font-weight: 620; }
+  td.iw-diff-down { color: var(--accent); font-weight: 620; }
+</style>
+
+<script>
+  const form = document.getElementById("iw-form") as HTMLFormElement;
+  const results = document.getElementById("iw-results")!;
+  const status = document.getElementById("iw-status")!;
+
+  const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  const heightCmInput = el<HTMLInputElement>("iw-height-cm");
+  const heightFtInput = el<HTMLInputElement>("iw-height-ft");
+  const heightInInput = el<HTMLInputElement>("iw-height-in");
+  const weightKgInput = el<HTMLInputElement>("iw-weight-kg");
+  const weightLbInput = el<HTMLInputElement>("iw-weight-lb");
+  const sexInput = el<HTMLSelectElement>("iw-sex");
+  const ageInput = el<HTMLInputElement>("iw-age");
+  const waistInput = el<HTMLInputElement>("iw-waist");
+
+  const UNITS = { metric: 1, imperial: 2 };
+  const KG_PER_LB = 0.45359237;
+  const CM_PER_IN = 2.54;
+
+  const currentUnits = (): "metric" | "imperial" =>
+    (form.querySelector('input[name="units"]:checked') as HTMLInputElement).value as
+      | "metric"
+      | "imperial";
+
+  const setUnitVisibility = () => {
+    const units = currentUnits();
+    for (const node of Array.from(document.querySelectorAll<HTMLElement>("[data-units]"))) {
+      node.hidden = node.dataset.units !== units;
+    }
+  };
+
+  const getHeightCm = (): number => {
+    if (currentUnits() === "metric") {
+      return Number(heightCmInput.value);
+    }
+    const feet = Number(heightFtInput.value) || 0;
+    const inches = Number(heightInInput.value) || 0;
+    return (feet * 12 + inches) * CM_PER_IN;
+  };
+
+  const getWeightKg = (): number => {
+    if (currentUnits() === "metric") {
+      return Number(weightKgInput.value);
+    }
+    return (Number(weightLbInput.value) || 0) * KG_PER_LB;
+  };
+
+  const kgToDisplay = (kg: number): string => {
+    if (currentUnits() === "metric") return `${kg.toFixed(1)} kg`;
+    return `${(kg / KG_PER_LB).toFixed(1)} lb`;
+  };
+
+  const idealWeights = (heightCm: number, sex: "male" | "female") => {
+    const inchesOver5ft = Math.max(0, heightCm / CM_PER_IN - 60);
+    const male = sex === "male";
+    return [
+      { name: "Devine (1974)", year: 1974, kg: (male ? 50 : 45.5) + 2.3 * inchesOver5ft },
+      { name: "Hamwi (1964)", year: 1964, kg: (male ? 48 : 45.5) + (male ? 2.7 : 2.2) * inchesOver5ft },
+      { name: "Robinson (1983)", year: 1983, kg: (male ? 52 : 49) + (male ? 1.9 : 1.7) * inchesOver5ft },
+      { name: "Miller (1983)", year: 1983, kg: (male ? 56.2 : 53.1) + (male ? 1.41 : 1.36) * inchesOver5ft },
+    ];
+  };
+
+  const bmiCategory = (bmi: number): { label: string; tone: string } => {
+    if (bmi < 16) return { label: "Severely underweight", tone: "var(--danger)" };
+    if (bmi < 18.5) return { label: "Underweight", tone: "var(--warn)" };
+    if (bmi < 25) return { label: "Healthy range", tone: "var(--ok)" };
+    if (bmi < 30) return { label: "Overweight", tone: "var(--warn)" };
+    if (bmi < 35) return { label: "Obese class I", tone: "var(--danger)" };
+    if (bmi < 40) return { label: "Obese class II", tone: "var(--danger)" };
+    return { label: "Obese class III", tone: "var(--danger)" };
+  };
+
+  const showError = (message: string) => {
+    status.textContent = message;
+    status.hidden = false;
+    results.hidden = true;
+  };
+
+  const calculate = () => {
+    status.hidden = true;
+
+    const heightCm = getHeightCm();
+    const weightKg = getWeightKg();
+    const sex = sexInput.value as "male" | "female";
+
+    if (!Number.isFinite(heightCm) || heightCm < 100 || heightCm > 250) {
+      showError("Please enter a height between 100 cm and 250 cm (about 3 ft 3 in to 8 ft 2 in).");
+      return;
+    }
+    if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+      showError("Please enter a weight between 20 kg and 400 kg (about 44 lb to 880 lb).");
+      return;
+    }
+
+    const heightM = heightCm / 100;
+    const bmi = weightKg / (heightM * heightM);
+    const healthyMin = 18.5 * heightM * heightM;
+    const healthyMax = 24.9 * heightM * heightM;
+
+    const estimates = idealWeights(heightCm, sex);
+    const average = estimates.reduce((sum, e) => sum + e.kg, 0) / estimates.length;
+
+    el("iw-bmi").textContent = bmi.toFixed(1);
+    const category = bmiCategory(bmi);
+    const catEl = el("iw-bmi-cat");
+    catEl.textContent = category.label;
+    catEl.style.color = category.tone;
+
+    el("iw-range").textContent = `${kgToDisplay(healthyMin)} – ${kgToDisplay(healthyMax)}`;
+    el("iw-average").textContent = kgToDisplay(average);
+
+    const rows = el("iw-rows");
+    const cells = Array.from(rows.querySelectorAll<HTMLTableRowElement>("tr[data-formula]"));
+    cells.forEach((tr, index) => {
+      const estimate = estimates[index];
+      if (!estimate) return;
+      const diff = weightKg - estimate.kg;
+
+      const estCell = tr.querySelector<HTMLElement>('[data-cell="estimate"]');
+      const diffCell = tr.querySelector<HTMLElement>('[data-cell="diff"]');
+      if (estCell) estCell.textContent = kgToDisplay(estimate.kg);
+      if (diffCell) {
+        const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+        diffCell.textContent = `${sign}${kgToDisplay(Math.abs(diff))}`;
+        diffCell.classList.toggle("iw-diff-up", diff >= 0.05);
+        diffCell.classList.toggle("iw-diff-down", diff <= -0.05);
+      }
+    });
+
+    // Scale: span generously around both the healthy range and the current weight.
+    const spanMin = Math.min(healthyMin, weightKg) * 0.75;
+    const spanMax = Math.max(healthyMax, weightKg) * 1.25;
+    const toPct = (kg: number) => ((kg - spanMin) / (spanMax - spanMin)) * 100;
+
+    const healthyBar = el("iw-scale-healthy");
+    healthyBar.style.left = `${toPct(healthyMin)}%`;
+    healthyBar.style.width = `${Math.max(0.5, toPct(healthyMax) - toPct(healthyMin))}%`;
+    el("iw-scale-marker").style.left = `${Math.min(100, Math.max(0, toPct(weightKg)))}%`;
+    el("iw-scale-min").textContent = `0 · ${kgToDisplay(spanMin)}`;
+    el("iw-scale-max").textContent = `${kgToDisplay(spanMax)}`;
+
+    const summary = el("iw-summary");
+    const toRangeEdge =
+      weightKg > healthyMax ? weightKg - healthyMax : weightKg < healthyMin ? healthyMin - weightKg : 0;
+
+    if (toRangeEdge === 0) {
+      summary.innerHTML = `Your weight is <strong>inside the healthy range</strong> for your height (BMI ${bmi.toFixed(
+        1
+      )}). The four published formulas average ${kgToDisplay(average)}, which is ${kgToDisplay(
+        Math.abs(weightKg - average)
+      )} ${weightKg >= average ? "above" : "below"} your current weight — a difference well within their normal spread.`;
+    } else if (weightKg > healthyMax) {
+      summary.innerHTML = `Your weight is <strong>above the healthy range</strong> for your height (BMI ${bmi.toFixed(
+        1
+      )}). The top of the range is ${kgToDisplay(healthyMax)}, which is ${kgToDisplay(
+        toRangeEdge
+      )} below your current weight. Aiming for the top of the range rather than its midpoint makes a far more realistic first goal.`;
+    } else {
+      summary.innerHTML = `Your weight is <strong>below the healthy range</strong> for your height (BMI ${bmi.toFixed(
+        1
+      )}). The bottom of the range is ${kgToDisplay(healthyMin)}, which is ${kgToDisplay(
+        toRangeEdge
+      )} above your current weight. Being underweight carries its own risks, so this is worth raising with a clinician rather than managing alone.`;
+    }
+
+    // Optional waist-based risk flag.
+    const risk = el("iw-risk");
+    const waist = Number(waistInput.value);
+    if (Number.isFinite(waist) && waist > 0) {
+      const threshold = sex === "male" ? 94 : 80;
+      const highThreshold = sex === "male" ? 102 : 88;
+      if (waist >= highThreshold) {
+        risk.textContent = `A waist of ${waist} cm is in the substantially increased risk band for ${
+          sex === "male" ? "men" : "women"
+        } (${highThreshold} cm or more). This is worth discussing with a doctor even if your BMI looks acceptable.`;
+        risk.hidden = false;
+      } else if (waist >= threshold) {
+        risk.textContent = `A waist of ${waist} cm is above the usual action level for ${
+          sex === "male" ? "men" : "women"
+        } (${threshold} cm). Central fat is a better predictor of metabolic risk than total weight, so it is a useful number to track alongside the scale.`;
+        risk.hidden = false;
+      } else {
+        risk.textContent = `A waist of ${waist} cm is below the usual action level for ${
+          sex === "male" ? "men" : "women"
+        } (${threshold} cm).`;
+        risk.hidden = false;
+      }
+    } else {
+      risk.hidden = true;
+    }
+
+    const age = Number(ageInput.value);
+    if (Number.isFinite(age) && age > 0 && (age < 18 || age > 65)) {
+      status.textContent =
+        age < 18
+          ? "You entered an age under 18. Adult BMI bands and the ideal-weight formulas do not apply to children and teenagers, who need age- and sex-specific growth charts."
+          : "You entered an age over 65. Adults lose muscle with age, so BMI can look normal while body fat is high — waist measurement and strength matter more at this stage.";
+      status.style.color = "var(--warn)";
+      status.hidden = false;
+    } else {
+      status.style.color = "var(--danger)";
+    }
+
+    results.hidden = false;
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    calculate();
+  });
+
+  form.querySelectorAll('input[name="units"]').forEach((radio) =>
+    radio.addEventListener("change", () => {
+      setUnitVisibility();
+      if (!results.hidden) calculate();
+    })
+  );
+
+  for (const input of [heightCmInput, heightFtInput, heightInInput, weightKgInput, weightLbInput, waistInput, sexInput, ageInput]) {
+    input.addEventListener("change", () => {
+      if (!results.hidden) calculate();
+    });
+  }
+
+  document.getElementById("iw-reset")?.addEventListener("click", () => {
+    (form.querySelector('input[name="units"][value="metric"]') as HTMLInputElement).checked = true;
+    heightCmInput.value = "175";
+    heightFtInput.value = "5";
+    heightInInput.value = "9";
+    weightKgInput.value = "80";
+    weightLbInput.value = "176";
+    sexInput.value = "male";
+    ageInput.value = "";
+    waistInput.value = "";
+    setUnitVisibility();
+    results.hidden = true;
+    status.hidden = true;
+  });
+
+  setUnitVisibility();
+</script>

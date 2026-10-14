@@ -1,0 +1,87 @@
+---
+import Base from "../layouts/Base.astro";
+import ToolDirectory from "../components/ToolDirectory.astro";
+import { allTools, categories, liveCount, urlOf } from "../data/tools";
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "All tools",
+    url: "https://tools.ly/all-tools/",
+    description: "The complete directory of free browser-based tools on Tools.ly.",
+    hasPart: allTools
+      .filter((t) => t.status === "live")
+      .map((t) => ({
+        "@type": "WebApplication",
+        name: t.nav ?? t.title,
+        url: new URL(urlOf(t), "https://tools.ly").href,
+        applicationCategory: "UtilitiesApplication",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      })),
+  },
+];
+---
+
+<Base
+  title="All Tools — The Complete Directory"
+  description={`Browse all ${allTools.length} browser-based tools on Tools.ly: calculators, converters, text, color, date, health, developer, media and privacy utilities. ${liveCount} are live today.`}
+  canonical="/all-tools/"
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">Directory</p>
+      <h1>All tools</h1>
+      <p class="lede">
+        {allTools.length} tools, grouped by what they do. {liveCount} are live and ready; the rest are
+        queued and marked as coming soon. Filter by category or search by name — everything on this
+        page runs in your browser with no upload and no account.
+      </p>
+    </div>
+  </div>
+
+  <ToolDirectory heading="Every tool" />
+
+  <section class="section">
+    <div class="container">
+      <h2>What each category covers</h2>
+      <div class="table-wrap" style="margin-top:1rem">
+        <table class="data">
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col">What you will find there</th>
+              <th scope="col">Tools</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              categories.map((c) => {
+                const count = allTools.filter((t) => t.category === c.id).length;
+                if (count === 0) return null;
+                return (
+                  <tr>
+                    <th scope="row" id={c.id}>
+                      {c.label}
+                    </th>
+                    <td>{c.blurb}</td>
+                    <td>{count}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout" style="margin-top:2rem">
+        <p>
+          <strong>Missing a tool?</strong> If you keep reaching for a utility that is not here yet,
+          <a href="/7b3c2-contact/"> tell us what it is</a> — the directory is driven by what people
+          actually need.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>

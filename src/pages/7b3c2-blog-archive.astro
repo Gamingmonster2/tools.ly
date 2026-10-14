@@ -1,0 +1,82 @@
+---
+import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
+import { legacyTools, categories, urlOf } from "../data/tools";
+
+const sorted = [...legacyTools].sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""));
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    name: "Tools.ly Blog",
+    url: "https://tools.ly/7b3c2-blog-archive/",
+    description: "Every tool guide and release note published on Tools.ly.",
+    blogPost: sorted.map((t) => ({
+      "@type": "BlogPosting",
+      headline: t.title,
+      url: new URL(urlOf(t), "https://tools.ly").href,
+      ...(t.updated ? { dateModified: t.updated } : {}),
+      author: { "@type": "Organization", name: "Tools.ly" },
+    })),
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://tools.ly/" },
+      { "@type": "ListItem", position: 2, name: "Blog", item: "https://tools.ly/7b3c2-blog-archive/" },
+    ],
+  },
+];
+---
+
+<Base
+  title="Blog — Tool Guides & Release Notes"
+  description="Guides, updates and release notes for every tool on Tools.ly. Each entry links straight to the tool it describes."
+  canonical="/7b3c2-blog-archive/"
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">Blog</p>
+      <h1>Guides and release notes</h1>
+      <p class="lede">
+        Every tool page also acts as its own guide: what it does, how the maths works, where the
+        formulas come from and what the results mean. These are the latest entries.
+      </p>
+    </div>
+  </div>
+
+  <div class="container section">
+    <div class="stack" style="--gap:1rem">
+      {
+        sorted.map((tool) => {
+          const category = categories.find((c) => c.id === tool.category);
+          return (
+            <article class="card">
+              <div class="tag-row" style="margin-bottom:0.6rem">
+                {category && <span class="badge badge--accent">{category.label}</span>}
+                {tool.updated && <span class="badge">Updated {tool.updated}</span>}
+              </div>
+              <h2 style="margin-bottom:0.4rem">
+                <a href={urlOf(tool)}>{tool.title}</a>
+              </h2>
+              <p style="color:var(--text-muted);margin-bottom:0.85rem">{tool.description}</p>
+              <a class="btn btn--soft btn--sm" href={urlOf(tool)}>
+                Open the tool <Icon name="arrow" size={15} />
+              </a>
+            </article>
+          );
+        })
+      }
+    </div>
+
+    <div class="callout" style="margin-top:2rem">
+      <p>
+        Looking for something that is not published yet? The{" "}
+        <a href="/all-tools/">full directory</a> shows the tools that are queued next.
+      </p>
+    </div>
+  </div>
+</Base>

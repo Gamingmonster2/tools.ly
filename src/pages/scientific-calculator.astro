@@ -1,0 +1,1404 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+const tool = legacyTools.find((t) => t.slug === "scientific-calculator")!;
+
+const faqs = [
+  {
+    q: "Why does sin(30) return 0.5 in degree mode but a different number in radian mode?",
+    a: "Degrees and radians are two ways of measuring the same angle. 30° is π/6 radians, which is about 0.5236. The trigonometric functions built into the browser expect radians, so the calculator converts your angle before calling them when the Deg toggle is active: it multiplies by π/180 on the way in and by 180/π on the way out for asin, acos and atan. If you leave the toggle on Rad, sin(30) means the sine of 30 radians, which is roughly -0.988.",
+  },
+  {
+    q: "What does the percent key do?",
+    a: "It depends on the context, exactly like a pocket calculator. After + or -, a percent sign is read as a relative share of the running total: 200 + 10% computes 200 + (200 × 0.10) = 220, and 200 - 10% computes 180. Everywhere else it converts the number on its left to a plain fraction of one: 50% × 80 = 40 and 200 × 10% = 20. The line under the display always shows the expanded expression, so you can read back what was actually calculated. For the remainder of a division, type the word mod instead, as in 17 mod 5.",
+  },
+  {
+    q: "How do I type the expression from my keyboard instead of clicking?",
+    a: "The display is a real text field, so the keypad is optional. Type digits and + - * / ^ ( ) . directly, and use the arrow keys to move the caret when you want to patch an existing expression. Enter evaluates, Escape clears the field, and Backspace deletes one character to the left of the caret. If you would rather not type function names, press the on-screen sin, cos or sqrt buttons — they insert at the caret position and keep your place. For powers you can also press the xʸ key, and for a factorial press n! or type a ! after the number.",
+  },
+  {
+    q: "Why does 0.1 + 0.2 not show 0.3?",
+    a: "Because JavaScript numbers are IEEE 754 double-precision binary floating point, and 0.1 and 0.2 have no exact binary representation — the same limitation every browser, spreadsheet and programming language has. The sum is 0.30000000000000004, and this calculator rounds the display to 12 significant digits, just short of the 15 to 17 digits a double can carry, which hides almost all of that noise. For money, work in whole cents or integer units and divide at the end.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — Math",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math",
+    note: "Documents every Math function this calculator wraps, including the fact that sin, cos and tan take radian arguments.",
+  },
+  {
+    label: "IEEE 754-2019 — Standard for Floating-Point Arithmetic",
+    href: "https://standards.ieee.org/ieee/754/6210/",
+    note: "The specification behind the binary64 format used by JavaScript numbers, and therefore behind the rounding behaviour described in the accuracy notes.",
+  },
+  {
+    label: "Wikipedia — Order of operations",
+    href: "https://en.wikipedia.org/wiki/Order_of_operations",
+    note: "Explains the standard precedence rules, including the ambiguity of the unary minus before a power that this parser resolves explicitly.",
+  },
+];
+
+const intro =
+  "A keyboard-first scientific calculator with full operator precedence, degrees or radians, memory keys, history and readable error messages — all evaluated locally in your browser.";
+---
+
+<ToolLayout tool={tool} intro={intro} faqs={faqs} sources={sources}>
+  <Fragment slot="tool">
+    <div class="panel sc">
+      <div class="panel__body">
+        <div class="sc__grid">
+          <section class="sc__main" aria-label="Scientific calculator">
+            <div
+              class="result-box sc__display readout"
+              role="group"
+              aria-label="Calculator display"
+            >
+              <div class="sc__display-top">
+                <span class="badge badge--accent sc__flag" data-mem-flag hidden>
+                  <abbr title="Memory holds a value">M</abbr>
+                </span>
+                <span class="badge sc__flag" data-angle-flag>DEG</span>
+                <button
+                  type="button"
+                  class="btn btn--ghost btn--sm sc__toggle"
+                  data-action="angle"
+                  aria-pressed="false"
+                  title="Switch between degrees and radians"
+                  ><span data-angle-label>Radians</span></button
+                >
+              </div>
+
+              <label class="sr-only" for="sc-input">Calculator expression</label>
+              <textarea
+                id="sc-input"
+                class="sc__input"
+                rows="2"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+                aria-describedby="sc-status"
+                placeholder="0"></textarea>
+
+              <p class="sc__status" id="sc-status" data-status></p>
+              <p class="sr-only" aria-live="polite" data-live></p>
+            </div>
+
+            <div class="sc__memrow">
+              <button type="button" class="btn btn--soft btn--sm" data-action="mem-store">MS</button>
+              <button type="button" class="btn btn--soft btn--sm" data-action="mem-recall">MR</button>
+              <button type="button" class="btn btn--soft btn--sm" data-action="mem-add">M+</button>
+              <button type="button" class="btn btn--soft btn--sm" data-action="mem-clear">MC</button>
+            </div>
+
+            <div class="sc__keys">
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="sin">sin</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="cos">cos</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="tan">tan</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="asin" title="Inverse sine">asin</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="acos" title="Inverse cosine">acos</button>
+
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="atan" title="Inverse tangent">atan</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="ln">ln</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="log">log</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="sqrt">√</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="exp" title="e to the power of x">eˣ</button>
+
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="abs">abs</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="round">round</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="floor">floor</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="unary" data-value="ceil">ceil</button>
+              <button type="button" class="sc__key sc__key--accent" data-action="control" data-value="clear">AC</button>
+
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="7">7</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="8">8</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="9">9</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="÷" data-key="/">÷</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="control" data-value="backspace" title="Delete one character">⌫</button>
+
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="4">4</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="5">5</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="6">6</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="×" data-key="*">×</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="postfix" data-value="%" title="Percent — 50% is read as 0.5">n%</button>
+
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="1">1</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="2">2</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="3">3</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="−" data-key="-">−</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="postfix" data-value="!" title="Factorial">n!</button>
+
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value="0">0</button>
+              <button type="button" class="sc__key sc__key--num" data-action="digit" data-value=".">.</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="+" title="Addition">+</button>
+              <button type="button" class="sc__key sc__key--op" data-action="const" data-value="π" title="Pi">π</button>
+              <button type="button" class="sc__key sc__key--op" data-action="const" data-value="e" title="Euler's number">e</button>
+
+              <button type="button" class="sc__key sc__key--fn" data-action="open">(</button>
+              <button type="button" class="sc__key sc__key--fn" data-action="close">)</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="^" title="Power">xʸ</button>
+              <button type="button" class="sc__key sc__key--op" data-action="op" data-value="10^" title="Ten to the power of x">10ˣ</button>
+              <button
+                type="button"
+                class="sc__key sc__key--eq"
+                data-action="equals"
+                title="Evaluate (Enter)">=</button
+              >
+            </div>
+          </section>
+
+          <aside class="sc__side" aria-label="Memory and history">
+            <div class="sc__sidehead">
+              <h2 class="sc__sidetitle">History</h2>
+              <button type="button" class="btn btn--ghost btn--sm" data-action="clear-history">
+                Clear history
+              </button>
+            </div>
+            <p class="sc__muted" data-history-empty>Calculations you evaluate appear here.</p>
+            <ul class="sc__hist" data-history hidden></ul>
+            <div class="sc__confirm" data-confirm hidden>
+              <span>Clear all history?</span>
+              <button type="button" class="btn btn--sm btn--ghost" data-action="confirm-yes">Yes</button>
+              <button type="button" class="btn btn--sm btn--ghost" data-action="confirm-no">No</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <div class="panel__foot">
+        Press <kbd>Enter</kbd> to evaluate, <kbd>Esc</kbd> to clear, <kbd>Backspace</kbd> to delete. Type
+        <code>!</code> after a number for a factorial, <code>%</code> for percent and the rest of the
+        expression as ordinary text — nothing you type leaves this page.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How this calculator works</h2>
+  <p>
+    The expression you type is read by a small parser written from scratch for this page: a tokenizer
+    turns the characters into numbers, constants, function names and operators, and a recursive-descent
+    parser builds a tree from those tokens. The tree is then evaluated in one pass. No <code>eval</code>
+    or <code>new Function</code> is involved anywhere, so an expression cannot run arbitrary script — it
+    can only produce a number or a readable complaint such as <em>Cannot divide by zero</em> or
+    <em>Unbalanced parentheses</em>. Anything that fails, whether a syntax error or a mathematical
+    domain error, leaves the display untouched so you can fix the expression and try again.
+  </p>
+  <p>
+    Because the parser understands structure rather than text, functions compose naturally.
+    <code>sqrt(16) + sin(30)</code> is evaluated as two independent values added together, and
+    <code>ln(e^2)</code> returns 2 exactly as the mathematics predicts. Factorials, powers and percent
+    signs are treated as postfix or right-associative operators at the right precedence, so
+    <code>2^3^2</code> is 512 rather than 64. Every step stays inside your browser tab.
+  </p>
+  <p>
+    Around the parser sits the usual calculator furniture: a memory register with MS, MR, M+ and MC, a
+    ten-entry history you can click to reload a previous result, a Deg/Rad switch for trigonometry, and
+    a result line that previews the answer while you type. The display is a genuine text field, so the
+    on-screen keypad is a convenience rather than a requirement.
+  </p>
+
+  <h2>Operator precedence and order of operations</h2>
+  <p>
+    Input is grouped from the tightest-binding operators outward, following the standard conventions
+    for written mathematics. Power binds tighter than the unary minus on its left, which is why
+    <code>-2^2</code> evaluates to -4 — the exponent is applied first and the sign afterwards. If you
+    want the square of negative two, write <code>(-2)^2</code>.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <caption class="sr-only">Operator precedence used by the parser, from highest to lowest</caption>
+      <thead>
+        <tr>
+          <th scope="col">Level</th>
+          <th scope="col">Operators</th>
+          <th scope="col">Associativity</th>
+          <th scope="col">Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1 (highest)</td>
+          <td>Function calls <code>sin(x)</code>, <code>sqrt(x)</code>, parentheses</td>
+          <td>—</td>
+          <td><code>sqrt(9) × 2 = 6</code></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Postfix factorial <code>!</code> and percent <code>%</code></td>
+          <td>Left to right</td>
+          <td><code>5! = 120</code>, <code>50% = 0.5</code></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Power <code>^</code></td>
+          <td>Right to left</td>
+          <td><code>2^3^2 = 512</code></td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Unary minus <code>-5</code>, <code>+5</code></td>
+          <td>Right to left</td>
+          <td><code>-3! = -6</code></td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>Multiplication <code>*</code>, division <code>/</code>, remainder <code>mod</code></td>
+          <td>Left to right</td>
+          <td><code>8 / 4 × 2 = 4</code>, <code>17 mod 5 = 2</code></td>
+        </tr>
+        <tr>
+          <td>6 (lowest)</td>
+          <td>Addition <code>+</code>, subtraction <code>-</code></td>
+          <td>Left to right</td>
+          <td><code>2 + 3 × 4 = 14</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The percent sign is the one operator whose meaning depends on where it sits. When it follows a
+    value that is being added to or subtracted from something else, it is read as a share of that
+    running total: <code>200 + 10%</code> is 220 and <code>200 - 10%</code> is 180. In every other
+    position it simply divides by one hundred, so <code>50% × 80</code> is 40 and <code>200 × 10%</code>
+    is 20. The result line prints the expanded arithmetic so the interpretation is never hidden.
+  </p>
+  <p>
+    Two consequences are worth knowing. A percent sign binds tighter than multiplication, so
+    <code>7%3</code> is 0.21 — write <code>(7%)3</code> if that is what you meant, or reach for the
+    remainder operator. And when both sides of a plus or minus carry a percent sign, the left value
+    scales the right one: <code>10% + 10%</code> is 0.11 rather than 0.2, because the second ten percent
+    is taken as a share of the first. To find the remainder of a division, write the word
+    <code>mod</code> between the values. It follows the JavaScript remainder rule, where the sign of the
+    answer matches the left operand: <code>-7 mod 3</code> is -1.
+  </p>
+
+  <h2>Degrees vs radians</h2>
+  <p>
+    The <strong>Radians</strong> button in the display header toggles the unit used by
+    <code>sin</code>, <code>cos</code>, <code>tan</code> and their inverses <code>asin</code>,
+    <code>acos</code> and <code>atan</code>. The badge next to it shows the active mode — <code>DEG</code>
+    or <code>RAD</code> — so you can always tell at a glance which one is in force. The setting is saved
+    in your browser and restored the next time you open the page.
+  </p>
+  <p>
+    In degree mode the calculator converts on the way in and on the way out: an angle is multiplied by
+    π/180 before it reaches the trigonometric function, and the result of an inverse function is
+    multiplied by 180/π. That is what makes <code>sin(30)</code> return exactly 0.5 and
+    <code>asin(0.5)</code> return 30. In radian mode the numbers pass through untouched, matching the
+    behaviour of <code>Math.sin</code> and friends, so <code>sin(π/6)</code> is the expression that
+    gives 0.5. Radians are the default in most programming contexts; degrees are what most people reach
+    for when they are working from a measurement.
+  </p>
+  <div class="callout">
+    <p>
+      Rule of thumb: if you are converting an angle you measured by hand, you want degrees. If you are
+      checking code, a physics formula or a graph that uses π, you want radians. The toggle changes only
+      the trigonometry — logarithms, roots, powers and everything else behave identically in both modes.
+    </p>
+  </div>
+
+  <h2>Keyboard shortcuts</h2>
+  <p>
+    The display accepts ordinary text input, so you can work without ever touching the mouse. Click into
+    the display once, or simply start typing — the page listens for keys while the cursor is in the
+    expression field.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <caption class="sr-only">Keyboard shortcuts supported by the calculator</caption>
+      <thead>
+        <tr>
+          <th scope="col">Key</th>
+          <th scope="col">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><kbd>0</kbd>–<kbd>9</kbd> and <kbd>.</kbd></td>
+          <td>Insert a digit or a decimal point at the caret</td>
+        </tr>
+        <tr>
+          <td><kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd> <kbd>/</kbd> <kbd>^</kbd> <kbd>%</kbd></td>
+          <td>Insert an operator; <code>%</code> is a postfix percent, so <code>50%</code> is read as 0.5</td>
+        </tr>
+        <tr>
+          <td><kbd>(</kbd> <kbd>)</kbd></td>
+          <td>Insert a parenthesis</td>
+        </tr>
+        <tr>
+          <td><kbd>Enter</kbd></td>
+          <td>Evaluate the expression and push it to the history list</td>
+        </tr>
+        <tr>
+          <td><kbd>Esc</kbd></td>
+          <td>Clear the expression (restores what you had if you press it once more)</td>
+        </tr>
+        <tr>
+          <td><kbd>Backspace</kbd></td>
+          <td>Delete the character before the caret, or the current selection</td>
+        </tr>
+        <tr>
+          <td><kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd></td>
+          <td>Move the caret so you can edit part of a long expression</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd></td>
+          <td>Select, copy and paste the expression as normal text</td>
+        </tr>
+        <tr>
+          <td><code>pi</code> or <code>π</code>, <code>e</code>, <code>sqrt(</code>, <code>sin(</code></td>
+          <td>Typed names work as well as the keypad: π, Euler's number and every function button</td>
+        </tr>
+        <tr>
+          <td><code>mod</code></td>
+          <td>Remainder of a division, as in <code>17 mod 5</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Accuracy notes</h2>
+  <p>
+    Numbers here are JavaScript numbers: IEEE 754 binary64 double precision, which gives about 15 to
+    17 significant decimal digits and a finite set of exactly representable values. Simple decimals
+    such as 0.1 have no exact binary form, so <code>0.1 + 0.2</code> really does produce
+    0.30000000000000004 internally. The display rounds to 12 significant digits, deliberately a little
+    short of what a double can hold, so that this kind of noise stays invisible in everyday arithmetic
+    while genuine differences still show up.
+  </p>
+  <p>
+    Rounding is applied for display only; the underlying value keeps full precision, and results that
+    feed into further work (memory and history) are stored unrounded. Very large or very small answers
+    switch to exponent form — <code>1.2e+21</code> — and anything beyond the range of a double becomes
+    <em>Result is too large</em> rather than silently turning into <code>Infinity</code>. Trigonometry
+    at multiples of 90° is the other place where tiny discrepancies surface: <code>sin(180)</code> may
+    come back as 1.2e-16 instead of a clean zero, because π itself cannot be represented exactly. Treat
+    results near zero in such cases as zero.
+  </p>
+  <div class="callout callout--warn">
+    <p>
+      For money and any other quantity that must balance to the cent, do not rely on floating-point
+      arithmetic. Work in integer units — cents, or the smallest indivisible amount — and convert to a
+      decimal only when you are ready to display the final figure.
+    </p>
+  </div>
+</ToolLayout>
+
+<style>
+  .sc__grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  @media (min-width: 940px) {
+    .sc__grid { grid-template-columns: minmax(0, 1fr) 280px; }
+  }
+
+  /* ---------- display ---------- */
+  .sc__display { padding: 0.85rem 1rem 0.9rem; }
+  .sc__display-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .sc__toggle { margin-inline-start: auto; }
+  .sc__input {
+    display: block;
+    width: 100%;
+    min-height: 4.6rem;
+    resize: none;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.35rem, 5.5vw, 2rem);
+    line-height: 1.3;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .sc__input:focus,
+  .sc__input:focus-visible {
+    outline: none;
+    box-shadow: none;
+    border: 0;
+  }
+  .sc__display:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .sc__input::placeholder { color: var(--text-faint); }
+
+  .sc__status {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    text-align: right;
+    color: var(--text-muted);
+    min-height: 1.4rem;
+    overflow-wrap: anywhere;
+  }
+  .sc__status[data-status="error"] { color: var(--danger); font-weight: 600; }
+  .sc__status[data-status="ok"] { color: var(--ok); }
+
+  /* ---------- memory row ---------- */
+  .sc__memrow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 0.9rem 0 1rem;
+  }
+  .sc__memrow .btn { min-height: 44px; }
+
+  /* ---------- keypad ---------- */
+  .sc__keys {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+  .sc__key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0.3rem 0.2rem;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  }
+  .sc__key:hover { border-color: var(--border-strong); background: var(--bg-soft); }
+  .sc__key:active { transform: translateY(1px); }
+  .sc__key--num {
+    background: var(--surface-2);
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .sc__key--op {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent);
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .sc__key--op:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .sc__key--fn { font-size: 0.85rem; color: var(--text-muted); }
+  .sc__key--accent {
+    background: var(--danger-soft);
+    border-color: transparent;
+    color: var(--danger);
+    font-weight: 700;
+  }
+  .sc__key--accent:hover { background: var(--danger-soft); border-color: var(--danger); }
+  .sc__key--eq {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+  .sc__key--eq:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .sc__key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (max-width: 380px) {
+    .sc__keys { gap: 0.35rem; }
+    .sc__key { font-size: 0.92rem; padding-inline: 0.1rem; }
+    .sc__key--num { font-size: 1.05rem; }
+    .sc__key--fn { font-size: 0.78rem; }
+    .panel__body { padding-inline: 0.85rem; }
+  }
+
+  /* ---------- history ---------- */
+  .sc__side {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: 1rem;
+  }
+  .sc__sidehead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+  .sc__sidetitle { margin: 0; font-size: 0.95rem; }
+  .sc__muted { margin: 0.25rem 0 0; font-size: 0.88rem; color: var(--text-faint); }
+  .sc__hist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+    max-height: 330px;
+    overflow-y: auto;
+  }
+  .sc__hist:empty { display: none; }
+  /* History entries are built by the script, so they sit outside this
+     component's scope hash and need :global() to pick the rules up. */
+  .sc__hist :global(.sc__histbtn) {
+    display: block;
+    width: 100%;
+    text-align: right;
+    padding: 0.5rem 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .sc__hist :global(.sc__histbtn:hover) { border-color: var(--accent-border); color: var(--text); }
+  .sc__hist :global(.sc__histbtn b) {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .sc__hist :global(.sc__histbtn span) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sc__confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .panel__foot kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text);
+  }
+</style>
+
+<script>
+  const input = document.querySelector("#sc-input");
+  const root = input.closest(".sc");
+  const statusEl = root.querySelector("[data-status]");
+  const liveEl = root.querySelector("[data-live]");
+  const memFlag = root.querySelector("[data-mem-flag]");
+  const angleFlag = root.querySelector("[data-angle-flag]");
+  const angleLabel = root.querySelector("[data-angle-label]");
+  const angleBtn = root.querySelector("[data-action='angle']");
+  const memRecallBtn = root.querySelector("[data-action='mem-recall']");
+  const histList = root.querySelector("[data-history]");
+  const histEmpty = root.querySelector("[data-history-empty]");
+  const confirmBox = root.querySelector("[data-confirm]");
+
+  let mem = 0;
+  try {
+    const stored = Number(localStorage.getItem("sc-memory"));
+    if (Number.isFinite(stored)) mem = stored;
+  } catch {
+    mem = 0;
+  }
+  let deg = false;
+  try {
+    deg = localStorage.getItem("sc-deg") === "1";
+  } catch {
+    deg = false;
+  }
+  let history = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem("sc-history") || "[]");
+    if (Array.isArray(raw)) {
+      history = raw
+        .filter((h) => !!h && typeof h.expr === "string" && Number.isFinite(h.result))
+        .slice(0, 10);
+    }
+  } catch {
+    history = [];
+  }
+  let lastResult = null;
+  let lastExpr = "";
+  let prevExpr = null;
+  let previewTimer;
+
+  /* ------------------------------ evaluator ------------------------------ */
+
+  /*
+   * Expressions are parsed into a small AST:
+   *   { k: "num", v }                          a literal number
+   *   { k: "const", name }                     pi or e
+   *   { k: "neg", a }                          unary minus
+   *   { k: "pct", a, relative }                postfix % (share of total when relative)
+   *   { k: "fact", a }                         postfix factorial
+   *   { k: "op", op, a, b }                    binary operator
+   *   { k: "func", name, arg }                 function call
+   */
+
+  const FUNCS = {
+    sin: Math.sin,
+    cos: Math.cos,
+    tan: Math.tan,
+    asin: Math.asin,
+    acos: Math.acos,
+    atan: Math.atan,
+    log: Math.log10,
+    ln: Math.log,
+    sqrt: Math.sqrt,
+    abs: Math.abs,
+    exp: Math.exp,
+    round: Math.round,
+    floor: Math.floor,
+    ceil: Math.ceil,
+  };
+  const TRIG = new Set(["sin", "cos", "tan"]);
+  const INVTRIG = new Set(["asin", "acos", "atan"]);
+  const FUNC_NAMES = ["asin", "acos", "atan", "sqrt", "round", "floor", "exp", "ceil", "log", "tan", "sin", "cos", "abs", "ln"];
+  const CONSTS = new Set(["pi", "e"]);
+
+  /* Turn the raw text into numbers, names, brackets and operators. */
+  function tokenize(raw) {
+    const s = raw
+      .replace(/[×✕·]/g, "*")
+      .replace(/[÷∕]/g, "/")
+      .replace(/[−–—]/g, "-")
+      .replace(/[πΠ]/gi, "pi")
+      .replace(/√/g, "sqrt")
+      .replace(/ᵉ/g, "e");
+    const toks = [];
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+        i++;
+        continue;
+      }
+      if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(s[i + 1] ?? ""))) {
+        let j = i;
+        while (j < s.length && /[0-9.]/.test(s[j])) j++;
+        if (s[j] === "e" || s[j] === "E") {
+          const k = j + 1;
+          const sign = s[k] === "+" || s[k] === "-" ? k + 1 : k;
+          if (/[0-9]/.test(s[sign] ?? "")) {
+            j = sign;
+            while (j < s.length && /[0-9]/.test(s[j])) j++;
+          }
+        }
+        const text = s.slice(i, j);
+        const v = Number(text);
+        if (!Number.isFinite(v)) throw new Error(`"${text}" is not a number I can read`);
+        toks.push({ t: "num", v });
+        i = j;
+        continue;
+      }
+      if (/[a-zA-Z]/.test(c)) {
+        let j = i;
+        while (j < s.length && /[a-zA-Z0-9]/.test(s[j])) j++;
+        const word = s.slice(i, j).toLowerCase();
+        i = j;
+        toks.push({ t: "name", v: word });
+        continue;
+      }
+      if (c === "(") {
+        toks.push({ t: "lp" });
+        i++;
+        continue;
+      }
+      if (c === ")") {
+        toks.push({ t: "rp" });
+        i++;
+        continue;
+      }
+      if (c === "!" || c === "%") {
+        toks.push({ t: "postfix", v: c });
+        i++;
+        continue;
+      }
+      if ("+-*/^".includes(c)) {
+        toks.push({ t: "op", v: c });
+        i++;
+        continue;
+      }
+      throw new Error(`I do not recognise the character "${c}"`);
+    }
+    return toks;
+  }
+
+  /* Precedence-climbing recursive-descent parser. */
+  class Parser {
+    constructor(toks) {
+      this.toks = toks;
+      this.i = 0;
+    }
+
+    peek() {
+      if (this.i >= this.toks.length) {
+        throw new Error("The expression ends too early");
+      }
+      return this.toks[this.i];
+    }
+    next() {
+      const t = this.peek();
+      this.i++;
+      return t;
+    }
+    parseRoot() {
+      if (!this.toks.length) throw new Error("Type an expression first");
+      const node = this.parseExpr();
+      if (this.i < this.toks.length) {
+        throw new Error("Unbalanced parentheses");
+      }
+      return node;
+    }
+    parseExpr() {
+      let left = this.parseTerm();
+      for (;;) {
+        const t = this.toks[this.i];
+        if (t && t.t === "op" && (t.v === "+" || t.v === "-")) {
+          this.i++;
+          const right = this.parseTerm();
+          left = { k: "op", op: t.v === "+" ? "add" : "sub", a: left, b: right };
+        } else {
+          return left;
+        }
+      }
+    }
+    parseTerm() {
+      let left = this.parseUnary();
+      for (;;) {
+        const t = this.toks[this.i];
+        // "%" is never a binary operator here: the tokenizer turns it into a
+        // postfix percent, and the remainder operator is spelled "mod".
+        if (t && t.t === "op" && (t.v === "*" || t.v === "/")) {
+          this.i++;
+          const right = this.parseUnary();
+          left = { k: "op", op: t.v === "*" ? "mul" : "div", a: left, b: right };
+        } else if (t && t.t === "name" && t.v === "mod") {
+          // 17 mod 5 — the remainder operator, spelled out.
+          this.i++;
+          const right = this.parseUnary();
+          left = { k: "op", op: "mod", a: left, b: right };
+        } else if (t && (t.t === "name" || t.t === "lp" || t.t === "num")) {
+          // Implicit multiplication: 2pi, 3(4+5), 2sin(30)
+          const right = this.parseUnary();
+          left = { k: "op", op: "mul", a: left, b: right };
+        } else {
+          return left;
+        }
+      }
+    }
+    parseUnary() {
+      const t = this.toks[this.i];
+      if (t && t.t === "op" && (t.v === "-" || t.v === "+")) {
+        this.i++;
+        const a = this.parseUnary();
+        return t.v === "-" ? { k: "neg", a } : a;
+      }
+      return this.parsePower();
+    }
+    parsePower() {
+      const base = this.parsePostfix();
+      const t = this.toks[this.i];
+      if (t && t.t === "op" && t.v === "^") {
+        this.i++;
+        return { k: "op", op: "pow", a: base, b: this.parseUnary() };
+      }
+      return base;
+    }
+    parsePostfix() {
+      let node = this.parsePrimary();
+      for (;;) {
+        const t = this.toks[this.i];
+        if (t && t.t === "postfix") {
+          this.i++;
+          node = t.v === "!" ? { k: "fact", a: node } : { k: "pct", a: node };
+        } else {
+          return node;
+        }
+      }
+    }
+    parsePrimary() {
+      const t = this.next();
+      if (t.t === "num") return { k: "num", v: t.v };
+      if (t.t === "name") return this.resolveName(t.v);
+      if (t.t === "lp") {
+        const inner = this.parseExpr();
+        this.expect("rp", "Unbalanced parentheses");
+        return inner;
+      }
+      if (t.t === "op") throw new Error("An operator is missing a value in front of it");
+      if (t.t === "postfix") {
+        throw new Error(t.v === "!" ? "A factorial needs a value in front of it" : "A percent sign needs a value in front of it");
+      }
+      throw new Error("Unbalanced parentheses");
+    }
+    /* Resolve "sin(", "pi", "e" or a user-facing alias such as "mod". */
+    resolveName(word) {
+      if (FUNC_NAMES.includes(word)) {
+        this.expect("lp", `${word} needs a value in brackets, like ${word}(9)`);
+        const arg = this.parseExpr();
+        this.expect("rp", `Close the brackets after ${word}(`);
+        return { k: "func", name: word, arg };
+      }
+      if (CONSTS.has(word)) {
+        // Both "e" and "pi" are ordinary constants; use a value in front of
+        // them for implicit multiplication, as in 2e or 3pi.
+        return { k: "const", name: word };
+      }
+      const rest = this.toks[this.i];
+      if (word === "mod") {
+        throw new Error("mod needs a value on both sides, like 17 mod 5");
+      }
+      throw new Error(`I do not know the name "${word}"`);
+    }
+    expect(kind, message) {
+      const t = this.toks[this.i];
+      if (!t || t.t !== kind) throw new Error(message);
+      this.i++;
+    }
+  }
+
+  function evalNode(node, radians) {
+    switch (node.k) {
+      case "num":
+        return node.v;
+      case "const":
+        return node.name === "pi" ? Math.PI : Math.E;
+      case "neg":
+        return -evalNode(node.a, radians);
+      case "pct":
+        // A bare percent sign is a plain fraction of one: 50% is 0.5.
+        // When it follows + or -, the operator below scales it by the
+        // left-hand value so 200 + 10% means 200 + 200 x 0.10.
+        return evalNode(node.a, radians) / 100;
+      case "fact": {
+        const v = evalNode(node.a, radians);
+        if (!Number.isInteger(v) || v < 0) throw new Error("Factorial needs a whole number that is 0 or larger");
+        if (v > 170) throw new Error("That factorial is too large to represent");
+        let acc = 1;
+        for (let k = 2; k <= v; k++) acc *= k;
+        return acc;
+      }
+      case "func": {
+        let x = evalNode(node.arg, radians);
+        if (TRIG.has(node.name) && !radians) x = (x * Math.PI) / 180;
+        const fn = FUNCS[node.name];
+        const out = fn(x);
+        if (INVTRIG.has(node.name)) {
+          if (!Number.isFinite(out)) {
+            throw new Error(`${node.name} needs a value between -1 and 1`);
+          }
+          return radians ? out : (out * 180) / Math.PI;
+        }
+        if (node.name === "log" || node.name === "ln") {
+          if (x < 0) throw new Error("Logarithms need a value larger than zero");
+          if (x === 0) throw new Error(`Cannot take the ${node.name} of zero`);
+        }
+        if (node.name === "sqrt" && x < 0) throw new Error("Cannot take the square root of a negative number");
+        if (!Number.isFinite(out)) throw new Error(`Cannot evaluate ${node.name} for that value`);
+        return out;
+      }
+      case "op": {
+        const op = node.op;
+        const a = evalNode(node.a, radians);
+        const b = evalNode(node.b, radians);
+        // Percent reading, exactly like a pocket calculator:
+        //   a + b%  and  a - b%   -> b is a share of a (200 + 10% = 220)
+        //   a * b%  and  a / b%   -> b is simply b/100  (200 * 10% = 20)
+        // The percent node has already reduced b to a fraction (10% -> 0.1).
+        const percentOfLeft = node.b.k === "pct" && (op === "add" || op === "sub");
+        const scaled = percentOfLeft ? a * b : b;
+        switch (op) {
+          case "add":
+            return a + scaled;
+          case "sub":
+            return a - scaled;
+          case "mul":
+            return a * scaled;
+          case "div":
+            if (scaled === 0) throw new Error("Cannot divide by zero");
+            return a / scaled;
+          case "mod":
+            if (scaled === 0) throw new Error("Cannot take a remainder with zero");
+            return a % scaled;
+          case "pow":
+            return Math.pow(a, scaled);
+        }
+        throw new Error("I could not work out that expression");
+      }
+    }
+  }
+
+  function parseExpression(raw) {
+    return new Parser(tokenize(raw)).parseRoot();
+  }
+
+  function evaluate(raw, radians) {
+    const v = evalNode(parseExpression(raw), radians);
+    if (Number.isNaN(v)) throw new Error("That calculation has no defined result");
+    if (!Number.isFinite(v)) throw new Error("Result is too large to represent");
+    return v;
+  }
+
+  /**
+   * True when the expression contains a percent sign used in a relative
+   * position (a + b%), where the display should spell out the interpretation.
+   */
+  function usesRelativePercent(raw) {
+    let tree;
+    try {
+      tree = parseExpression(raw);
+    } catch {
+      return false;
+    }
+    let found = false;
+    const walk = (n) => {
+      if (found) return;
+      switch (n.k) {
+        case "pct":
+          walk(n.a);
+          return;
+        case "neg":
+        case "fact":
+          walk(n.a);
+          return;
+        case "op":
+          if (n.b.k === "pct" && (n.op === "add" || n.op === "sub")) {
+            found = true;
+            return;
+          }
+          walk(n.a);
+          walk(n.b);
+          return;
+        case "func":
+          walk(n.arg);
+          return;
+      }
+    };
+    walk(tree);
+    return found;
+  }
+
+  /* ----------------------------- formatting ----------------------------- */
+
+  /*
+   * Format with up to 12 significant digits: thousands separators for the
+   * integer part, exponent form outside the comfortable range.
+   */
+  const MAX_EXP = 1e15;
+  const MIN_EXP = 1e-6;
+
+  function trimZeros(text) {
+    if (text.indexOf(".") < 0) return text;
+    return text.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function groupThousands(intPart) {
+    return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function formatNumber(value) {
+    if (Number.isNaN(value)) return "Not a number";
+    if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
+    if (value === 0) return "0";
+    const neg = value < 0;
+    const abs = Math.abs(value);
+    let out;
+    if (abs >= MAX_EXP || abs < MIN_EXP) {
+      const parts = abs.toExponential(9).split("e");
+      out = `${trimZeros(Number(parts[0]).toFixed(9))}e${parts[1].replace("+", "")}`;
+    } else {
+      const rounded = Number(abs.toPrecision(12));
+      out = trimZeros(rounded.toFixed(Math.max(0, Math.min(20, 12 - Math.floor(Math.log10(rounded)) - 1))));
+      const parts = out.split(".");
+      out = parts[1] ? `${groupThousands(parts[0])}.${parts[1]}` : groupThousands(parts[0]);
+    }
+    return neg ? `-${out}` : out;
+  }
+
+  /* ------------------------------- state -------------------------------- */
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text;
+    statusEl.dataset.status = kind;
+    liveEl.textContent = text;
+  }
+
+  function placeCaret(pos) {
+    input.setSelectionRange(pos, pos);
+  }
+
+  function insert(text) {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    if (input.value.length - (end - start) + text.length > 400) {
+      setStatus("That expression is getting too long", "error");
+      return;
+    }
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    placeCaret(start + text.length);
+    onChange();
+  }
+
+  function deleteBack() {
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? start;
+    if (start === end) {
+      if (start === 0) return;
+      input.value = input.value.slice(0, start - 1) + input.value.slice(start);
+      placeCaret(start - 1);
+    } else {
+      input.value = input.value.slice(0, start) + input.value.slice(end);
+      placeCaret(start);
+    }
+    onChange();
+  }
+
+  function renderMemory() {
+    const has = mem !== 0;
+    memFlag.hidden = !has;
+    memRecallBtn.disabled = !has;
+  }
+
+  function renderAngle() {
+    angleFlag.textContent = deg ? "DEG" : "RAD";
+    angleLabel.textContent = deg ? "Degrees" : "Radians";
+    angleBtn.setAttribute("aria-pressed", deg ? "true" : "false");
+    angleBtn.setAttribute("aria-label", deg ? "Angle mode: degrees. Switch to radians" : "Angle mode: radians. Switch to degrees");
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem("sc-history", JSON.stringify(history.slice(0, 10)));
+    } catch {
+      /* storage unavailable; history stays for this session only */
+    }
+  }
+
+  function renderHistory() {
+    histList.textContent = "";
+    histEmpty.hidden = history.length > 0;
+    histList.hidden = history.length === 0;
+    history.forEach((entry) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "sc__histbtn";
+      btn.title = "Click to load this result into the display";
+      const span = document.createElement("span");
+      span.textContent = `${entry.expr} =`;
+      const strong = document.createElement("b");
+      strong.textContent = formatNumber(entry.result);
+      btn.append(span, strong);
+      btn.addEventListener("click", () => {
+        input.value = formatNumber(entry.result).replace(/,/g, "");
+        placeCaret(input.value.length);
+        prevExpr = null;
+        onChange();
+        input.focus();
+      });
+      li.append(btn);
+      histList.append(li);
+    });
+  }
+
+  function schedulePreview() {
+    if (previewTimer !== undefined) clearTimeout(previewTimer);
+    previewTimer = window.setTimeout(preview, 90);
+  }
+
+  function preview() {
+    previewTimer = undefined;
+    const raw = input.value.trim();
+    if (!input.value.length) {
+      lastExpr = "";
+      setStatus("", "");
+      return;
+    }
+    if (!raw) {
+      lastExpr = "";
+      setStatus("", "");
+      return;
+    }
+    try {
+      const value = evaluate(raw, deg);
+      const relative = usesRelativePercent(raw);
+      lastExpr = raw;
+      setStatus(
+        relative
+          ? `${formatNumber(value)}  (percent read as a share of the total)`
+          : `= ${formatNumber(value)}`,
+        "ok",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "I could not read that expression";
+      const syntaxOnly =
+        /ends too early|Unbalanced|too early|missing a value|Do not know|do not know|recognise/i.test(message);
+      setStatus(syntaxOnly ? "" : message, syntaxOnly ? "" : "error");
+    }
+  }
+
+  function onChange() {
+    schedulePreview();
+    renderMemory();
+  }
+
+  function currentValue() {
+    const raw = input.value.trim();
+    if (!raw) return lastResult ?? 0;
+    return evaluate(raw, deg);
+  }
+
+  function flashError(message) {
+    setStatus(message, "error");
+  }
+
+  /* ------------------------------ actions ------------------------------- */
+
+  function calculate() {
+    const raw = input.value.trim();
+    if (!raw) return;
+    let value;
+    try {
+      value = evaluate(raw, deg);
+    } catch (err) {
+      flashError(err instanceof Error ? err.message : "I could not read that expression");
+      return;
+    }
+    const relative = usesRelativePercent(raw);
+    input.value = formatNumber(value).replace(/,/g, "");
+    placeCaret(input.value.length);
+    lastResult = value;
+    lastExpr = raw;
+    prevExpr = null;
+    setStatus(
+      relative
+        ? `${formatNumber(value)}  ← ${raw}  (percent read as a share of the total)`
+        : `${formatNumber(value)}  ←  ${raw}`,
+      "ok",
+    );
+    if (history[0]?.expr !== raw || history[0]?.result !== value) {
+      history.unshift({ expr: raw, result: value });
+      history = history.slice(0, 10);
+      saveHistory();
+      renderHistory();
+    }
+    renderMemory();
+    input.focus();
+  }
+
+  function press(action, value, key) {
+    switch (action) {
+      case "digit":
+      case "const":
+      case "op":
+        insert(key ?? value ?? "");
+        break;
+      case "postfix":
+        insert(value ?? "");
+        break;
+      case "unary":
+        insert(`${value}(`);
+        break;
+      case "open":
+        insert("(");
+        break;
+      case "close":
+        insert(")");
+        break;
+      case "equals":
+        calculate();
+        break;
+      case "angle":
+        deg = !deg;
+        try {
+          localStorage.setItem("sc-deg", deg ? "1" : "0");
+        } catch {
+          /* preference not persisted */
+        }
+        renderAngle();
+        preview();
+        break;
+      case "clear":
+        prevExpr = input.value;
+        input.value = "";
+        lastExpr = "";
+        placeCaret(0);
+        onChange();
+        setStatus("", "");
+        input.focus();
+        break;
+      case "backspace":
+        deleteBack();
+        input.focus();
+        break;
+      case "mem-store":
+        storeMemory();
+        break;
+      case "mem-recall":
+        recallMemory();
+        break;
+      case "mem-add":
+        addMemory();
+        break;
+      case "mem-clear":
+        mem = 0;
+        persistMemory();
+        renderMemory();
+        break;
+      case "clear-history":
+        confirmBox.hidden = false;
+        break;
+      case "confirm-yes":
+        history = [];
+        saveHistory();
+        renderHistory();
+        confirmBox.hidden = true;
+        break;
+      case "confirm-no":
+        confirmBox.hidden = true;
+        break;
+    }
+  }
+
+  function persistMemory() {
+    try {
+      localStorage.setItem("sc-memory", String(mem));
+    } catch {
+      /* memory stays for this session only */
+    }
+  }
+
+  function storeMemory() {
+    try {
+      mem = currentValue();
+    } catch (err) {
+      flashError(err instanceof Error ? err.message : "There is no result to store yet");
+      return;
+    }
+    persistMemory();
+    renderMemory();
+  }
+
+  function addMemory() {
+    try {
+      mem += currentValue();
+    } catch (err) {
+      flashError(err instanceof Error ? err.message : "There is no result to add yet");
+      return;
+    }
+    persistMemory();
+    renderMemory();
+  }
+
+  function recallMemory() {
+    if (mem === 0) return;
+    insert(formatNumber(mem).replace(/,/g, ""));
+    input.focus();
+  }
+
+  /* ------------------------------ wiring -------------------------------- */
+
+  root.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      press(btn.dataset.action ?? "", btn.dataset.value, btn.dataset.key);
+    });
+  });
+
+  const keypad = root.querySelector(".sc__keys");
+  if (keypad) {
+    keypad.addEventListener("mousedown", (event) => event.preventDefault());
+  }
+  const memRow = root.querySelector(".sc__memrow");
+  if (memRow) {
+    memRow.addEventListener("mousedown", (event) => event.preventDefault());
+  }
+
+  const CHAR_MAP = {
+    "*": "×",
+    "/": "÷",
+    "-": "−",
+    "+": "+",
+    "^": "^",
+    "%": "%",
+    "(": "(",
+    ")": ")",
+    ".": ".",
+    "!": "!",
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      calculate();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      const current = input.value;
+      if (current.length) {
+        prevExpr = current;
+        input.value = "";
+        lastExpr = "";
+        placeCaret(0);
+        onChange();
+        setStatus("", "");
+      } else if (prevExpr !== null) {
+        input.value = prevExpr;
+        prevExpr = null;
+        placeCaret(input.value.length);
+        onChange();
+      }
+      return;
+    }
+    if (event.key === "Delete") {
+      event.preventDefault();
+      const start = input.selectionStart ?? 0;
+      const end = input.selectionEnd ?? start;
+      if (start === end) {
+        input.value = input.value.slice(0, start) + input.value.slice(start + 1);
+        placeCaret(start);
+      } else {
+        input.value = input.value.slice(0, start) + input.value.slice(end);
+        placeCaret(start);
+      }
+      onChange();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const mapped = CHAR_MAP[event.key];
+    if (mapped) {
+      event.preventDefault();
+      insert(mapped);
+    }
+  });
+
+  input.addEventListener("input", onChange);
+  input.addEventListener("click", () => schedulePreview());
+  input.addEventListener("focus", () => schedulePreview());
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!target || !target.closest(".sc")) return;
+    if (!target.closest("button")) input.focus();
+  });
+
+  renderAngle();
+  renderMemory();
+  renderHistory();
+</script>

@@ -1,0 +1,17 @@
+---
+import { urlOf, type Tool } from "../data/tools";
+import Icon from "./Icon.astro";
+
+interface Props {
+  tool: Tool;
+}
+const { tool } = Astro.props;
+---
+
+<a class="tool-card" href={urlOf(tool)}>
+  <span class="tool-card__icon" aria-hidden="true"><Icon name={tool.icon} size={20} /></span>
+  <span>
+    <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+    <span class="tool-card__desc">{tool.description}</span>
+  </span>
+</a>

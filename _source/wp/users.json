@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "name": "admin",
+    "link": "https://tools.ly/author/admin/",
+    "slug": "admin"
+  },
+  {
+    "id": 2,
+    "name": "Tools Manager",
+    "link": "https://tools.ly/author/tools-manager/",
+    "slug": "tools-manager"
+  }
+]

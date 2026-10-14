@@ -1,0 +1,167 @@
+---
+import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
+import ToolDirectory from "../components/ToolDirectory.astro";
+import { allTools, liveCount, legacyTools, urlOf } from "../data/tools";
+
+const featured = legacyTools.slice(0, 6);
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Tools.ly",
+    url: "https://tools.ly/",
+    description:
+      "Free online tools that run entirely in your browser: calculators, converters, text, color, media and privacy utilities.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: "https://tools.ly/all-tools/?q={search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Free online tools",
+    numberOfItems: allTools.length,
+    itemListElement: legacyTools.map((t, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: t.nav ?? t.title,
+      url: new URL(urlOf(t), "https://tools.ly").href,
+    })),
+  },
+];
+---
+
+<Base
+  title="Free Online Tools That Run in Your Browser | Tools.ly"
+  description="A growing collection of free browser-based tools — calculators, converters, text, color, media and privacy utilities. No sign-up, no installs, nothing uploaded to a server."
+  canonical="/"
+  jsonLd={jsonLd}
+>
+  <section class="hero">
+    <div class="container">
+      <p class="eyebrow">Free · Private · Works offline</p>
+      <h1>Useful tools that run inside your browser.</h1>
+      <p class="lede">
+        Calculators, converters, text utilities, color and media tools — all free, all
+        client-side. Nothing you type is ever sent to a server, and there is no account to create.
+      </p>
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="#all-tools">
+          Browse the tools <Icon name="arrow" size={16} />
+        </a>
+        <a class="btn btn--ghost" href={urlOf(legacyTools[0])}>Open the calculator</a>
+      </div>
+
+      <div class="hero__stats">
+        <div class="hero__stat">
+          <b>{allTools.length}</b>
+          <span>tools in the directory</span>
+        </div>
+        <div class="hero__stat">
+          <b>{liveCount}</b>
+          <span>live right now</span>
+        </div>
+        <div class="hero__stat">
+          <b>0</b>
+          <span>bytes uploaded</span>
+        </div>
+        <div class="hero__stat">
+          <b>0</b>
+          <span>accounts required</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <p class="eyebrow">Start here</p>
+      <h2>Ready to use right now</h2>
+      <p class="lede">
+        These tools are live and work the same way they always have — same web addresses, rebuilt
+        from scratch on a cleaner, faster foundation.
+      </p>
+
+      <div class="tool-grid" style="margin-top:1.5rem">
+        {
+          featured.map((tool) => (
+            <a class="tool-card" href={urlOf(tool)}>
+              <span class="tool-card__icon" aria-hidden="true"><Icon name={tool.icon} size={20} /></span>
+              <span>
+                <span class="tool-card__title">{tool.nav ?? tool.title}</span>
+                <span class="tool-card__desc">{tool.description}</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <div class="section--soft">
+    <div class="container" style="padding-block:var(--section-y)">
+      <ToolDirectory heading="Every tool in one place" />
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="container">
+      <div class="tool-layout tool-layout--aside">
+        <div class="prose">
+          <h2>Why these tools are different</h2>
+          <p>
+            Every tool on Tools.ly runs as plain HTML, CSS and JavaScript in your own browser tab.
+            There is no server doing the calculation, no database storing your input and no
+            analytics script watching what you type. When you close the tab, the work is gone
+            unless <em>you</em> chose to save or download it.
+          </p>
+
+          <h3>It keeps working when the network does not</h3>
+          <p>
+            Because nothing is computed remotely, a tool page that is already open keeps working
+            with a flaky connection, on a plane, or on a locked-down work laptop that blocks
+            third-party scripts.
+          </p>
+
+          <h3>Honest about limits</h3>
+          <p>
+            Several tools here — the body-composition and calorie estimators in particular — are
+            estimates built on published formulas. They are a starting point for a conversation
+            with a professional, not a diagnosis. Every page says so, and every page links to the
+            sources it uses.
+          </p>
+
+          <h3>Built to be found and linked</h3>
+          <p>
+            Each tool has its own permanent address, a canonical URL, structured data and a
+            breadcrumb trail, so search engines and other people can link to the exact tool rather
+            than to a generic home page. See{" "}
+            <a href="/all-tools/">the full directory</a> or{" "}
+            <a href="/7b3c2-about/">read more about the project</a>.
+          </p>
+        </div>
+
+        <aside class="stack">
+          <div class="card">
+            <h3 style="font-size:1.05rem">Coming next</h3>
+            <p style="color:var(--text-muted);font-size:0.92rem;margin-bottom:0.75rem">
+              The directory is being expanded with converters, encoders, timers and media tools.
+            </p>
+            <a class="btn btn--soft btn--block" href="/all-tools/">See what is planned</a>
+          </div>
+          <div class="card">
+            <h3 style="font-size:1.05rem">Suggest a tool</h3>
+            <p style="color:var(--text-muted);font-size:0.92rem;margin-bottom:0.75rem">
+              Missing something you would use every day? Ask for it.
+            </p>
+            <a class="btn btn--ghost btn--block" href="/7b3c2-contact/">Send a request</a>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+</Base>

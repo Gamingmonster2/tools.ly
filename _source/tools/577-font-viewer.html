@@ -1,0 +1,596 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Royal Font Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Importing a base set of fonts for the UI and the Viewer -->
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&#038;family=Cairo:wght@400;700&#038;family=Cinzel:wght@400;700&#038;family=Lato:wght@400;700&#038;family=Lobster&#038;family=Merriweather:wght@400;700&#038;family=Montserrat:wght@400;700&#038;family=Open+Sans:wght@400;700&#038;family=Oswald:wght@400;700&#038;family=Playfair+Display:wght@400;700&#038;family=Roboto:wght@400;700&#038;family=Roboto+Mono:wght@400;700&#038;display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #111111;
+            --accent-color: #000000;
+            --secondary-bg: #f4f4f4;
+            --border-color: #111111;
+            --card-shadow: 5px 5px 0px rgba(0,0,0,0.1);
+            --card-shadow-hover: 8px 8px 0px rgba(0,0,0,0.2);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-top: 20px;
+            position: relative;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif; /* Royal font */
+            font-size: 3.5rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            border-bottom: 3px solid var(--text-color);
+            display: inline-block;
+            padding-bottom: 10px;
+        }
+
+        .subtitle {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            color: #555;
+            margin-top: 5px;
+        }
+
+        /* Controls Container */
+        .controls-wrapper {
+            max-width: 1000px;
+            margin: 0 auto 50px auto;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            border: 1px solid #eee;
+            padding: 30px;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            border-radius: 8px;
+        }
+
+        /* Section Labels */
+        .section-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: block;
+            color: #666;
+        }
+
+        /* Rectangle Selectors (Replacing Dropdowns) */
+        .rectangle-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .rect-btn {
+            background: transparent;
+            border: 2px solid var(--border-color);
+            padding: 10px 20px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-transform: capitalize;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rect-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 3px 3px 0px var(--text-color);
+        }
+
+        .rect-btn.active {
+            background: var(--text-color);
+            color: var(--bg-color);
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.3);
+        }
+
+        /* Slider Section */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: var(--secondary-bg);
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--text-color);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 0 4px rgba(0,0,0,0.1);
+            transition: var(--transition);
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #ccc;
+            border-radius: 2px;
+        }
+
+        .size-display {
+            font-family: 'Roboto Mono', monospace;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Input & Alignment Row */
+        .input-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .alignment-toggles {
+            display: flex;
+            border: 2px solid var(--border-color);
+        }
+
+        .align-btn {
+            background: transparent;
+            border: none;
+            border-right: 1px solid var(--border-color);
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: var(--transition);
+        }
+
+        .align-btn:last-child {
+            border-right: none;
+        }
+
+        .align-btn:hover {
+            background: #eee;
+        }
+
+        .align-btn.active {
+            background: var(--text-color);
+            color: white;
+        }
+
+        .text-input {
+            width: 100%;
+            padding: 14px 20px;
+            font-size: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: 0; /* Sharp edges for royal feel */
+            outline: none;
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        .text-input:focus {
+            box-shadow: 4px 4px 0px var(--text-color);
+        }
+
+        /* Color Palette */
+        .palette {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .color-swatch {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.1);
+        }
+
+        .color-swatch.active {
+            border-color: var(--text-color);
+            transform: scale(1.1);
+        }
+        
+        /* Specific fix for white swatch visibility */
+        .color-swatch[data-color="#ffffff"] {
+            border: 1px solid #ccc;
+        }
+
+        /* Font Grid */
+        .font-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding-bottom: 50px;
+        }
+
+        .font-card {
+            background: #fff;
+            border: 1px solid #eee;
+            padding: 25px;
+            border-radius: 8px;
+            position: relative;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .font-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+            border-color: #333;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .font-name {
+            font-size: 0.9rem;
+            color: #888;
+            font-weight: 600;
+        }
+
+        .font-category {
+            font-size: 0.75rem;
+            background: #111;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .preview-text {
+            font-size: 32px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            flex-grow: 1;
+            transition: color 0.3s ease;
+        }
+
+        /* Animation for entering items */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .font-card {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .input-row {
+                grid-template-columns: 1fr;
+            }
+            .alignment-toggles {
+                justify-content: center;
+            }
+            h1 {
+                font-size: 2.5rem;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Font Viewer</h1>
+        <div class="subtitle">Royal Edition • Black &#038; White Collection</div>
+    </header>
+
+    <div class="controls-wrapper">
+        
+        <!-- Category Selection (Rectangles) -->
+        <div>
+            <span class="section-label">Category</span>
+            <div class="rectangle-group" id="category-filters">
+                <button class="rect-btn active" data-val="all">All</button>
+                <button class="rect-btn" data-val="serif">Serif</button>
+                <button class="rect-btn" data-val="sans-serif">Sans Serif</button>
+                <button class="rect-btn" data-val="display">Display</button>
+                <button class="rect-btn" data-val="handwriting">Handwriting</button>
+                <button class="rect-btn" data-val="monospace">Monospace</button>
+            </div>
+        </div>
+
+        <!-- Language Selection (Rectangles) -->
+        <div>
+            <span class="section-label">Language / Script</span>
+            <div class="rectangle-group" id="lang-filters">
+                <button class="rect-btn active" data-val="english">English</button>
+                <button class="rect-btn" data-val="arabic">Arabic (العربية)</button>
+            </div>
+        </div>
+
+        <!-- Size Slider -->
+        <div>
+            <span class="section-label">Text Size</span>
+            <div class="slider-container">
+                <span style="font-size: 14px;">A</span>
+                <input type="range" id="size-slider" min="12" max="96" value="32">
+                <span style="font-size: 24px;">A</span>
+                <div class="size-display" id="size-val">32px</div>
+            </div>
+        </div>
+
+        <!-- Input & Alignment -->
+        <div class="input-row">
+            <div class="alignment-toggles">
+                <button class="align-btn active" data-align="left">
+                    <!-- SVG Left Align -->
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 21h18v-2H3v2zm0-4h12v-2H3v2zm0-4h18v-2H3v2zm0-4h12V7H3v2zm0-6v2h18V3H3z"/></svg>
+                </button>
+                <button class="align-btn" data-align="center">
+                    <!-- SVG Center Align -->
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/></svg>
+                </button>
+                <button class="align-btn" data-align="right">
+                    <!-- SVG Right Align -->
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zm-6-6v2h18V3H3z"/></svg>
+                </button>
+            </div>
+            <input type="text" id="text-input" class="text-input" placeholder="Type something royal...">
+        </div>
+
+        <!-- Color Palette -->
+        <div>
+            <span class="section-label">Preview Color</span>
+            <div class="palette" id="color-palette">
+                <div class="color-swatch active" style="background-color: #000000;" data-color="#000000"></div>
+                <div class="color-swatch" style="background-color: #1a237e;" data-color="#1a237e"></div> <!-- Royal Blue -->
+                <div class="color-swatch" style="background-color: #b71c1c;" data-color="#b71c1c"></div> <!-- Deep Red -->
+                <div class="color-swatch" style="background-color: #f9a825;" data-color="#f9a825"></div> <!-- Gold -->
+                <div class="color-swatch" style="background-color: #2e7d32;" data-color="#2e7d32"></div> <!-- Emerald -->
+                <div class="color-swatch" style="background-color: #4a148c;" data-color="#4a148c"></div> <!-- Purple -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Font Grid Output -->
+    <div class="font-grid" id="font-grid">
+        <!-- Cards will be injected here via JS -->
+    </div>
+
+    <script>
+        // --- Data ---
+        const fonts = [
+            { name: 'Roboto', category: 'sans-serif', lang: 'english' },
+            { name: 'Open Sans', category: 'sans-serif', lang: 'english' },
+            { name: 'Lato', category: 'sans-serif', lang: 'english' },
+            { name: 'Montserrat', category: 'sans-serif', lang: 'english' },
+            { name: 'Playfair Display', category: 'serif', lang: 'english' },
+            { name: 'Merriweather', category: 'serif', lang: 'english' },
+            { name: 'Cinzel', category: 'serif', lang: 'english' }, // Very Royal
+            { name: 'Oswald', category: 'display', lang: 'english' },
+            { name: 'Lobster', category: 'display', lang: 'english' },
+            { name: 'Roboto Mono', category: 'monospace', lang: 'english' },
+            
+            // Arabic Fonts
+            { name: 'Amiri', category: 'serif', lang: 'arabic' },
+            { name: 'Cairo', category: 'sans-serif', lang: 'arabic' },
+            { name: 'Lateef', category: 'handwriting', lang: 'arabic' }, // Assuming Lateef is available or fallback
+            { name: 'Scheherazade New', category: 'serif', lang: 'arabic' }
+        ];
+
+        // --- State ---
+        let state = {
+            text: "The quick brown fox jumps over the lazy dog.",
+            arabicText: "أبجد هوز حطي كلمن سعفص قرشت ثخذ ضظغ",
+            size: 32,
+            align: 'left',
+            color: '#000000',
+            category: 'all',
+            lang: 'english'
+        };
+
+        // --- DOM Elements ---
+        const grid = document.getElementById('font-grid');
+        const textInput = document.getElementById('text-input');
+        const sizeSlider = document.getElementById('size-slider');
+        const sizeVal = document.getElementById('size-val');
+        const catFilters = document.getElementById('category-filters');
+        const langFilters = document.getElementById('lang-filters');
+        const alignBtns = document.querySelectorAll('.align-btn');
+        const colorSwatches = document.querySelectorAll('.color-swatch');
+
+        // --- Initialization ---
+        function init() {
+            render();
+            setupListeners();
+        }
+
+        // --- Rendering ---
+        function render() {
+            grid.innerHTML = '';
+
+            // Filter fonts
+            const filteredFonts = fonts.filter(font => {
+                const catMatch = state.category === 'all' || font.category === state.category;
+                const langMatch = font.lang === state.lang;
+                return catMatch && langMatch;
+            });
+
+            // Determine text to show
+            let displayText = textInput.value.trim();
+            if (!displayText) {
+                displayText = state.lang === 'arabic' ? state.arabicText : state.text;
+            }
+
+            // Generate Cards
+            filteredFonts.forEach((font, index) => {
+                const card = document.createElement('div');
+                card.className = 'font-card';
+                card.style.animationDelay = `${index * 0.05}s`;
+
+                // Apply Font Family
+                const fontFamily = `'${font.name}', ${font.category}`;
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="font-name">${font.name}</span>
+                        <span class="font-category">${font.category}</span>
+                    </div>
+                    <div class="preview-text" style="
+                        font-family: ${fontFamily};
+                        font-size: ${state.size}px;
+                        text-align: ${state.align};
+                        color: ${state.color};
+                        direction: ${state.lang === 'arabic' ? 'rtl' : 'ltr'};
+                    ">
+                        ${displayText}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            if (filteredFonts.length === 0) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888;">No fonts found for this selection.</div>`;
+            }
+        }
+
+        // --- Event Listeners ---
+        function setupListeners() {
+            // Text Input
+            textInput.addEventListener('input', (e) => {
+                render(); // Re-render to update text content
+            });
+
+            // Size Slider
+            sizeSlider.addEventListener('input', (e) => {
+                state.size = e.target.value;
+                sizeVal.innerText = `${state.size}px`;
+                // Update directly via CSS for performance instead of full re-render
+                document.querySelectorAll('.preview-text').forEach(el => {
+                    el.style.fontSize = `${state.size}px`;
+                });
+            });
+
+            // Category Filters (Rectangles)
+            catFilters.addEventListener('click', (e) => {
+                if (e.target.classList.contains('rect-btn')) {
+                    // Update UI
+                    catFilters.querySelectorAll('.rect-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    
+                    // Update State
+                    state.category = e.target.dataset.val;
+                    render();
+                }
+            });
+
+            // Language Filters
+            langFilters.addEventListener('click', (e) => {
+                if (e.target.classList.contains('rect-btn')) {
+                    langFilters.querySelectorAll('.rect-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    state.lang = e.target.dataset.val;
+                    
+                    // Reset text input if it's empty to show correct default
+                    if(textInput.value === "") render();
+                    else render();
+                }
+            });
+
+            // Alignment
+            alignBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    alignBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    state.align = btn.dataset.align;
+                    
+                    document.querySelectorAll('.preview-text').forEach(el => {
+                        el.style.textAlign = state.align;
+                    });
+                });
+            });
+
+            // Color Palette
+            colorSwatches.forEach(swatch => {
+                swatch.addEventListener('click', () => {
+                    colorSwatches.forEach(s => s.classList.remove('active'));
+                    swatch.classList.add('active');
+                    state.color = swatch.dataset.color;
+
+                    document.querySelectorAll('.preview-text').forEach(el => {
+                        el.style.color = state.color;
+                    });
+                });
+            });
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>

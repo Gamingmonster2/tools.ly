@@ -1,0 +1,58 @@
+[
+  {
+    "id": 3,
+    "count": 0,
+    "link": "https://tools.ly/category/design/",
+    "name": "Design",
+    "slug": "design",
+    "parent": 0
+  },
+  {
+    "id": 18,
+    "count": 3,
+    "link": "https://tools.ly/category/free-online-tools/",
+    "name": "Free online tools",
+    "slug": "free-online-tools",
+    "parent": 0
+  },
+  {
+    "id": 4,
+    "count": 0,
+    "link": "https://tools.ly/category/layout/",
+    "name": "layout",
+    "slug": "layout",
+    "parent": 0
+  },
+  {
+    "id": 19,
+    "count": 1,
+    "link": "https://tools.ly/category/free-online-tools/password-generator/",
+    "name": "Password generator",
+    "slug": "password-generator",
+    "parent": 18
+  },
+  {
+    "id": 1,
+    "count": 3,
+    "link": "https://tools.ly/category/uncategorized/",
+    "name": "Uncategorized",
+    "slug": "uncategorized",
+    "parent": 0
+  },
+  {
+    "id": 17,
+    "count": 2,
+    "link": "https://tools.ly/category/weight-tools/",
+    "name": "Weight tools",
+    "slug": "weight-tools",
+    "parent": 0
+  },
+  {
+    "id": 20,
+    "count": 0,
+    "link": "https://tools.ly/category/free-online-tools/word-counter/",
+    "name": "Word Counter",
+    "slug": "word-counter",
+    "parent": 18
+  }
+]

@@ -1,0 +1,1398 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find((t) => t.slug === "online-voice-recorder")!;
+
+const faqs = [
+  {
+    q: "Is my recording uploaded or stored on a server?",
+    a: "No. The microphone stream is captured by the browser with getUserMedia, compressed by MediaRecorder and held in memory as a Blob that only your tab can see. There is no upload step, no server-side copy and no account. The moment you press Delete — or close the tab — the audio is gone, because closing a tab discards everything held in memory. That also means a recording is not a backup: download the clip before you leave the page.",
+  },
+  {
+    q: "Why does the browser ask for microphone permission?",
+    a: "Because the browser is the only party that can open the microphone, and it deliberately makes the page ask you first. Until you accept the prompt, the page receives nothing — the recorder cannot listen in the background and cannot start before you click Record. If you denied it by accident, the padlock or camera icon in the address bar lets you reset that choice for this site; reload the page afterwards.",
+  },
+  {
+    q: "Why does nothing happen — or why is the microphone blocked?",
+    a: "The two usual causes are an insecure context and an unavailable device. Microphone capture is only exposed on HTTPS pages (and on localhost during development); over plain HTTP, navigator.mediaDevices is simply undefined, so the tool shows a 'secure connection required' notice instead of failing silently. The other cause is a missing or muted input device: unplugged headsets, a webcam with its built-in mic disabled, or another app holding the microphone exclusively. Check the picker next to the Record button and try a different input.",
+  },
+  {
+    q: "Which file format will I get, and can my editor open it?",
+    a: "The tool asks MediaRecorder for the best format the browser advertises and falls back to plain WebM. Chrome, Edge and Firefox on desktop normally produce WebM with Opus audio (.webm), which every modern player handles but older editors and some mobile social apps reject. Safari usually produces MPEG-4 AAC (.m4a), which is broadly compatible. If your target app refuses the file, convert it to WAV or MP3 in a converter tool before editing; the audio data itself is identical.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN Web Docs — MediaRecorder",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder",
+    note: "The API behind the recording: how start() and stop() work, why the final dataavailable event matters, and the browser support table for each container.",
+  },
+  {
+    label: "MDN Web Docs — MediaDevices.getUserMedia()",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia",
+    note: "Explains the microphone permission prompt, the constraints object used to request a specific input, and the NotAllowedError and NotFoundError failures the UI translates into plain messages.",
+  },
+  {
+    label: "MDN Web Docs — AnalyserNode",
+    href: "https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode",
+    note: "Documents getByteTimeDomainData() and getByteFrequencyData(), the two methods the live waveform is drawn from, plus fftSize and smoothingTimeConstant.",
+  },
+];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Record a voice memo, a practice run or an interview straight from your microphone, watch the live waveform, then play the clip back and download it — no upload, no account, nothing to install."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body vr">
+        <!-- Unsupported / insecure notice -->
+        <div class="callout callout--warn vr__notice" id="vr-notice" hidden>
+          <p><strong id="vr-notice-title">Not supported in this browser</strong></p>
+          <p id="vr-notice-text">
+            Recording needs a recent version of Chrome, Edge, Firefox or Safari.
+          </p>
+        </div>
+
+        <!-- Level / waveform -->
+        <div class="vr__stage" id="vr-stage">
+          <canvas
+            class="vr__canvas"
+            id="vr-canvas"
+            role="img"
+            aria-label="Live microphone waveform. This is a visual aid, not a calibrated level meter."
+          ></canvas>
+          <span class="vr__hint" id="vr-stage-hint">Waveform appears here while recording</span>
+        </div>
+
+        <!-- Readouts -->
+        <div class="vr__bar">
+          <p class="vr__timer readout" id="vr-timer" aria-hidden="true">00:00</p>
+          <span class="badge" id="vr-badge">Ready</span>
+        </div>
+        <p class="sr-only" id="vr-live" role="status" aria-live="polite">Recorder ready.</p>
+
+        <!-- Controls -->
+        <div class="vr__controls">
+          <button type="button" class="btn btn--primary vr__rec" id="vr-record">
+            <span class="vr__dot" aria-hidden="true"></span>
+            <span id="vr-record-label">Record</span>
+          </button>
+          <button type="button" class="btn btn--ghost" id="vr-clear">Clear all</button>
+        </div>
+
+        <div class="field vr__device">
+          <label for="vr-device">Microphone</label>
+          <select id="vr-device" aria-describedby="vr-device-help">
+            <option value="">System default</option>
+          </select>
+          <p class="vr__help" id="vr-device-help">
+            The list is populated after you grant microphone access. Devices without a usable input
+            are hidden by the browser.
+          </p>
+        </div>
+
+        <p class="vr__help vr__shortcuts">
+          Keyboard: <kbd>R</kbd> starts, <kbd>Space</kbd> stops while recording, <kbd>Esc</kbd> cancels
+          the current take without saving.
+        </p>
+      </div>
+
+      <div class="panel__foot">
+        <p class="vr__footnote" id="vr-foot">
+          Your audio stays in this tab: it is captured and compressed locally and never uploaded.
+          Recordings live in memory only, so download anything you want to keep and note that the
+          list keeps the 10 most recent clips — older ones are dropped.
+        </p>
+      </div>
+    </div>
+
+    <!-- Recordings -->
+    <section class="vr__library" aria-labelledby="vr-lib-h">
+      <h2 class="vr__h" id="vr-lib-h">
+        Your recordings <span class="badge" id="vr-count">0</span>
+      </h2>
+      <p class="empty-state" id="vr-empty">
+        Nothing recorded yet. Press <strong>Record</strong> and grant microphone access when your
+        browser asks.
+      </p>
+      <ul class="vr__list" id="vr-list"></ul>
+    </section>
+  </Fragment>
+
+  <h2>How to record audio in your browser</h2>
+  <p>
+    Everything on this page happens in one tab and takes three clicks of browser work. Select your
+    microphone if you have more than one, press <em>Record</em>, and press the same button — now
+    labelled <em>Stop</em> — when you are done. The clip appears immediately underneath with a player,
+    its duration, its file size and a download link. There is no upload progress bar because there is
+    no upload.
+  </p>
+  <ol>
+    <li>
+      <strong>Check the input first.</strong> Plug in the headset or USB microphone you intend to use
+      before you press Record, then pick it in the <em>Microphone</em> list. Switching devices
+      mid-take is not possible, and a webcam microphone across the room will sound like it.
+    </li>
+    <li>
+      <strong>Press Record and allow access.</strong> Your browser shows a permission prompt the first
+      time. Until you accept it, the page is not listening to anything.
+    </li>
+    <li>
+      <strong>Watch the waveform, not the ceiling.</strong> The canvas shows the incoming signal. If a
+      loud passage flattens into a solid block, you are probably too close or the input gain is too
+      high — move back a hand's width or lower the level in your system sound settings and take the
+      take again.
+    </li>
+    <li>
+      <strong>Press Stop.</strong> The recorder finalises the file, the timer resets to 00:00 and the
+      new clip is inserted at the top of the list with the status badge showing <em>Saved</em>.
+    </li>
+    <li>
+      <strong>Play it back, then download it.</strong> Reviewing before you leave the page is worth the
+      ten seconds: closing the tab discards every recording, because they only ever existed in memory.
+    </li>
+  </ol>
+  <p>
+    A few habits make browser recordings much easier to work with. Say a short test phrase and listen
+    to it before a long take — ten seconds of checking beats re-recording a ten-minute interview.
+    Record in the quietest room available and keep the microphone off hard surfaces; a desk reflection
+    is more audible than most people expect. Finally, name the file as soon as you download it: a
+    folder of <code>recording-1.webm</code>, <code>recording-2.webm</code> is unusable a week later.
+  </p>
+
+  <h2>Your recording never leaves your device</h2>
+  <p>
+    This tool is a static page. It has no upload endpoint, no analytics on your audio and no
+    server-side storage: the file exists as a Blob inside your browser's memory, addressed by a
+    <code>blob:</code> URL that only this tab can resolve. Deleting the clip revokes that URL, and
+    closing the tab releases everything else.
+  </p>
+  <p>
+    That architecture has three honest consequences, and they are worth stating plainly rather than
+    hiding behind a privacy badge.
+  </p>
+  <ul>
+    <li>
+      <strong>The browser still asks for permission, and it must.</strong> Microphone capture is
+      privileged: the page cannot open the device until you approve it, and the browser keeps showing
+      the recording indicator while a stream is live. Permission is granted per site, and you can
+      revoke it at any time from the padlock icon in the address bar. This prompt is not the page
+      tracking you — it is the sandbox working as designed.
+    </li>
+    <li>
+      <strong>The page needs a secure context.</strong> <code>navigator.mediaDevices</code> is only
+      exposed over HTTPS (or on <code>localhost</code> during development), so on a plain
+      <code>http://</code> address there is no <code>getUserMedia</code> to call at all. This page
+      detects that and tells you, instead of offering a button that could never work.
+    </li>
+    <li>
+      <strong>Local does not mean permanent.</strong> Memory is not storage. A refresh, a crash, a
+      closed tab or a phone that sleeps all destroy unrecovered recordings. Download anything you
+      care about in the same session in which you recorded it.
+    </li>
+  </ul>
+  <div class="callout">
+    <p>
+      If you need recordings to survive a refresh, download them and keep the files on your own disk
+      (or in your own backup). This page deliberately has no "save to cloud" button, because adding
+      one would mean your voice leaving your machine.
+    </p>
+  </div>
+
+  <h2>Understanding the waveform</h2>
+  <p>
+    The canvas is fed by the Web Audio API. A single <code>AnalyserNode</code> is inserted between
+    the microphone stream and nothing else — it is a pass-through tap that copies a window of samples
+    on every animation frame. The visualiser reads that window two ways: as time-domain samples for
+    the filled waveform shape, and as frequency bins to colour the peaks. The result is a
+    zero-latency picture of what the microphone is hearing right now.
+  </p>
+  <p>
+    Read it as a shape, not as a number. Three things are visible at a glance:
+  </p>
+  <ul>
+    <li>
+      <strong>A flat line</strong> means near silence: the microphone is muted, the wrong input is
+      selected, or you are too far from it.
+    </li>
+    <li>
+      <strong>A steady, restless wave</strong> with peaks reaching roughly the middle of the canvas is
+      the healthy range for speech. Peaks should vary naturally as words come and go.
+    </li>
+    <li>
+      <strong>A block that fills the canvas edge to edge</strong> is clipping — the signal is being cut
+      off at the input stage. The lost detail cannot be recovered later, so re-take it quieter.
+    </li>
+  </ul>
+  <p>
+    Because of how the analyser is configured here, this drawing is a <strong>visual aid, not a level
+    meter</strong>. It is not calibrated to dBFS, it applies a smoothing constant so the bars fall
+    back smoothly instead of snapping, and its vertical scale depends on the canvas height, which
+    changes with the window. Use it to see that the microphone is alive and roughly how loud you are.
+    Do not use it to set final levels, judge a -18 LUFS delivery target or decide whether a take will
+    pass a loudness standard — for that you need a metering tool that reports real numbers.
+  </p>
+  <p>
+    One small optimisation is built in: while the tab is hidden the
+    <code>requestAnimationFrame</code> loop is paused, so a background tab does not burn processor
+    time drawing a waveform nobody can see. The audio keeps recording regardless — the visualiser is
+    decoration, not the capture path.
+  </p>
+
+  <h2>File formats and compatibility</h2>
+  <p>
+    Browser recording is a negotiation, not a setting. There is no single <code>audio/webm</code> flag
+    that every browser understands, so the tool asks <code>MediaRecorder</code> which of a short list
+    of container and codec pairs it supports and uses the first one that answers yes. The extension
+    on the download link is derived from that same answer, so you never get an <code>.m4a</code> file
+    that is really WebM.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Browser</th>
+          <th scope="col">Typical result</th>
+          <th scope="col">Extension</th>
+          <th scope="col">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chrome, Edge, Opera (desktop)</td>
+          <td>WebM container, Opus audio</td>
+          <td><code>.webm</code></td>
+          <td>Small files, excellent speech quality at modest bitrates. Opens in browsers, VLC and most current NLEs; older editors may refuse it.</td>
+        </tr>
+        <tr>
+          <td>Firefox (desktop)</td>
+          <td>WebM / Ogg container with Opus</td>
+          <td><code>.webm</code></td>
+          <td>Same idea as Chrome. Firefox is usually happy to emit <code>audio/webm;codecs=opus</code> directly.</td>
+        </tr>
+        <tr>
+          <td>Safari (macOS, iOS)</td>
+          <td>MPEG-4 with AAC audio</td>
+          <td><code>.m4a</code></td>
+          <td>Safari has historically refused WebM; recent versions accept it, so the tool asks for MP4/AAC first there and falls back cleanly.</td>
+        </tr>
+        <tr>
+          <td>Anything else</td>
+          <td>Whatever the browser advertises, else WebM</td>
+          <td><code>.webm</code></td>
+          <td>If nothing is supported the page shows a "not supported" notice rather than producing a file that will not play.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Two practical notes about the audio inside those containers. Opus is a modern, low-latency codec
+    and generally sounds better per kilobyte than MP3 at speech bitrates; AAC is older but has the
+    widest device support. Both are lossy, which means each re-encode loses a little information — so
+    keep the original download as your master and convert a copy for the destination that needs a
+    different format.
+  </p>
+  <h3>If your editor or app will not open the file</h3>
+  <p>
+    Convert rather than re-record. A WebM/Opus file can be converted to WAV (lossless from the
+    decoded stream, but large), MP3 (universally accepted) or M4A/AAC (good size and support) with
+    any audio converter. Converting to WAV is the safest stop before editing, because it removes the
+    container question entirely; then export your edit back to AAC or MP3 for delivery.
+  </p>
+
+  <h2>Recording quality and file size</h2>
+  <p>
+    Browser recording is compressed on the fly, so quality and size trade against each other
+    continuously rather than as a one-off export choice. At the default settings most browsers use for
+    a single mono microphone, roughly 1&nbsp;MB of audio per minute is a good rule of thumb — a
+    5-minute memo lands around 4–6&nbsp;MB. An hour-long interview can pass 50&nbsp;MB, which is worth
+    knowing before you try to email it.
+  </p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th scope="col">Clip length</th>
+          <th scope="col">Approximate size (mono, default bitrate)</th>
+          <th scope="col">Typical use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>30 seconds</td>
+          <td>300–500&nbsp;KB</td>
+          <td>Voice memo, pronunciation practice, a short client note</td>
+        </tr>
+        <tr>
+          <td>3 minutes</td>
+          <td>2–3&nbsp;MB</td>
+          <td>Song idea, a spoken paragraph for review, a podcast ident</td>
+        </tr>
+        <tr>
+          <td>10 minutes</td>
+          <td>8–12&nbsp;MB</td>
+          <td>Lecture segment, podcast interview section, meeting notes</td>
+        </tr>
+        <tr>
+          <td>60 minutes</td>
+          <td>50–70&nbsp;MB</td>
+          <td>Full interview or lecture — record in shorter takes where you can</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The numbers move with content as well as settings: silence compresses to almost nothing, while
+    music with cymbals and reverb is far more expensive than speech at the same bitrate. If file size
+    is the constraint, record in shorter takes and download each one, rather than producing a single
+    hour-long file you then have to split.
+  </p>
+  <h3>Keeping the quality you started with</h3>
+  <ul>
+    <li>
+      <strong>Fix the source before the codec.</strong> Microphone position, room noise and input gain
+      affect the result more than any bitrate setting. A quiet room with a close microphone at a
+      sensible level will beat a noisy room at a higher bitrate every time.
+    </li>
+    <li>
+      <strong>Avoid clipping, not level.</strong> Lossy encoders forgive a quiet recording — you can
+      raise it later — but they cannot restore detail that was cut off at the input. Aim for peaks
+      around the middle of the waveform canvas.
+    </li>
+    <li>
+      <strong>Do not re-encode for fun.</strong> Each conversion to a lossy format adds a generation
+      of damage. Keep the original download, convert once for the destination, and archive the
+      original.
+    </li>
+    <li>
+      <strong>Mind the memory ceiling.</strong> This page keeps the ten most recent clips in memory
+      and drops the oldest when an eleventh arrives. That protects a low-memory device, but it also
+      means long sessions need download-as-you-go discipline.
+    </li>
+  </ul>
+  <div class="callout callout--warn">
+    <p>
+      Keep the tab in the foreground for long takes where you can. Recording continues in a background
+      tab or on a locked screen — the stream is not tied to the animation loop — but aggressive
+      battery savers on mobile occasionally suspend a backgrounded tab and truncate the file.
+    </p>
+  </div>
+</ToolLayout>
+
+<style is:global>
+  .vr {
+    display: grid;
+    gap: 1.1rem;
+  }
+  .vr__notice {
+    margin: 0;
+  }
+  .vr__notice[hidden] {
+    display: none;
+  }
+  .vr__notice p + p {
+    margin-top: 0.4rem;
+  }
+
+  /* waveform stage */
+  .vr__stage {
+    position: relative;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    height: clamp(104px, 22vw, 148px);
+    overflow: hidden;
+  }
+  .vr__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .vr__hint {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .vr__stage[data-active="true"] .vr__hint {
+    opacity: 0;
+  }
+
+  /* readouts */
+  .vr__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+  .vr__timer {
+    margin: 0;
+    font-size: clamp(1.9rem, 7vw, 2.6rem);
+    font-weight: 750;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .vr__badge--rec {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .vr__badge--saved {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  /* controls */
+  .vr__controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .vr__rec {
+    flex: 1 1 12rem;
+    padding-block: 0.8rem;
+    font-size: 1rem;
+  }
+  .vr__dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: var(--radius-pill);
+    background: currentColor;
+    flex: none;
+  }
+  .vr__rec[data-recording="true"] .vr__dot {
+    border-radius: 3px;
+    animation: vr-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes vr-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .vr__device {
+    margin-top: 0.2rem;
+  }
+  .vr__help {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .vr__shortcuts kbd {
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    padding: 0.05em 0.35em;
+  }
+
+  .vr__footnote {
+    margin: 0;
+  }
+
+  /* recordings library */
+  .vr__library {
+    margin-top: 1.75rem;
+  }
+  .vr__h {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.15rem;
+    margin: 0 0 0.75rem;
+  }
+  .vr__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .vr__item {
+    display: grid;
+    gap: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    box-shadow: var(--shadow-xs);
+  }
+  .vr__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.75rem;
+  }
+  .vr__name {
+    font-weight: 680;
+    font-size: 0.975rem;
+  }
+  .vr__facts {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .vr__audio {
+    width: 100%;
+    height: 2.4rem;
+  }
+  .vr__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  @media (min-width: 720px) {
+    .vr__item {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    .vr__meta {
+      grid-column: 1 / -1;
+    }
+    .vr__audio {
+      grid-column: 1;
+      width: 100%;
+    }
+    .vr__actions {
+      grid-column: 2;
+      justify-content: flex-end;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    "use strict";
+
+    var MAX_CLIPS = 10;
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    var el = {
+      notice: $("vr-notice"),
+      noticeTitle: $("vr-notice-title"),
+      noticeText: $("vr-notice-text"),
+      stage: $("vr-stage"),
+      canvas: $("vr-canvas"),
+      hint: $("vr-stage-hint"),
+      timer: $("vr-timer"),
+      badge: $("vr-badge"),
+      live: $("vr-live"),
+      record: $("vr-record"),
+      recordLabel: $("vr-record-label"),
+      clear: $("vr-clear"),
+      device: $("vr-device"),
+      list: $("vr-list"),
+      empty: $("vr-empty"),
+      count: $("vr-count"),
+    };
+
+    if (!el.record) return;
+
+    // ---------------------------------------------------------------- support
+
+    var isSecure =
+      window.isSecureContext === true ||
+      location.protocol === "https:" ||
+      location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1";
+    var hasRecorder = typeof window.MediaRecorder === "function";
+    var canCapture =
+      typeof navigator !== "undefined" &&
+      typeof navigator.mediaDevices !== "undefined" &&
+      navigator.mediaDevices !== null &&
+      typeof navigator.mediaDevices.getUserMedia === "function";
+
+    function showNotice(title, text) {
+      el.noticeTitle.textContent = title;
+      el.noticeText.textContent = text;
+      el.notice.hidden = false;
+    }
+
+    function unsupported() {
+      el.record.disabled = true;
+      el.clear.disabled = true;
+      el.device.disabled = true;
+      el.stage.hidden = true;
+      el.empty.textContent = "Recording is unavailable in this browser.";
+    }
+
+    if (!isSecure) {
+      showNotice(
+        "A secure connection is required",
+        "Microphone capture is only available on HTTPS pages (localhost is also allowed). Reopen this page over https:// to record."
+      );
+      unsupported();
+    } else if (!canCapture) {
+      showNotice(
+        "Not supported in this browser",
+        "This browser does not expose navigator.mediaDevices.getUserMedia, so it cannot capture audio. Try a current version of Chrome, Edge, Firefox or Safari."
+      );
+      unsupported();
+    } else if (!hasRecorder) {
+      showNotice(
+        "Not supported in this browser",
+        "This browser cannot capture audio: the MediaRecorder API is missing. Please update your browser or use a current version of Chrome, Edge, Firefox or Safari."
+      );
+      unsupported();
+    }
+
+    var ready = isSecure && canCapture && hasRecorder;
+
+    // ------------------------------------------------------------ mime types
+
+    var CANDIDATES = [
+      { type: "audio/webm;codecs=opus", ext: "webm" },
+      { type: "audio/ogg;codecs=opus", ext: "ogg" },
+      { type: "audio/mp4;codecs=mp4a.40.2", ext: "m4a" },
+      { type: "audio/mp4", ext: "m4a" },
+      { type: "audio/webm", ext: "webm" },
+    ];
+
+    function pickMime() {
+      if (!ready || typeof MediaRecorder.isTypeSupported !== "function") {
+        return { type: "", ext: "webm" };
+      }
+      for (var i = 0; i < CANDIDATES.length; i++) {
+        try {
+          if (MediaRecorder.isTypeSupported(CANDIDATES[i].type)) return CANDIDATES[i];
+        } catch (err) {
+          /* a browser may throw instead of returning false */
+        }
+      }
+      return { type: "", ext: "webm" };
+    }
+
+    var chosen = pickMime();
+
+    // ---------------------------------------------------------------- helpers
+
+    function pad2(n) {
+      return (n < 10 ? "0" : "") + n;
+    }
+
+    function clock(ms) {
+      var total = Math.max(0, Math.floor(ms / 1000));
+      var m = Math.floor(total / 60);
+      var s = total % 60;
+      return pad2(m) + ":" + pad2(s);
+    }
+
+    function sizeText(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      var kb = bytes / 1024;
+      if (kb < 1024) return (kb < 10 ? kb.toFixed(1) : Math.round(kb)) + " KB";
+      var mb = kb / 1024;
+      return (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + " MB";
+    }
+
+    function stamp(date) {
+      return (
+        date.getFullYear() +
+        pad2(date.getMonth() + 1) +
+        pad2(date.getDate()) +
+        "-" +
+        pad2(date.getHours()) +
+        pad2(date.getMinutes()) +
+        pad2(date.getSeconds())
+      );
+    }
+
+    function trackCount(stream) {
+      return stream && stream.getAudioTracks ? stream.getAudioTracks().length : 0;
+    }
+
+    // --------------------------------------------------------------- messages
+
+    function failMessage(err) {
+      var name = "";
+      try {
+        name = err && err.name ? String(err.name) : "";
+      } catch (e) {
+        name = "";
+      }
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Microphone access was blocked. Allow it from the padlock or camera icon in the address bar, then reload this page and try again. Some browsers block the prompt automatically on sites you have not interacted with.";
+      }
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "No microphone was found. Connect an input device — a headset, a USB microphone or a webcam with a built-in mic — and try again.";
+      }
+      if (name === "NotReadableError" || name === "TrackStartError") {
+        return "The microphone is in use by another application, or the operating system blocked access to it. Close other recording apps (or the browser tab that holds it) and try again.";
+      }
+      if (name === "OverconstrainedError") {
+        return "The selected microphone cannot deliver audio in the requested format. Pick System default in the Microphone list and try again.";
+      }
+      if (name === "AbortError") {
+        return "Microphone access was aborted before it finished. This usually means another part of the page or browser interrupted the request — reload and try again.";
+      }
+      return "The microphone could not be started (" + (name || "unknown error") + "). Reload the page and try again.";
+    }
+
+    function showError(text) {
+      setStatus("Error", "error");
+      el.live.textContent = text;
+    }
+
+    // ----------------------------------------------------------------- status
+
+    // "ready" | "recording" | "saved" | "error"
+    function setStatus(state, kind) {
+      var label = { ready: "Ready", recording: "Recording", saved: "Saved", error: "Error" }[kind || state];
+      el.badge.textContent = label;
+      el.badge.className = "badge vr__badge--" + (kind || state);
+      if ((kind || state) === "recording") {
+        el.badge.setAttribute("aria-label", "Status: recording");
+      } else {
+        el.badge.removeAttribute("aria-label");
+      }
+    }
+
+    function announce(text, opts) {
+      var parts = [];
+      if (opts && opts.status) parts.push(opts.status);
+      if (text) parts.push(text);
+      el.live.textContent = parts.join(". ");
+    }
+
+    // -------------------------------------------------------------- recording
+
+    var state = {
+      recording: false,
+      starting: false,
+      recorder: null,
+      stream: null,
+      context: null,
+      source: null,
+      analyser: null,
+      timeBuf: null,
+      freqBuf: null,
+      raf: 0,
+      startedAt: 0,
+      elapsed: 0,
+      timerId: 0,
+      chunks: [],
+      keep: true,
+      mime: chosen.type,
+      ext: chosen.ext,
+      clips: [],
+    };
+
+    function stopAnimation() {
+      if (state.raf) {
+        cancelAnimationFrame(state.raf);
+        state.raf = 0;
+      }
+    }
+
+    function releaseAudio() {
+      stopAnimation();
+      if (state.source) {
+        try {
+          state.source.disconnect();
+        } catch (err) {
+          /* already disconnected */
+        }
+      }
+      state.source = null;
+      state.analyser = null;
+      if (state.context) {
+        try {
+          if (typeof state.context.close === "function") state.context.close();
+        } catch (err) {
+          /* context already closed */
+        }
+      }
+      state.context = null;
+      if (state.stream) {
+        var tracks = state.stream.getTracks ? state.stream.getTracks() : [];
+        for (var i = 0; i < tracks.length; i++) {
+          try {
+            tracks[i].stop();
+          } catch (err) {
+            /* track already ended */
+          }
+        }
+      }
+      state.stream = null;
+    }
+
+    function clearCanvas() {
+      var dpr = window.devicePixelRatio || 1;
+      var ctx = el.canvas.getContext("2d");
+      if (!ctx) return;
+      el.canvas.width = Math.max(1, Math.round(el.canvas.clientWidth * dpr));
+      el.canvas.height = Math.max(1, Math.round(el.canvas.clientHeight * dpr));
+      ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+    }
+
+    function sizeCanvas() {
+      var dpr = window.devicePixelRatio || 1;
+      var w = Math.max(1, Math.round(el.canvas.clientWidth * dpr));
+      var h = Math.max(1, Math.round(el.canvas.clientHeight * dpr));
+      if (el.canvas.width !== w || el.canvas.height !== h) {
+        el.canvas.width = w;
+        el.canvas.height = h;
+      }
+      return dpr;
+    }
+
+    function cssVar(name, fallback) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      v = v ? v.trim() : "";
+      return v || fallback;
+    }
+
+    function draw() {
+      if (!state.analyser) return;
+      state.raf = requestAnimationFrame(draw);
+      if (document.hidden) return;
+
+      var analyser = state.analyser;
+      analyser.getByteTimeDomainData(state.timeBuf);
+      analyser.getByteFrequencyData(state.freqBuf);
+
+      var dpr = sizeCanvas();
+      var ctx = el.canvas.getContext("2d");
+      if (!ctx) return;
+      var W = el.canvas.width;
+      var H = el.canvas.height;
+      var mid = H / 2;
+
+      // energy from the frequency data drives the accent tint
+      var sum = 0;
+      for (var b = 0; b < state.freqBuf.length; b++) sum += state.freqBuf[b];
+      var energy = Math.min(1, sum / (state.freqBuf.length * 128));
+      var accent = cssVar("--accent", "#2456e6");
+      var faint = cssVar("--accent-border", "#c2d0ff");
+      var stroke = energy > 0.55 ? cssVar("--danger", "#c0392b") : accent;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // baseline
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = faint;
+      ctx.lineWidth = Math.max(1, dpr);
+      ctx.beginPath();
+      ctx.moveTo(0, mid);
+      ctx.lineTo(W, mid);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // filled waveform from the time-domain window
+      var len = state.timeBuf.length;
+      var step = W / len;
+      var minY = mid;
+      var maxY = mid;
+      var i;
+      var y;
+      ctx.beginPath();
+      for (i = 0; i < len; i++) {
+        y = mid + ((state.timeBuf[i] - 128) / 128) * (mid * 0.92);
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (i === 0) ctx.moveTo(0, y);
+        else ctx.lineTo(i * step, y);
+      }
+      var grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, accent);
+      grad.addColorStop(1, faint);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(1.5, 2 * dpr);
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      ctx.lineTo(W, mid);
+      ctx.lineTo(0, mid);
+      ctx.closePath();
+      ctx.globalAlpha = energy > 0.5 ? 0.22 : 0.14;
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // coarse bars from the frequency window for a little body
+      var bars = Math.min(48, state.freqBuf.length);
+      var bw = W / bars;
+      ctx.fillStyle = stroke;
+      ctx.globalAlpha = 0.28;
+      for (i = 0; i < bars; i++) {
+        var v = state.freqBuf[i] / 255;
+        var bh = v * mid * 0.85;
+        ctx.fillRect(i * bw + bw * 0.2, mid - bh, bw * 0.6, bh);
+        ctx.fillRect(i * bw + bw * 0.2, mid, bw * 0.6, bh);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function tick() {
+      var now = Date.now();
+      state.elapsed = now - state.startedAt;
+      el.timer.textContent = clock(state.elapsed);
+    }
+
+    function startTimer() {
+      state.startedAt = Date.now();
+      state.elapsed = 0;
+      el.timer.textContent = "00:00";
+      stopTimer();
+      state.timerId = setInterval(tick, 250);
+    }
+
+    function stopTimer() {
+      if (state.timerId) {
+        clearInterval(state.timerId);
+        state.timerId = 0;
+      }
+    }
+
+    function buildContext(stream) {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return false;
+      try {
+        state.context = new Ctx();
+      } catch (err) {
+        state.context = null;
+        return false;
+      }
+      if (state.context.state === "suspended" && typeof state.context.resume === "function") {
+        try {
+          state.context.resume();
+        } catch (err) {
+          /* resume is best effort */
+        }
+      }
+      try {
+        state.source = state.context.createMediaStreamSource(stream);
+        state.analyser = state.context.createAnalyser();
+        state.analyser.fftSize = 1024;
+        state.analyser.smoothingTimeConstant = 0.75;
+        state.timeBuf = new Uint8Array(state.analyser.fftSize);
+        state.freqBuf = new Uint8Array(state.analyser.frequencyBinCount);
+        state.source.connect(state.analyser);
+      } catch (err) {
+        state.analyser = null;
+        return false;
+      }
+      return true;
+    }
+
+    function constraints() {
+      var base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      var id = el.device.value;
+      if (id) base.deviceId = { exact: id };
+      return { audio: base, video: false };
+    }
+
+    function getStream() {
+      var wanted = constraints();
+      return navigator.mediaDevices.getUserMedia(wanted).catch(function (err) {
+        var name = err && err.name ? String(err.name) : "";
+        if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+          return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        }
+        throw err;
+      });
+    }
+
+    function start() {
+      if (!ready || state.recording || state.starting) return;
+      state.starting = true;
+      el.record.disabled = true;
+      announce("Requesting microphone access.", { status: "Requesting microphone access" });
+
+      getStream().then(
+        function (stream) {
+          state.starting = false;
+          if (!trackCount(stream)) {
+            var t = stream.getTracks ? stream.getTracks() : [];
+            for (var i = 0; i < t.length; i++) t[i].stop();
+            el.record.disabled = false;
+            showError("No audio input was delivered by the selected device. Pick a different microphone and try again.");
+            return;
+          }
+
+          state.stream = stream;
+          var visual = buildContext(stream);
+          if (visual) {
+            el.stage.dataset.active = "true";
+            draw();
+          } else {
+            el.hint.textContent = "Recording without a waveform preview (Web Audio unavailable)";
+          }
+
+          var rec;
+          try {
+            rec = state.mime ? new MediaRecorder(stream, { mimeType: state.mime }) : new MediaRecorder(stream);
+          } catch (err) {
+            try {
+              rec = new MediaRecorder(stream);
+              state.mime = rec.mimeType || "";
+              state.ext = state.mime.indexOf("mp4") !== -1 ? "m4a" : state.mime.indexOf("ogg") !== -1 ? "ogg" : "webm";
+            } catch (err2) {
+              releaseAudio();
+              el.record.disabled = false;
+              showError("This browser cannot start a recorder for the available audio format. Try a different browser.");
+              return;
+            }
+          }
+
+          state.recorder = rec;
+          state.chunks = [];
+          rec.ondataavailable = function (event) {
+            if (event.data && event.data.size > 0) state.chunks.push(event.data);
+          };
+          rec.onerror = function (event) {
+            var name = event && event.error ? event.error.name : "";
+            if (name === "NotAllowedError") {
+              showError("Recording stopped: the browser withdrew microphone permission.");
+            } else {
+              showError("Recording stopped because of an error (" + (name || "unknown") + "). The take up to that point was kept.");
+            }
+            finish();
+          };
+          rec.onstop = function () {
+            finalise();
+          };
+
+          try {
+            rec.start(250);
+          } catch (err) {
+            releaseAudio();
+            state.recorder = null;
+            el.record.disabled = false;
+            showError("The recorder could not be started (" + (err && err.name ? err.name : "unknown error") + "). Reload the page and try again.");
+            return;
+          }
+
+          state.recording = true;
+          el.record.disabled = false;
+          el.record.dataset.recording = "true";
+          el.recordLabel.textContent = "Stop";
+          el.record.setAttribute("aria-label", "Stop recording");
+          setStatus("recording", "recording");
+          startTimer();
+          announce("Recording started.", { status: "Recording" });
+          refreshDevices();
+        },
+        function (err) {
+          state.starting = false;
+          el.record.disabled = false;
+          var message = failMessage(err);
+          var name = err && err.name ? String(err.name) : "";
+          if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+            showNotice("No microphone available", message);
+          } else if (name === "NotAllowedError" || name === "SecurityError") {
+            showNotice("Microphone access blocked", message);
+          }
+          showError(message);
+        }
+      );
+    }
+
+    function stop(save) {
+      if (!state.recording || !state.recorder) return;
+      state.keep = save !== false;
+      el.record.disabled = true;
+      try {
+        state.recorder.stop();
+      } catch (err) {
+        finish();
+      }
+    }
+
+    function finish() {
+      state.recording = false;
+      stopTimer();
+      releaseAudio();
+      el.record.dataset.recording = "false";
+      el.recordLabel.textContent = "Record";
+      el.record.setAttribute("aria-label", "Start recording");
+      el.stage.dataset.active = "false";
+      el.hint.textContent = "Waveform appears here while recording";
+      clearCanvas();
+      el.record.disabled = !ready;
+    }
+
+    function finalise() {
+      var chunks = state.chunks;
+      var elapsed = state.elapsed || Date.now() - state.startedAt;
+      var wasCancelled = state.keep === false;
+      state.keep = true;
+      state.chunks = [];
+      state.recorder = null;
+      finish();
+
+      if (wasCancelled) {
+        setStatus("ready", "ready");
+        announce("Recording cancelled. Nothing was saved.", { status: "Ready" });
+        return;
+      }
+
+      if (!chunks.length) {
+        setStatus("ready", "ready");
+        announce("Nothing was recorded.", { status: "Ready" });
+        return;
+      }
+
+      var type = state.mime || "audio/webm";
+      var blob;
+      try {
+        blob = new Blob(chunks, { type: type });
+      } catch (err) {
+        blob = new Blob(chunks);
+      }
+
+      if (blob.size < 512 || elapsed < 250) {
+        setStatus("ready", "ready");
+        announce("That take was too short to keep. Hold the recording for at least a second.", { status: "Ready" });
+        return;
+      }
+
+      addClip(blob, elapsed, type);
+      setStatus("saved", "saved");
+      announce(
+        "Recording saved. " + clock(elapsed) + ", " + sizeText(blob.size) + ". Download it to keep it.",
+        { status: "Saved" }
+      );
+      window.setTimeout(function () {
+        if (!state.recording) setStatus("ready", "ready");
+      }, 2600);
+    }
+
+    // ------------------------------------------------------------- recordings
+
+    function addClip(blob, duration, type) {
+      var clip = {
+        id: "clip-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+        url: URL.createObjectURL(blob),
+        size: blob.size,
+        date: new Date(),
+        minutes: clock(duration),
+        type: type,
+        ext: state.ext || "webm",
+      };
+
+      while (state.clips.length >= MAX_CLIPS) {
+        var evicted = state.clips.pop();
+        if (evicted) URL.revokeObjectURL(evicted.url);
+      }
+
+      state.clips.unshift(clip);
+      render(clip.id);
+    }
+
+    function removeClip(id) {
+      for (var i = 0; i < state.clips.length; i++) {
+        if (state.clips[i].id === id) {
+          URL.revokeObjectURL(state.clips[i].url);
+          state.clips.splice(i, 1);
+          break;
+        }
+      }
+      render();
+      announce("Recording deleted, and its temporary file URL released.", { status: "Ready" });
+    }
+
+    function clearAll() {
+      for (var i = 0; i < state.clips.length; i++) URL.revokeObjectURL(state.clips[i].url);
+      state.clips = [];
+      render();
+      announce("All recordings deleted.", { status: "Ready" });
+    }
+
+    function item(clip, highlight) {
+      var li = document.createElement("li");
+      li.className = "vr__item";
+      li.dataset.id = clip.id;
+
+      var meta = document.createElement("div");
+      meta.className = "vr__meta";
+
+      var name = document.createElement("span");
+      name.className = "vr__name";
+      name.textContent = "Recording " + stamp(clip.date);
+      meta.appendChild(name);
+
+      var facts = document.createElement("span");
+      facts.className = "vr__facts";
+      facts.textContent =
+        clip.minutes +
+        " · " +
+        sizeText(clip.size) +
+        " · " +
+        (clip.ext === "webm" ? "WebM / Opus audio" : clip.ext.toUpperCase() + " audio");
+      meta.appendChild(facts);
+      li.appendChild(meta);
+
+      var audio = document.createElement("audio");
+      audio.className = "vr__audio";
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.src = clip.url;
+      audio.setAttribute("aria-label", "Playback of recording " + stamp(clip.date));
+      li.appendChild(audio);
+
+      var actions = document.createElement("div");
+      actions.className = "vr__actions";
+
+      var download = document.createElement("a");
+      download.className = "btn btn--soft btn--sm";
+      download.href = clip.url;
+      download.download = "recording-" + stamp(clip.date) + "." + clip.ext;
+      download.textContent = "Download ." + clip.ext;
+      actions.appendChild(download);
+
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn btn--danger btn--sm";
+      del.dataset.action = "delete";
+      del.dataset.id = clip.id;
+      del.textContent = "Delete";
+      del.setAttribute("aria-label", "Delete recording " + stamp(clip.date));
+      actions.appendChild(del);
+
+      li.appendChild(actions);
+      if (highlight) li.dataset.new = "true";
+      return li;
+    }
+
+    function render() {
+      el.list.innerHTML = "";
+      for (var i = 0; i < state.clips.length; i++) {
+        el.list.appendChild(item(state.clips[i], false));
+      }
+      var n = state.clips.length;
+      el.count.textContent = String(n);
+      el.empty.hidden = n > 0;
+      el.clear.disabled = n === 0;
+    }
+
+    // ---------------------------------------------------------------- devices
+
+    function refreshDevices() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== "function") return;
+      navigator.mediaDevices.enumerateDevices().then(
+        function (devices) {
+          var inputs = devices.filter(function (d) {
+            return d.kind === "audioinput";
+          });
+          var current = el.device.value;
+          el.device.innerHTML = "";
+          var def = document.createElement("option");
+          def.value = "";
+          def.textContent = "System default";
+          el.device.appendChild(def);
+          var labelled = 0;
+          for (var i = 0; i < inputs.length; i++) {
+            var opt = document.createElement("option");
+            opt.value = inputs[i].deviceId;
+            var label = inputs[i].label;
+            if (label) labelled++;
+            opt.textContent = label || "Microphone " + (i + 1);
+            el.device.appendChild(opt);
+          }
+          if (!labelled && inputs.length) {
+            el.device.options[0].textContent = inputs.length + " microphone(s) available — labels appear after access is granted";
+          }
+          el.device.value = current;
+          if (el.device.selectedIndex === -1) el.device.value = "";
+        },
+        function () {
+          /* enumeration is a convenience, never fatal */
+        }
+      );
+    }
+
+    if (ready && navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
+    }
+
+    // ----------------------------------------------------------------- wiring
+
+    el.record.addEventListener("click", function () {
+      if (state.recording) stop(true);
+      else start();
+    });
+
+    el.clear.addEventListener("click", function () {
+      if (!state.clips.length) return;
+      clearAll();
+    });
+
+    el.list.addEventListener("click", function (event) {
+      var btn = event.target.closest ? event.target.closest("[data-action='delete']") : null;
+      if (!btn) return;
+      removeClip(btn.getAttribute("data-id"));
+    });
+
+    document.addEventListener("keydown", function (event) {
+      var tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "r" || event.key === "R") {
+        if (!ready) return;
+        event.preventDefault();
+        if (!state.recording) start();
+      } else if (event.key === "Escape") {
+        if (state.recording) {
+          event.preventDefault();
+          stop(false);
+        }
+      }
+    });
+
+    window.addEventListener("beforeunload", function (event) {
+      if (!state.recording) return;
+      event.preventDefault();
+      event.returnValue = "A recording is still in progress. Leaving now will discard it.";
+      return event.returnValue;
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        stopAnimation();
+      } else if (state.analyser && !state.raf) {
+        draw();
+      }
+    });
+
+    var resizeTimer = 0;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (!state.analyser) clearCanvas();
+      }, 150);
+    });
+
+    // ------------------------------------------------------------------- boot
+
+    el.record.disabled = !ready;
+    el.clear.disabled = true;
+    el.count.textContent = "0";
+    if (ready) {
+      setStatus("ready", "ready");
+      clearCanvas();
+      refreshDevices();
+      announce("Recorder ready. Press Record to start.", { status: "Ready" });
+    }
+  })();
+</script>

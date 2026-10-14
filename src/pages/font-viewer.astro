@@ -1,0 +1,565 @@
+---
+import ToolLayout from "../layouts/ToolLayout.astro";
+import { legacyTools } from "../data/tools";
+
+const tool = legacyTools.find((t) => t.slug === "font-viewer")!;
+
+const fontGroups = [
+  {
+    label: "Sans-serif",
+    options: [
+      { value: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", label: "System UI (default)" },
+      { value: "Arial, Helvetica, sans-serif", label: "Arial / Helvetica" },
+      { value: "Verdana, Geneva, sans-serif", label: "Verdana" },
+      { value: "Tahoma, Geneva, sans-serif", label: "Tahoma" },
+      { value: "'Trebuchet MS', 'Lucida Grande', sans-serif", label: "Trebuchet MS" },
+      { value: "'Segoe UI', Frutiger, 'Frutiger Linotype', sans-serif", label: "Segoe UI" },
+    ],
+  },
+  {
+    label: "Serif",
+    options: [
+      { value: "Georgia, 'Times New Roman', serif", label: "Georgia" },
+      { value: "'Times New Roman', Times, serif", label: "Times New Roman" },
+      { value: "'Palatino Linotype', 'Book Antiqua', Palatino, serif", label: "Palatino" },
+      { value: "'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif", label: "Iowan Old Style" },
+      { value: "Cambria, Cochin, Georgia, serif", label: "Cambria" },
+    ],
+  },
+  {
+    label: "Monospace",
+    options: [
+      { value: "ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace", label: "System mono" },
+      { value: "'Courier New', Courier, monospace", label: "Courier New" },
+      { value: "'Consolas', 'Andale Mono', monospace, monospace", label: "Consolas" },
+    ],
+  },
+  {
+    label: "Display & handwriting",
+    options: [
+      { value: "Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif", label: "Impact" },
+      { value: "'Comic Sans MS', 'Comic Sans', cursive", label: "Comic Sans MS" },
+      { value: "'Brush Script MT', cursive", label: "Brush Script MT" },
+      { value: "'Copperplate', 'Copperplate Gothic Light', fantasy", label: "Copperplate" },
+    ],
+  },
+];
+
+const samples = {
+  english: "Sphinx of black quartz, judge my vow. 0123456789",
+  arabic: "نصٌّ تجريبيّ لعرض الخط العربي — الأرقام ٠١٢٣٤٥٦٧٨٩",
+  numbers: "0123456789 £ $ € ¼ ½ ¾ ‰ + − × ÷ = ≠ ≤ ≥",
+  paragraph:
+    "Typography is the craft of arranging written language so that it is legible, readable and pleasant to look at. Size, weight, line-height and letter-spacing are the four controls that matter most: get them wrong and even a beautiful typeface becomes hard work.",
+};
+
+const faqs = [
+  {
+    q: "Why can I not see a font I have installed?",
+    a: "This tool does not enumerate the fonts on your machine — browsers deliberately block that, because it would let a website fingerprint your device. Type the font's family name into the free-text field instead and the browser will use it if it is installed.",
+  },
+  {
+    q: "Does this page load fonts from the internet?",
+    a: "No. There are no Google Fonts or other remote font requests anywhere on this page, which is why it works offline. The trade-off is that you can only preview fonts that already exist on your device, or families you have loaded yourself elsewhere.",
+  },
+  {
+    q: "Why does the Arabic sample look wrong in some fonts?",
+    a: "Not every typeface includes Arabic glyphs, and of those that do, not all include proper contextual shaping. If the Arabic sample appears as separated or missing characters, the font simply does not support Arabic — the browser falls back to a font that does, which is the correct behaviour.",
+  },
+  {
+    q: "What is the waterfall for?",
+    a: "A waterfall renders the same line at a descending series of sizes so you can judge where a typeface stops being readable. It is a quick way to decide the smallest size you would be comfortable setting body text in.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — font-family",
+    href: "https://developer.mozilla.org/en-US/docs/Web/CSS/font-family",
+    note: "how the family list, generic fallbacks and quoted names actually work",
+  },
+  {
+    label: "MDN — font-variation-settings and variable fonts",
+    href: "https://developer.mozilla.org/en-US/docs/Web/CSS/font-variation-settings",
+    note: "why weight is continuous in some families and stepped in others",
+  },
+  {
+    label: "W3C — CSS Fonts Module Level 4",
+    href: "https://www.w3.org/TR/css-fonts-4/",
+    note: "the specification behind font matching and fallback",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+
+const waterfallSizes = [72, 48, 36, 28, 22, 18, 16, 14, 12];
+---
+
+<ToolLayout
+  tool={tool}
+  intro="Preview any font installed on your device with your own text, size, weight, spacing and colors — including a proper right-to-left sample for Arabic."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="fv-controls">
+          <div class="field fv-controls__wide">
+            <label for="fv-text">Text to preview</label>
+            <textarea id="fv-text" rows="2" spellcheck="false">Sphinx of black quartz, judge my vow.</textarea>
+          </div>
+
+          <div class="field">
+            <label for="fv-preset">Sample text</label>
+            <select id="fv-preset">
+              <option value="english">English pangram</option>
+              <option value="arabic">Arabic (RTL)</option>
+              <option value="numbers">Numbers &amp; symbols</option>
+              <option value="paragraph">Readability paragraph</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fv-family">Font family</label>
+            <select id="fv-family">
+              {
+                fontGroups.map((group) => (
+                  <optgroup label={group.label}>
+                    {group.options.map((option) => (
+                      <option value={option.value}>{option.label}</option>
+                    ))}
+                  </optgroup>
+                ))
+              }
+              <option value="__custom__">Custom font-family…</option>
+            </select>
+          </div>
+
+          <div class="field" id="fv-custom-wrap" hidden>
+            <label for="fv-custom">Custom font-family</label>
+            <input id="fv-custom" type="text" placeholder="e.g. 'My Font', Georgia, serif" />
+          </div>
+
+          <div class="field">
+            <label for="fv-direction">Text direction</label>
+            <select id="fv-direction">
+              <option value="ltr">Left to right (LTR)</option>
+              <option value="rtl">Right to left (RTL)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fv-size">Size — <output id="fv-size-out">32</output> px</label>
+            <input id="fv-size" type="range" min="12" max="120" step="1" value="32" />
+          </div>
+
+          <div class="field">
+            <label for="fv-weight">Weight — <output id="fv-weight-out">400</output></label>
+            <input id="fv-weight" type="range" min="100" max="900" step="100" value="400" />
+          </div>
+
+          <div class="field">
+            <label for="fv-line">Line height — <output id="fv-line-out">1.5</output></label>
+            <input id="fv-line" type="range" min="1" max="3" step="0.05" value="1.5" />
+          </div>
+
+          <div class="field">
+            <label for="fv-spacing">Letter spacing — <output id="fv-spacing-out">0</output> px</label>
+            <input id="fv-spacing" type="range" min="-2" max="12" step="0.25" value="0" />
+          </div>
+
+          <div class="field">
+            <label for="fv-align">Alignment</label>
+            <select id="fv-align">
+              <option value="start">Start</option>
+              <option value="center">Center</option>
+              <option value="end">End</option>
+              <option value="justify">Justify</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fv-transform">Text transform</label>
+            <select id="fv-transform">
+              <option value="none">None</option>
+              <option value="uppercase">UPPERCASE</option>
+              <option value="lowercase">lowercase</option>
+              <option value="capitalize">Capitalize</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fv-style">Style</label>
+            <select id="fv-style">
+              <option value="normal">Normal</option>
+              <option value="italic">Italic</option>
+              <option value="oblique">Oblique</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fv-fg">Text color</label>
+            <input id="fv-fg" type="color" value="#0d1526" />
+          </div>
+
+          <div class="field">
+            <label for="fv-bg">Background</label>
+            <input id="fv-bg" type="color" value="#ffffff" />
+          </div>
+        </div>
+
+        <div class="fv-specimen" id="fv-specimen">
+          <p class="fv-specimen__big" id="fv-big">Sphinx of black quartz, judge my vow.</p>
+
+          <h3 class="fv-specimen__label">Waterfall</h3>
+          <div class="fv-waterfall" id="fv-waterfall">
+            {
+              waterfallSizes.map((size) => (
+                <div class="fv-waterfall__row">
+                  <span class="fv-waterfall__size">{size}px</span>
+                  <p class="fv-waterfall__text" data-wf-size={size} />
+                </div>
+              ))
+            }
+          </div>
+
+          <h3 class="fv-specimen__label">Paragraph</h3>
+          <p class="fv-specimen__para" id="fv-para"></p>
+        </div>
+
+        <div class="field-grid" style="margin-top:1.25rem">
+          <div class="stat">
+            <div class="stat__label">Computed font size</div>
+            <div class="stat__value" style="font-size:1.15rem" id="fv-out-size">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Computed line height</div>
+            <div class="stat__value" style="font-size:1.15rem" id="fv-out-line">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Computed letter spacing</div>
+            <div class="stat__value" style="font-size:1.15rem" id="fv-out-spacing">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Resolved family</div>
+            <div class="stat__value" style="font-size:0.95rem;font-weight:600" id="fv-out-family">—</div>
+          </div>
+        </div>
+
+        <div style="margin-top:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            <h3 style="margin:0;font-size:1rem">Generated CSS</h3>
+            <button class="btn btn--soft btn--sm" type="button" id="fv-copy">Copy CSS</button>
+          </div>
+          <div class="result-box" id="fv-css" style="margin-top:0.6rem;white-space:pre-wrap">—</div>
+        </div>
+
+        <p class="fv-status" id="fv-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="panel__foot">
+        No fonts are downloaded. This page only previews families already installed on your device,
+        so it keeps working without a network connection.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>How to use the font viewer</h2>
+  <p>
+    Type or paste the text you want to judge — your own headline, a product name, a line of Arabic —
+    then set the family and adjust size, weight, line-height and letter-spacing while watching the
+    specimen above. The waterfall underneath renders the same line at nine descending sizes so you
+    can see exactly where the typeface stops being comfortable to read. Everything updates as you
+    move a slider, and nothing is sent anywhere.
+  </p>
+
+  <h2>What the specimen shows</h2>
+  <p>
+    The large line is for character: letterforms, contrast, the shape of the numerals. The waterfall
+    is for decisions — it answers "what is the smallest size I would set this at?" faster than any
+    amount of theory. The paragraph block is for rhythm: a typeface that looks superb at 72 px can be
+    exhausting at 16 px if its counters are small or its x-height is low, and only running text
+    reveals that.
+  </p>
+
+  <h2>Bilingual preview for Arabic, Persian and other RTL scripts</h2>
+  <p>
+    Right-to-left scripts need more than a different font. They need the correct base direction,
+    because that governs where the line starts, how punctuation is placed and how numbers behave
+    inside the sentence. The direction switch sets <code>dir</code> on the specimen, so the Arabic
+    sample renders as it would in a real Arabic layout rather than being pushed through a Latin
+    left-to-right flow.
+  </p>
+  <p>
+    Not every typeface ships Arabic glyphs. When you pick one that does not, the browser falls back
+    to a family that does — which is the correct and expected behaviour, not a bug in the tool. If
+    you need a guarantee, specify a fallback chain yourself in the custom field, for example
+    <code>'Noto Naskh Arabic', 'Segoe UI', Tahoma, sans-serif</code>.
+  </p>
+
+  <h2>System fonts vs downloaded web fonts</h2>
+  <p>
+    A web page can display a font in two ways: it can ask the visitor's device for a family it
+    already has, or it can download a font file. This page only does the first. That is a deliberate
+    choice — remote font requests are the single most common third-party dependency on modern
+    sites, they leak a request to another company on every page view, and they add a visible delay
+    before text appears.
+  </p>
+  <p>
+    The trade-off is honest: you can only preview what is installed on the device you are using. A
+    font installed on your desktop may be absent on your phone, and any family you have not
+    installed simply will not appear. To preview a specific downloaded font file, install it
+    locally, or load it on a page of your own and copy the CSS rule into the custom field here.
+  </p>
+
+  <h2>A short checklist for choosing type</h2>
+  <ul>
+    <li><strong>Size first.</strong> Pick the body size that is comfortable, then choose the font — not the other way round.</li>
+    <li><strong>Line-height for reading.</strong> Long paragraphs usually need 1.4 to 1.7; headings can sit much tighter.</li>
+    <li><strong>Letter-spacing sparingly.</strong> Large capitals benefit from a little extra tracking; body text almost never does.</li>
+    <li><strong>Weight is not a fix for size.</strong> If text is hard to read, making it bolder rarely helps as much as making it bigger.</li>
+    <li><strong>Test the real language.</strong> A pangram in English tells you nothing about how the typeface handles Arabic, Cyrillic or diacritics.</li>
+  </ul>
+</ToolLayout>
+
+<style>
+  .fv-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+  .fv-controls__wide { grid-column: 1 / -1; }
+  .fv-controls output { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 650; }
+  .fv-controls input[type="color"] { height: 38px; padding: 2px; cursor: pointer; }
+
+  .fv-specimen {
+    margin-top: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 3vw, 2rem);
+    background: #ffffff;
+    color: #0d1526;
+    overflow-wrap: anywhere;
+  }
+
+  .fv-specimen__big {
+    margin: 0 0 1.5rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .fv-specimen__label {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8b95a7;
+    border-top: 1px solid #e3e8f0;
+    padding-top: 1rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .fv-waterfall { display: grid; gap: 0.35rem; margin-bottom: 1.5rem; }
+  .fv-waterfall__row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    border-bottom: 1px dashed #eef1f7;
+    padding-bottom: 0.3rem;
+  }
+  .fv-waterfall__size {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #8b95a7;
+    min-width: 3.2rem;
+    flex: none;
+  }
+  .fv-waterfall__text {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .fv-specimen__para {
+    margin: 0;
+    max-width: 68ch;
+    overflow-wrap: anywhere;
+  }
+
+  .fv-status { margin: 1rem 0 0; font-size: 0.88rem; color: var(--ok); min-height: 1.2em; }
+
+  @media (max-width: 480px) {
+    .fv-waterfall__text { white-space: normal; }
+  }
+</style>
+
+<script>
+  const samples: Record<string, string> = {
+    english: "Sphinx of black quartz, judge my vow. 0123456789",
+    arabic: "نصٌّ تجريبيّ لعرض الخط العربي — الأرقام ٠١٢٣٤٥٦٧٨٩",
+    numbers: "0123456789 £ $ € ¼ ½ ¾ ‰ + − × ÷ = ≠ ≤ ≥",
+    paragraph:
+      "Typography is the craft of arranging written language so that it is legible, readable and pleasant to look at. Size, weight, line-height and letter-spacing are the four controls that matter most: get them wrong and even a beautiful typeface becomes hard work.",
+  };
+
+  const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const val = <T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(id: string) =>
+    el<T>(id).value;
+
+  const textArea = el<HTMLTextAreaElement>("fv-text");
+  const familySelect = el<HTMLSelectElement>("fv-family");
+  const customWrap = el("fv-custom-wrap");
+  const customInput = el<HTMLInputElement>("fv-custom");
+  const direction = el<HTMLSelectElement>("fv-direction");
+  const specimen = el("fv-specimen");
+  const big = el("fv-big");
+  const para = el("fv-para");
+  const waterfall = el("fv-waterfall");
+  const cssBox = el("fv-css");
+  const status = el("fv-status");
+
+  let customFamily = "";
+
+  const family = (): string => {
+    const chosen = familySelect.value;
+    return chosen === "__custom__" ? customInput.value.trim() || "system-ui, sans-serif" : chosen;
+  };
+
+  const settings = () => ({
+    text: textArea.value || "Sphinx of black quartz, judge my vow.",
+    family: family(),
+    dir: direction.value as "ltr" | "rtl",
+    size: Number(val("fv-size")),
+    weight: Number(val("fv-weight")),
+    line: Number(val("fv-line")),
+    spacing: Number(val("fv-spacing")),
+    align: val("fv-align"),
+    transform: val("fv-transform"),
+    style: val("fv-style"),
+    fg: val("fv-fg"),
+    bg: val("fv-bg"),
+  });
+
+  const render = () => {
+    const s = settings();
+
+    el("fv-size-out").textContent = String(s.size);
+    el("fv-weight-out").textContent = String(s.weight);
+    el("fv-line-out").textContent = s.line.toFixed(2);
+    el("fv-spacing-out").textContent = s.spacing.toFixed(2);
+
+    specimen.style.background = s.bg;
+    specimen.style.color = s.fg;
+    specimen.dir = s.dir;
+
+    const base = `font-family:${s.family};font-weight:${s.weight};font-style:${s.style};letter-spacing:${s.spacing}px;text-align:${s.align};text-transform:${s.transform};`;
+
+    big.style.cssText = `${base}font-size:${s.size}px;line-height:${Math.max(1, s.line * 0.9)};`;
+    big.textContent = s.text;
+
+    para.style.cssText = `${base}font-size:${Math.max(14, Math.round(s.size * 0.6))}px;line-height:${s.line};`;
+    para.textContent = s.text;
+
+    // The waterfall rows are rendered in the markup (so they carry Astro's scoping
+    // attribute and stay styled); here we only restyle and refill them.
+    for (const line of Array.from(waterfall.querySelectorAll<HTMLElement>("[data-wf-size]"))) {
+      const size = Number(line.dataset.wfSize ?? "16");
+      line.style.cssText = `${base}font-size:${size}px;line-height:1.25;`;
+      line.textContent = s.text;
+    }
+
+    // Read the values the browser actually resolved, not what we asked for.
+    const computed = getComputedStyle(big);
+    el("fv-out-size").textContent = computed.fontSize;
+    el("fv-out-line").textContent = computed.lineHeight;
+    el("fv-out-spacing").textContent = computed.letterSpacing;
+    el("fv-out-family").textContent = computed.fontFamily;
+
+    const css = [
+      ".specimen {",
+      `  font-family: ${s.family};`,
+      `  font-size: ${s.size}px;`,
+      `  font-weight: ${s.weight};`,
+      `  font-style: ${s.style};`,
+      `  line-height: ${s.line};`,
+      `  letter-spacing: ${s.spacing}px;`,
+      `  text-align: ${s.align};`,
+      `  text-transform: ${s.transform};`,
+      `  color: ${s.fg};`,
+      `  background: ${s.bg};`,
+      ...(s.dir === "rtl" ? ["  direction: rtl;"] : []),
+      "}",
+    ].join("\n");
+    cssBox.textContent = css;
+  };
+
+  textArea.addEventListener("input", render);
+  direction.addEventListener("change", render);
+
+  for (const id of [
+    "fv-size", "fv-weight", "fv-line", "fv-spacing", "fv-align",
+    "fv-transform", "fv-style", "fv-fg", "fv-bg",
+  ]) {
+    el(id).addEventListener("input", render);
+    el(id).addEventListener("change", render);
+  }
+
+  familySelect.addEventListener("change", () => {
+    const isCustom = familySelect.value === "__custom__";
+    customWrap.hidden = !isCustom;
+    if (isCustom && customInput.value === "" && customFamily) customInput.value = customFamily;
+    render();
+  });
+
+  customInput.addEventListener("input", () => {
+    customFamily = customInput.value;
+    render();
+  });
+
+  el<HTMLSelectElement>("fv-preset").addEventListener("change", (event) => {
+    const key = (event.target as HTMLSelectElement).value;
+    const sample = samples[key];
+    if (!sample) return;
+    // Choosing the Arabic sample switches direction too — that is the point of the preset.
+    if (key === "arabic") direction.value = "rtl";
+    else if (key !== "arabic" && direction.value === "rtl") direction.value = "ltr";
+    textArea.value = sample;
+    render();
+  });
+
+  el("fv-copy").addEventListener("click", async () => {
+    const css = cssBox.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(css);
+      status.textContent = "CSS copied to your clipboard.";
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = css;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      status.textContent = ok ? "CSS copied to your clipboard." : "Copying was blocked by the browser.";
+    }
+    setTimeout(() => {
+      status.textContent = "";
+    }, 2500);
+  });
+
+  render();
+</script>

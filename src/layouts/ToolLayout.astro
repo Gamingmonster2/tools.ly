@@ -1,0 +1,170 @@
+---
+import Base from "./Base.astro";
+import Breadcrumbs from "../components/Breadcrumbs.astro";
+import Icon from "../components/Icon.astro";
+import { relatedTools, urlOf, categories, type Tool } from "../data/tools";
+
+export interface FaqItem {
+  q: string;
+  a: string;
+}
+
+export interface SourceItem {
+  label: string;
+  href: string;
+  note?: string;
+}
+
+interface Props {
+  tool: Tool;
+  /** One-paragraph summary shown under the H1. Falls back to the registry description. */
+  intro?: string;
+  faqs?: FaqItem[];
+  sources?: SourceItem[];
+  /** Rendered above the tool, e.g. a privacy notice. */
+  notice?: string;
+}
+
+const { tool, intro, faqs = [], sources = [], notice } = Astro.props;
+const category = categories.find((c) => c.id === tool.category);
+const related = relatedTools(tool);
+const pageUrl = urlOf(tool);
+
+const jsonLd: Record<string, unknown>[] = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: tool.nav ?? tool.title,
+    url: new URL(pageUrl, Astro.site ?? "https://tools.ly").href,
+    applicationCategory: "UtilitiesApplication",
+    operatingSystem: "Any modern browser",
+    description: tool.description,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    ...(tool.updated ? { dateModified: tool.updated } : {}),
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: new URL("/", Astro.site ?? "https://tools.ly").href },
+      { "@type": "ListItem", position: 2, name: "All tools", item: new URL("/all-tools/", Astro.site ?? "https://tools.ly").href },
+      { "@type": "ListItem", position: 3, name: tool.nav ?? tool.title, item: new URL(pageUrl, Astro.site ?? "https://tools.ly").href },
+    ],
+  },
+  ...(faqs.length
+    ? [
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqs.map((f) => ({
+            "@type": "Question",
+            name: f.q,
+            acceptedAnswer: { "@type": "Answer", text: f.a },
+          })),
+        },
+      ]
+    : []),
+];
+---
+
+<Base title={tool.title} description={tool.description} canonical={pageUrl} jsonLd={jsonLd}>
+  <div class="container">
+    <Breadcrumbs
+      items={[
+        { label: "Home", href: "/" },
+        { label: "All tools", href: "/all-tools/" },
+        { label: tool.nav ?? tool.title },
+      ]}
+    />
+
+    <div class="page-head">
+      <div class="tag-row" style="margin-bottom:0.65rem">
+        {category && <span class="badge badge--accent">{category.label}</span>}
+        <span class="badge badge--ok"><Icon name="check" size={13} /> Works offline</span>
+        {tool.updated && <span class="badge">Updated {tool.updated}</span>}
+      </div>
+      <h1>{tool.title}</h1>
+      <p class="lede">{intro ?? tool.description}</p>
+    </div>
+  </div>
+
+  {
+    notice && (
+      <div class="container" style="margin-bottom:1rem">
+        <div class="callout callout--warn"><p>{notice}</p></div>
+      </div>
+    )
+  }
+
+  <div class="tool-stage">
+    <div class="container">
+      <slot name="tool" />
+    </div>
+  </div>
+
+  <div class="container section">
+    <div class="tool-layout tool-layout--aside">
+      <div class="prose">
+        <slot />
+
+        {
+          faqs.length > 0 && (
+            <section aria-labelledby="faq-heading">
+              <h2 id="faq-heading">Frequently asked questions</h2>
+              <div class="stack" style="--gap:0.6rem">
+                {faqs.map((f) => (
+                  <details class="card" style="box-shadow:none">
+                    <summary style="cursor:pointer;font-weight:650">{f.q}</summary>
+                    <p style="margin:0.75rem 0 0;color:var(--text-muted)">{f.a}</p>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )
+        }
+
+        {
+          sources.length > 0 && (
+            <section aria-labelledby="sources-heading">
+              <h2 id="sources-heading">Sources &amp; further reading</h2>
+              <ul>
+                {sources.map((s) => (
+                  <li>
+                    <a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a>
+                    {s.note ? <span style="color:var(--text-muted)"> — {s.note}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+      </div>
+
+      <aside class="stack" style="--gap:1.25rem">
+        <div class="card">
+          <h2 style="font-size:1.05rem">Related tools</h2>
+          <div class="related-list">
+            {
+              related.map((t) => (
+                <a href={urlOf(t)}>
+                  <Icon name={t.icon} size={16} />
+                  {t.nav ?? t.title}
+                </a>
+              ))
+            }
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="font-size:1.05rem">Privacy</h2>
+          <p style="margin:0;color:var(--text-muted);font-size:0.9rem">
+            This tool runs entirely in your browser. Nothing you type is sent to a server,
+            and there is no account to create.
+          </p>
+        </div>
+
+        <slot name="aside" />
+      </aside>
+    </div>
+  </div>
+</Base>

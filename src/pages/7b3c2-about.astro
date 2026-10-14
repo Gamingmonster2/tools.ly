@@ -1,0 +1,147 @@
+---
+import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
+import { allTools, legacyTools, urlOf } from "../data/tools";
+
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    name: "About Tools.ly",
+    url: "https://tools.ly/7b3c2-about/",
+    description: "Who builds Tools.ly, how the tools work and what they deliberately do not do.",
+  },
+];
+---
+
+<Base
+  title="About Tools.ly"
+  description="Tools.ly is a free collection of browser-based utilities. Learn how the tools are built, why they run entirely on your device, and how the project is maintained."
+  canonical="/7b3c2-about/"
+  jsonLd={jsonLd}
+>
+  <div class="container">
+    <div class="page-head" style="padding-top:2rem">
+      <p class="eyebrow">About</p>
+      <h1>Tools that respect your time and your data</h1>
+      <p class="lede">
+        Tools.ly is a small, independent collection of free utilities for everyday tasks — from
+        calculating a healthy body-fat target to picking an accessible color palette. Everything is
+        built to work in a browser tab, on any device, with nothing installed.
+      </p>
+    </div>
+  </div>
+
+  <div class="container section">
+    <div class="tool-layout tool-layout--aside">
+      <div class="prose">
+        <h2>Our mission</h2>
+        <p>
+          Useful software should not require an account, a subscription or a download. Every tool
+          here is free to use, needs no sign-up, and does its work on your own device. We would
+          rather build thirty tools that each do one job properly than one bloated suite that does
+          everything badly.
+        </p>
+
+        <h2>How the tools are built</h2>
+        <p>
+          The site is a static website: plain HTML, CSS and JavaScript, generated ahead of time and
+          served from a global content network. There is no PHP, no database and no application
+          server. The consequences are practical rather than technical:
+        </p>
+        <ul>
+          <li>
+            <strong>Your input stays on your device.</strong> Calculations happen in your browser,
+            not on a server we control.
+          </li>
+          <li>
+            <strong>Pages load quickly.</strong> A static page has nothing to compute before it
+            renders, which matters on slow mobile connections.
+          </li>
+          <li>
+            <strong>There is very little to break.</strong> No server-side sessions, no expired
+            logins, no database to go offline.
+          </li>
+        </ul>
+
+        <h2>What we deliberately do not do</h2>
+        <ul>
+          <li>No accounts, no email walls, no "sign in to continue".</li>
+          <li>No uploading your files, measurements or documents anywhere.</li>
+          <li>No selling data, because there is no collected data to sell.</li>
+          <li>No dark patterns: nothing is hidden behind a fake progress bar or a countdown.</li>
+        </ul>
+
+        <h2>The health tools, and what they are not</h2>
+        <p>
+          The body-composition, calorie and ideal-weight tools use published formulas (the U.S. Navy
+          circumference method, the Mifflin–St Jeor equation and standard weight-range equations).
+          They produce <strong>estimates</strong> for information only. They are not medical advice
+          and cannot account for your medical history. For anything that matters, talk to a doctor,
+          dietitian or qualified trainer.
+        </p>
+
+        <h2>How the site is maintained</h2>
+        <p>
+          Every tool has its own permanent address, so a link to a tool keeps working. When a tool is
+          updated, the change is noted on the page itself. If you spot an error — a wrong conversion,
+          an out-of-date formula, a broken layout on your device —{" "}
+          <a href="/7b3c2-contact/">tell us</a> and it gets fixed.
+        </p>
+
+        <h2>Start somewhere</h2>
+        <p>
+          Browse the <a href="/all-tools/">full directory</a>, or jump straight into one of the
+          tools people use most:
+        </p>
+      </div>
+
+      <aside class="stack">
+        <div class="card">
+          <h2 style="font-size:1.05rem">Most used tools</h2>
+          <div class="related-list">
+            {
+              legacyTools.slice(0, 6).map((t) => (
+                <a href={urlOf(t)}>
+                  <Icon name={t.icon} size={16} />
+                  {t.nav ?? t.title}
+                </a>
+              ))
+            }
+          </div>
+        </div>
+        <div class="card">
+          <h2 style="font-size:1.05rem">By the numbers</h2>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat__label">Tools live</div>
+              <div class="stat__value">{legacyTools.length}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Planned</div>
+              <div class="stat__value">{allTools.length - legacyTools.length}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Uploads</div>
+              <div class="stat__value">0</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="tool-grid" style="margin-top:2.5rem">
+      {
+        legacyTools.map((t) => (
+          <a class="tool-card" href={urlOf(t)}>
+            <span class="tool-card__icon" aria-hidden="true"><Icon name={t.icon} size={20} /></span>
+            <span>
+              <span class="tool-card__title">{t.nav ?? t.title}</span>
+              <span class="tool-card__desc">{t.description}</span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</Base>
