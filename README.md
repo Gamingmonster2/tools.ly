@@ -26,7 +26,19 @@ npm run preview      # preview the built site
 npm run check        # build, then run both guards below (use this before every push)
 npm run check:urls   # migration guard: legacy URLs, sitemap, metadata, no third-party assets
 npm run check:styles # diagnostic: runtime-assigned classes that scoped CSS cannot reach
+npm run check:live <origin>   # verify a deployment: statuses, redirects, the Arabic slug
 ```
+
+Verifying a deployment (do this after every push, and again the day the domain moves):
+
+```bash
+node tools/check-live.mjs https://tools-ly.pages.dev
+```
+
+It checks that every legacy URL answers 200, that the percent-encoded Arabic slug
+resolves, that every WordPress leftover (`/home/`, `/category/*`, `/author/*`, `/feed/`,
+`/wp-login.php`) returns a 301 to a real page rather than a 404, that an unknown path
+returns 404, and that `sitemap.xml` and `robots.txt` are served.
 
 Visual check of the built output without the dev server:
 

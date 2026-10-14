@@ -9,6 +9,7 @@
     "preview": "astro preview",
     "check:urls": "node tests/url-integrity.mjs",
     "check:styles": "node tests/dynamic-styles.mjs",
+    "check:live": "node tools/check-live.mjs",
     "check": "npm run build && npm run check:urls && npm run check:styles"
   },
   "devDependencies": {
