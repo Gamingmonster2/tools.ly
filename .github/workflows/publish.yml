@@ -1,0 +1,74 @@
+# Publishes one tool at a time to the Telegram channel.
+#
+# The cadence lives in the script (MIN_HOURS_BETWEEN_POSTS, default 48h), not in the cron
+# expression, because GitHub's scheduler cannot express "every 48 hours" reliably. Running
+# daily and letting the script decide is simpler and survives schedule delays.
+#
+# Setup, once:
+#   Repository → Settings → Secrets and variables → Actions → New repository secret
+#     TELEGRAM_BOT_TOKEN   the token from BotFather
+#     TELEGRAM_CHAT_ID     @toolsly      (the @ is fine)
+#
+# You can also run it by hand from the Actions tab: it prints the next post without sending
+# it, exactly like `node tools/publish.mjs --dry`.
+
+name: Publish to Telegram
+
+on:
+  schedule:
+    # 07:10 UTC daily — 09:10 in Tripoli. Off the hour so it is not queued behind the crowd.
+    - cron: "10 7 * * *"
+  workflow_dispatch:
+    inputs:
+      send:
+        description: "Actually send the next post (leave unchecked for a dry run)"
+        type: boolean
+        default: false
+      force:
+        description: "Ignore the 48-hour cadence"
+        type: boolean
+        default: false
+
+# Needed to commit the state file back, so the workflow knows what it already posted.
+permissions:
+  contents: write
+
+concurrency:
+  group: publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publish
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MIN_HOURS_BETWEEN_POSTS: "48"
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.send }}" = "true" ]; then
+            FORCE=""
+            if [ "${{ inputs.force }}" = "true" ]; then FORCE="--force"; fi
+            node tools/publish.mjs $FORCE
+          else
+            node tools/publish.mjs --dry
+          fi
+
+      - name: Remember what was posted
+        run: |
+          if [ -n "$(git status --porcelain .publish-state.json)" ]; then
+            git config user.name  "toolsly-publisher"
+            git config user.email "publisher@tools.ly"
+            git add .publish-state.json
+            git commit -m "chore: record the latest Telegram post [skip ci]"
+            git push
+          else
+            echo "nothing to record"
+          fi

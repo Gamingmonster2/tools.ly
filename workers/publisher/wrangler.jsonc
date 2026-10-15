@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "toolsly-publisher",
+  "main": "src/index.js",
+  "compatibility_date": "2026-01-01",
+
+  // 07:00 UTC daily. That is 09:00 in Tripoli (UTC+2), a reasonable hour for the audience.
+  "triggers": {
+    "crons": ["0 7 * * *"]
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "PUBLISHER_STATE",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+
+  "vars": {
+    "TELEGRAM_CHAT_ID": "-1004376248040",
+    "FEED_URL": "https://tools.ly/feed/releases.json",
+    // One post every two days. Raise it to slow the drip down, lower it to speed it up.
+    "MIN_HOURS_BETWEEN_POSTS": "48"
+  }
+
+  // TELEGRAM_BOT_TOKEN and ADMIN_KEY are secrets, not vars:
+  //   npx wrangler secret put TELEGRAM_BOT_TOKEN
+  //   npx wrangler secret put ADMIN_KEY
+}
