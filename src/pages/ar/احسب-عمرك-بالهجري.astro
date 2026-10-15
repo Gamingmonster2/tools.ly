@@ -1,0 +1,716 @@
+---
+import ArToolLayout from "../../layouts/ArToolLayout.astro";
+import { arTools } from "../../data/arTools";
+
+const tool = arTools.find((t) => t.slug === "احسب-عمرك-بالهجري")!;
+
+const faqs = [
+  {
+    q: "كيف أحسب عمري بالهجري بدون تطبيق؟",
+    a: "اكتب تاريخ ميلادك الميلادي في الحقل الأول من الأداة أعلاه، واقرأ الجواب في السطر الكبير مباشرة، فلا تحتاج إلى تنزيل أي شيء ولا إلى حساب يدوي. وإن أردت أن تفعلها بالورقة والقلم فحوّل تاريخ ميلادك إلى الهجري، وحوّل تاريخ اليوم كذلك، ثم قارن الثلاثيتين: اطرح الأيام من الأيام والأشهر من الأشهر والسنوات من السنوات. فإن كانت أيام تاريخ الحساب أقل من أيام الميلاد فاستعر شهراً كاملاً من الشهر السابق وأضف إلى الأيام عدد أيامه الفعلية، وهو ٢٩ أو ٣٠ بحسب الشهر والسنة، ثم استعر سنة من السنوات إن احتجت. هذا الاقتراض هو الفرق بين حساب صحيح وحساب تقريبي.",
+  },
+  {
+    q: "لماذا عمري بالهجري أقل من عمري الميلادي؟",
+    a: "أكثر الناس يجدون الأمر معكوساً: لأن السنة الهجرية أقصر بنحو أحد عشر يوماً من الميلادية، فإن عدد سنواتك الهجرية يسبق عدد سنواتك الميلادية، فقد يكون عمرك ٣٣ سنة ميلادية و٣٤ سنة هجرية في الوقت نفسه. فإن ظهر لك رقم أقل في موقع آخر فالسبب غالباً أحد أمرين: إما أن ذلك الموقع يقسم مجموع أيامك على ٣٥٤٫٢٥ ثم يقرّب الناتج، وهو تقريب يخطئ عند حدود السنة، وإما أنك قارنت تاريخاً هجرياً بتاريخ ميلادي مختلف، فاختلط التقويمان في المقارنة. أما عدد الأيام فمقياس واحد في التقويمين، فلا يتغير بتغيّر التقويم.",
+  },
+  {
+    q: "هل الحساب دقيق؟",
+    a: "دقيق في حدود يوم واحد تقريباً. الحساب نفسه بلا تقريب: نقارن الثلاثيات الهجرية ونستعير أيام الشهر الفعلي (٢٩ أو ٣٠)، ولا نقسم مجموع الأيام على ٣٥٤٫٢٥. لكن بداية الشهر في تقويم أم القرى محسوبة فلكياً، بينما تُعلن في كل بلد بناءً على رؤية الهلال أو قرار الجهة المختصة، فقد يختلف الإعلان عن الحساب بيوم أو يومين. ويُضاف إلى ذلك أن بيانات التقويم مضمّنة في متصفحك وقد تختلف قليلاً بين إصدار وآخر، وأن اليوم الهجري شرعاً يبدأ من المغرب لا من منتصف الليل. فاعتبر الرقم صحيحاً في حدود يوم، ولا تعتمد عليه في موعد عبادة أو معاملة رسمية.",
+  },
+  {
+    q: "كيف أعرف عيد ميلادي الهجري ومتى يوافق بالميلادي؟",
+    a: "الأداة تحسبه لك تلقائياً في البطاقة الأخيرة: تأخذ يوم ميلادك وشهره في التقويم الهجري، وتضعهما في السنة الهجرية التي لم يأتِ موعدهما فيها بعد، فإن كان الموعد قد مضى هذا العام انتقلت إلى السنة التالية. وإن كان شهرك القادم أقصر من يوم ميلادك (شهر من ٢٩ يوماً) ضُبط اليوم على آخر يوم فيه كما يفعل الناس في التقويم الميلادي مع ٢٩ فبراير. ثم تبحث الأداة عن التاريخ الميلادي المقابل لهذا اليوم وتكتبه أمامك، مع عدد الأيام الباقية حتى يحين. فإن أردت تحويل تواريخ أخرى بحرية — سفر أو عقد أو تاريخ قديم — فالمحوّل المخصص في الصفحة المرتبطة أسفل الأداة يفعل ذلك.",
+  },
+];
+
+const sources = [
+  {
+    label: "MDN — Intl.DateTimeFormat وتقويم islamic-umalqura",
+    href: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat",
+    note: "المرجع الذي يوضح كيف يُنسّق المتصفح التواريخ بحسب التقويم المطلوب، ومنه تقويم أم القرى، وكيف تُقرأ أجزاء التاريخ (اليوم والشهر والسنة) عبر formatToParts؛ وعليه يقوم كل حساب في هذه الصفحة.",
+  },
+  {
+    label: "يونيكود CLDR — بيانات التقويمات (UTS #35: Dates)",
+    href: "https://unicode.org/reports/tr35/tr35-dates.html",
+    note: "المواصفة التي تعرّف بيانات التقويمات في مشروع يونيكود، ومنها التقويم الإسلامي بأم القرى، وأسماء الأشهر الهجرية العربية وترتيبها؛ ومن هذه البيانات تبني المتصفحات أسماء مثل «ربيع الأول» و«ذو الحجة».",
+  },
+  {
+    label: "تقويم أم القرى الرسمي",
+    href: "https://www.ummulqura.org.sa/",
+    note: "الموقع الرسمي لتقويم أم القرى الصادر عن مدينة الملك عبدالعزيز للعلوم والتقنية، وهو التقويم المعتمد رسمياً في السعودية والمرجع الذي تُقابَل به أرقام هذه الأداة عند أي اختلاف.",
+  },
+];
+---
+
+<ArToolLayout
+  tool={tool}
+  intro="اكتب تاريخ ميلادك واقرأ فوراً كم عمرك بالسنوات والأشهر والأيام الهجرية، مع عمرك الميلادي وإجمالي أيامك وموعد عيد ميلادك الهجري القادم — والحساب كله يجري داخل متصفحك."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="ha-fields">
+          <div class="field">
+            <label for="ha-born">تاريخ الميلاد (ميلادي)</label>
+            <input type="date" id="ha-born" name="ha-born" autocomplete="off" />
+            <p class="ha-hint">اكتب تاريخ ميلادك كما هو في التقويم الميلادي.</p>
+          </div>
+          <div class="field">
+            <label for="ha-until">احسب العمر حتى تاريخ</label>
+            <input type="date" id="ha-until" name="ha-until" autocomplete="off" />
+            <p class="ha-hint">افتراضياً اليوم؛ غيّره إن أردت معرفة عمرك في تاريخ آخر.</p>
+          </div>
+        </div>
+
+        <div class="ha-actions">
+          <button type="button" class="btn btn--soft btn--sm" id="ha-today">اليوم</button>
+        </div>
+
+        <div class="callout callout--warn ha-alert" id="ha-alert" role="alert" hidden>
+          <p id="ha-alert-text"></p>
+        </div>
+
+        <p class="ha-answer" id="ha-answer" aria-live="polite" data-state="muted">
+          اكتب تاريخ ميلادك بالأعلى، وسيظهر عمرك بالتقويم الهجري في هذه المساحة مباشرة.
+        </p>
+        <p class="ha-born-note" id="ha-born-note" aria-live="polite"></p>
+
+        <div class="stat-grid ha-stats">
+          <div class="stat">
+            <div class="stat__label">العمر بالسنوات الهجرية (إجمالي)</div>
+            <div class="stat__value" id="ha-years-hij">—</div>
+            <div class="ha-sub" id="ha-years-hij-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">العمر بالأشهر الهجرية</div>
+            <div class="stat__value" id="ha-months-hij">—</div>
+            <div class="ha-sub" id="ha-months-hij-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">العمر بالأيام</div>
+            <div class="stat__value" id="ha-days-hij">—</div>
+            <div class="ha-sub" id="ha-days-hij-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">العمر الميلادي (سنوات وأشهر وأيام)</div>
+            <div class="stat__value" id="ha-greg-age">—</div>
+            <div class="ha-sub" id="ha-greg-age-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">إجمالي الأيام الميلادية</div>
+            <div class="stat__value" id="ha-days-greg">—</div>
+            <div class="ha-sub" id="ha-days-greg-sub"></div>
+          </div>
+          <div class="stat ha-stat-wide">
+            <div class="stat__label">عيد ميلادك الهجري القادم</div>
+            <div class="stat__value" id="ha-next-hij">—</div>
+            <div class="ha-sub" id="ha-next-hij-sub"></div>
+          </div>
+        </div>
+
+        <p class="ha-more">
+          هذه الصفحة تحسب العمر وحده. وإن أردت تحويل تاريخ بعينه — ميلادي إلى هجري أو هجري إلى ميلادي — أو معرفة التاريخ الهجري
+          لليوم أو الفرق بين تاريخين، فاستعمل <a href="/ar/التقويم-الهجري/">محوّل التاريخ الهجري والميلادي</a>.
+        </p>
+      </div>
+
+      <div class="panel__foot">
+        الحساب يعتمد تقويم أم القرى <strong>المحسوب</strong> المدمج في متصفحك؛ وبداية الشهر المُعلنة في بلدك قد تختلف عنه بيوم أو
+        يومين، فخُذ الرقم صحيحاً في حدود يوم تقريباً. لا يُرسل أي تاريخ ولا يُحفظ بعد إغلاق الصفحة.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>كيف أحسب عمري بالهجري؟</h2>
+  <p>
+    إن كان سؤالك «كم عمري بالهجري» فله جواب واحد مباشر، ولهذا وُضع في هذه الصفحة سطر كبير لا يقول شيئاً آخر: تكتب تاريخ ميلادك
+    الميلادي، وتترك «احسب العمر حتى تاريخ» على اليوم، فيظهر فوراً جواب من قبيل «عمرك ٣٤ سنة و٧ أشهر و١٢ يوماً بالتقويم الهجري».
+    لا تحتاج إلى تطبيق، ولا إلى حفظ أطوال الأشهر الهجرية، ولا إلى تحويل يدوي قبل ذلك.
+  </p>
+  <p>
+    أما كيف احسب عمري بالهجري بنفسي، فالطريق الصحيح أن تحوّل تاريخ ميلادك إلى التاريخ الهجري المقابل، وتحوّل تاريخ الحساب كذلك،
+    ثم تقارن الثلاثيتين: سنة بسنة، وشهر بشهر، ويوم بيوم. فإن كانت أيام تاريخ الحساب أقل من أيام تاريخ الميلاد استعرت شهراً كاملاً
+    من الشهر السابق وزدت على الأيام عدد أيامه الفعلية، وهو ٢٩ أو ٣٠ بحسب الشهر والسنة، ثم استعرت سنة من السنوات إن لزم الأمر. ولهذا
+    لا تصلح قسمة مجموع الأيام على ٣٥٤٫٢٥ لتقول إن هذا عمرك: فهي قسمة تعطي رقماً تقريبياً وتخطئ حين يقترب يوم الحساب من يوم
+    الميلاد. وحساب العمر بالهجري والميلادي معاً هو ما تعرضه الأداة: العمر الهجري في السطر الكبير، والعمر الميلادي وإجمالي الأيام
+    وموعد عيد ميلادك الهجري القادم في البطاقات تحته.
+  </p>
+
+  <h2>الفرق بين العمر الهجري والعمر الميلادي</h2>
+  <p>
+    السنة الهجرية أقصر من الميلادية بنحو أحد عشر يوماً، لأنها اثنا عشر شهراً قمرياً يتراوح مجموعها بين ٣٥٤ و٣٥٥ يوماً، بينما
+    السنة الميلادية ٣٦٥ أو ٣٦٦ يوماً. ونتيجة هذا الفرق أن عدد سنواتك الهجرية يسبق عدد سنواتك الميلادية مع مرور الوقت: من كان عمره
+    ٣٣ سنة ميلادية قد يكون ٣٤ سنة هجرية، ويتراكم الفرق سنة كاملة كل ثلاث وثلاثين سنة ميلادية تقريباً. فإذا اختلف الرقمان فليس
+    أحدهما خطأً، بل هما قياسان مختلفان للمدة نفسها.
+  </p>
+  <p>
+    والفرق لا يقف عند السنوات: الشهر الهجري ٢٩ أو ٣٠ يوماً فقط، فسبعة أشهر هجرية ليست سبعة أشهر ميلادية ولا تساويها في عدد
+    الأيام. أما الأيام فمقياس واحد في التقويمين، لأن اليوم نفسه هو اليوم؛ ولهذا تجد بطاقتي «العمر بالأيام» و«إجمالي الأيام
+    الميلادية» بالرقم نفسه، والفرق بينهما أن الثانية تبيّن ما يعادله بالأسابيع والأيام. وهذه المساواة مقصودة ومكتوبة هنا صراحةً
+    حتى لا تظن أن في الأداة تكراراً بلا معنى.
+  </p>
+
+  <h2>لماذا يختلف عمرك الهجري بيوم أو يومين</h2>
+  <p>
+    تقويم أم القرى تقويم <strong>حسابي</strong>: تُحسب بداية الشهر فلكياً وفق شروط محدّدة، لا برؤية الهلال. أما التقويم المعمول
+    به رسمياً في بلدك فقد يقوم على الرؤية أو على إعلان الجهة الشرعية أو الفلكية، ويجوز أن يختلف إعلانه عن الحساب بيوم أو يومين.
+    فإن ظهر لك في هذه الصفحة «١٢ يوماً» وظهر عند الجهة الرسمية في بلدك «١١» أو «١٣»، فالفارق يوم واحد، وليس خطأً في الحساب.
+  </p>
+  <p>
+    ويُضاف إلى ذلك سببان آخران. الأول أن بيانات التقويم تأتي من مكتبة التقويم المضمّنة في نظامك، وقد تختلف بدايات بعض الأشهر
+    اختلافاً طفيفاً بين إصدار وآخر. والثاني هو المنطقة الزمنية: نحن نحسب باليوم لا باللحظة، لكن اليوم الهجري شرعاً يبدأ من غروب
+    الشمس بينما المتصفح يبدأ يومه من منتصف الليل؛ فإن حسبت قرب منتصف الليل أو كنت في بلد بعيد عن مكة المكرمة فقد يقع يومك في
+    تاريخ هجري مختلف. ولهذا نقول إن الفرق قد يبلغ يوماً أو يومين، ولا نقول إن الرقم قطعي.
+  </p>
+
+  <h2>دقة النتيجة وحدودها</h2>
+  <p>
+    النتيجة دقيقة في حدود يوم واحد تقريباً. هي صحيحة تماماً ما دامت بداية الشهر في بلدك موافقة لما يحسبه أم القرى، وتنقص أو
+    تزيد يوماً حين يختلف الإعلان الرسمي عن الحساب. وليست هذه الأداة حكماً شرعياً ولا فتوى ولا مرجعاً قانونياً، فلا تُبنى عليها
+    مواعيد عبادة ولا مواعيد عقود ومعاملات رسمية؛ المرجع في ذلك إعلان الجهة المختصة في بلدك، وما هنا مرجع تقريبي مفيد للمعرفة
+    اليومية.
+  </p>
+  <p>
+    وثمة حدّ تقني صريح: بيانات أم القرى في المتصفحات موثوقة في نطاق يقع بين ١٣٥٦ و١٥٠٠ هجرية، أي ما يوافق ١٩٣٧ و٢٠٧٧ ميلادياً
+    تقريباً. فإن أدخلت تاريخاً خارج هذا النطاق نبّهتك الأداة صراحةً بدل أن تعطيك رقماً مضلِّلاً، وتبقى عندئذ أرقام العمر
+    الميلادي وإجمالي الأيام صحيحة لأنها لا تعتمد على التقويم الهجري. وأخيراً، مهمة هذه الصفحة حساب العمر وحده؛ فمن أراد تحويل
+    تاريخ بعينه أو عرض جدول الشهر أو الفرق بين تاريخين، فـ
+    <a href="/ar/التقويم-الهجري/">محوّل التاريخ الهجري والميلادي</a> أنسب له من هذه الصفحة.
+  </p>
+</ArToolLayout>
+
+<style>
+  .ha-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+  }
+
+  @media (min-width: 720px) {
+    .ha-fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .ha-hint {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-faint);
+  }
+
+  .ha-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-block-start: 0.9rem;
+  }
+
+  .ha-alert {
+    margin-block: 1rem 0;
+  }
+
+  .ha-alert[hidden] {
+    display: none;
+  }
+
+  .ha-answer {
+    margin-block: 1.1rem 0.35rem;
+    padding-block: 1rem 1.05rem;
+    padding-inline: 1.1rem;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-inline-start: 4px solid var(--accent-border);
+    border-radius: var(--radius);
+    font-family: var(--font-arabic);
+    font-size: clamp(1.3rem, 4.8vw, 2rem);
+    font-weight: 750;
+    line-height: 1.65;
+    text-align: center;
+    color: var(--text);
+  }
+
+  .ha-answer[data-state="muted"] {
+    font-size: clamp(1rem, 2.6vw, 1.1rem);
+    font-weight: 600;
+    color: var(--text-muted);
+    border-inline-start-color: var(--border);
+  }
+
+  .ha-answer[data-state="ok"] {
+    border-inline-start-color: var(--accent);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .ha-born-note {
+    margin: 0;
+    min-height: 1.4rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .ha-stats {
+    margin-block-start: 1.1rem;
+  }
+
+  .ha-stats .stat__value {
+    font-size: 1.3rem;
+    line-height: 1.5;
+  }
+
+  .ha-stats .ha-stat-wide .stat__value {
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .ha-stats .ha-sub {
+    margin-block-start: 0.2rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  .ha-more {
+    margin-block: 1.1rem 0;
+    padding-block-start: 0.95rem;
+    border-block-start: 1px solid var(--border);
+    font-size: 0.92rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 400px) {
+    .ha-answer {
+      padding-inline: 0.8rem;
+    }
+  }
+</style>
+
+<script>
+  /* ================================================================
+     حاسبة العمر بالهجري — كل الحساب داخل المتصفح وحده.
+     لا شبكة، لا مكتبات، لا تخزين. بيانات التقويم من أم القرى.
+     ================================================================ */
+
+  var ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+  var DAY_MS = 86400000;
+  var CALENDAR = "islamic-umalqura";
+
+  var arabicDigits = function (value) {
+    return String(value).replace(/[0-9]/g, function (digit) {
+      return ARABIC_DIGITS[Number(digit)];
+    });
+  };
+
+  /* تنسيق للعرض بالعربية، وتنسيق رقمي للقراءة والتحويل. */
+  var hijriLong = new Intl.DateTimeFormat("ar-SA-u-ca-" + CALENDAR, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    weekday: "long"
+  });
+  var hijriMonthName = new Intl.DateTimeFormat("ar-SA-u-ca-" + CALENDAR, { month: "long" });
+  var gregorianLong = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+  var hijriNumeric = new Intl.DateTimeFormat("en-US-u-ca-" + CALENDAR, {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric"
+  });
+
+  /* ---------- أدوات التاريخ: رقم يوم ثابت لا يتأثر بالتوقيت الصيفي ---------- */
+
+  var dayNumberOf = function (date) {
+    return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
+  };
+  var dateOfDayNumber = function (number) {
+    var utc = new Date(number * DAY_MS);
+    return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+  };
+  var todayDate = function () {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+  var pad2 = function (value) {
+    return String(value).padStart(2, "0");
+  };
+  var isoOf = function (date) {
+    return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate());
+  };
+  var dateFromIso = function (value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+    if (!match) return null;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+  };
+
+  /* ---------- أم القرى: الثلاثية الهجرية <-> رقم اليوم الميلادي ---------- */
+
+  var hijriOnDayNumber = function (number) {
+    var parts = hijriNumeric.formatToParts(dateOfDayNumber(number));
+    var year = 0;
+    var month = 0;
+    var day = 0;
+    for (var i = 0; i < parts.length; i += 1) {
+      if (parts[i].type === "year") year = Number(parts[i].value);
+      else if (parts[i].type === "month") month = Number(parts[i].value);
+      else if (parts[i].type === "day") day = Number(parts[i].value);
+    }
+    return { year: year, month: month, day: day };
+  };
+
+  /* Intl ينسّق ولا يحلّل، فالبحث عن يوم ميلادي مقابل لثلاثية هجرية يجري بحثاً ثنائياً. */
+  var SEARCH_START = dayNumberOf(new Date(1937, 0, 1));
+  var SEARCH_END = dayNumberOf(new Date(2077, 11, 31));
+
+  var compareTriple = function (a, b) {
+    return a.year - b.year || a.month - b.month || a.day - b.day;
+  };
+
+  var searchDay = function (year, month, day) {
+    var target = { year: year, month: month, day: day };
+    if (compareTriple(hijriOnDayNumber(SEARCH_START), target) > 0) return null;
+    if (compareTriple(hijriOnDayNumber(SEARCH_END), target) < 0) return null;
+    var low = SEARCH_START;
+    var high = SEARCH_END;
+    while (low < high) {
+      var mid = low + Math.floor((high - low) / 2);
+      if (compareTriple(hijriOnDayNumber(mid), target) < 0) low = mid + 1;
+      else high = mid;
+    }
+    return compareTriple(hijriOnDayNumber(low), target) === 0 ? low : null;
+  };
+
+  /* النطاق المعلن: من ١ محرم ١٣٥٦ هـ إلى آخر يوم من ذي الحجة ١٥٠٠ هـ. */
+  var RANGE_FIRST = { year: 1356, month: 1, day: 1 };
+  var AFTER_RANGE = searchDay(1501, 1, 1);
+  var RANGE_LAST = hijriOnDayNumber(AFTER_RANGE === null ? SEARCH_END : AFTER_RANGE - 1);
+
+  var inRange = function (triple) {
+    return compareTriple(triple, RANGE_FIRST) >= 0 && compareTriple(triple, RANGE_LAST) <= 0;
+  };
+
+  var hijriToDayNumber = function (year, month, day) {
+    var target = { year: year, month: month, day: day };
+    if (!inRange(target)) return null;
+    return searchDay(year, month, day);
+  };
+
+  var monthLength = function (year, month) {
+    var first = searchDay(year, month, 1);
+    if (first === null) return 30;
+    var nextYear = month === 12 ? year + 1 : year;
+    var nextMonth = month === 12 ? 1 : month + 1;
+    var next = searchDay(nextYear, nextMonth, 1);
+    return next === null ? 30 : next - first;
+  };
+
+  /* ---------- صياغة عربية سليمة للمعدود ---------- */
+
+  var UNITS = {
+    year: { one: "سنة واحدة", two: "سنتان", few: "سنوات", many: "سنة" },
+    month: { one: "شهر واحد", two: "شهران", few: "أشهر", many: "شهراً" },
+    day: { one: "يوم واحد", two: "يومان", few: "أيام", many: "يوماً" },
+    week: { one: "أسبوع واحد", two: "أسبوعان", few: "أسابيع", many: "أسبوعاً" }
+  };
+
+  var unitPhrase = function (count, unit, format) {
+    if (count === 1) return unit.one;
+    if (count === 2) return unit.two;
+    if (count >= 3 && count <= 10) return format(count) + " " + unit.few;
+    return format(count) + " " + unit.many;
+  };
+
+  var joinParts = function (parts) {
+    var kept = [];
+    for (var i = 0; i < parts.length; i += 1) {
+      if (parts[i].count > 0) kept.push(parts[i]);
+    }
+    if (!kept.length) return "أقل من يوم واحد";
+    var words = [];
+    for (var j = 0; j < kept.length; j += 1) {
+      words.push(unitPhrase(kept[j].count, kept[j].unit, arabicDigits));
+    }
+    return words.join(" و");
+  };
+
+  /* ---------- العمر بالاقتراض، لا بقسمة مجموع الأيام ---------- */
+
+  var hijriAgeBetween = function (from, to) {
+    var years = to.year - from.year;
+    var months = to.month - from.month;
+    var days = to.day - from.day;
+    if (days < 0) {
+      months -= 1;
+      var prevMonth = to.month === 1 ? 12 : to.month - 1;
+      var prevYear = to.month === 1 ? to.year - 1 : to.year;
+      days += monthLength(prevYear, prevMonth);
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    return { years: years, months: months, days: days };
+  };
+
+  var gregorianAgeBetween = function (from, to) {
+    var years = to.getFullYear() - from.getFullYear();
+    var months = to.getMonth() - from.getMonth();
+    var days = to.getDate() - from.getDate();
+    if (days < 0) {
+      months -= 1;
+      var prevMonth = to.getMonth() === 0 ? 11 : to.getMonth() - 1;
+      var prevYear = to.getMonth() === 0 ? to.getFullYear() - 1 : to.getFullYear();
+      days += new Date(prevYear, prevMonth + 1, 0).getDate();
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    return { years: years, months: months, days: days };
+  };
+
+  /* عيد الميلاد الهجري القادم: الشهر واليوم نفسهما في السنة الهجرية التي لم يأتِ موعدهما فيها. */
+  var nextHijriBirthday = function (birth, todayTriple, todayNumber) {
+    for (var step = 0; step <= 2; step += 1) {
+      var year = todayTriple.year + step;
+      var length = monthLength(year, birth.month);
+      var day = Math.min(birth.day, length);
+      var number = hijriToDayNumber(year, birth.month, day);
+      if (number === null) continue;
+      if (number >= todayNumber) {
+        return { year: year, month: birth.month, day: day, dayNumber: number, daysLeft: number - todayNumber };
+      }
+    }
+    return null;
+  };
+
+  /* ---------- عناصر الصفحة ---------- */
+
+  var byId = function (id) {
+    return document.getElementById(id);
+  };
+  var el = {
+    born: byId("ha-born"),
+    until: byId("ha-until"),
+    today: byId("ha-today"),
+    alert: byId("ha-alert"),
+    alertText: byId("ha-alert-text"),
+    answer: byId("ha-answer"),
+    bornNote: byId("ha-born-note"),
+    yearsHij: byId("ha-years-hij"),
+    yearsHijSub: byId("ha-years-hij-sub"),
+    monthsHij: byId("ha-months-hij"),
+    monthsHijSub: byId("ha-months-hij-sub"),
+    daysHij: byId("ha-days-hij"),
+    daysHijSub: byId("ha-days-hij-sub"),
+    gregAge: byId("ha-greg-age"),
+    gregAgeSub: byId("ha-greg-age-sub"),
+    daysGreg: byId("ha-days-greg"),
+    daysGregSub: byId("ha-days-greg-sub"),
+    nextHij: byId("ha-next-hij"),
+    nextHijSub: byId("ha-next-hij-sub")
+  };
+
+  var setAlert = function (message) {
+    if (!message) {
+      el.alertText.textContent = "";
+      el.alert.hidden = true;
+      return;
+    }
+    el.alertText.textContent = message;
+    el.alert.hidden = false;
+  };
+
+  var setAnswer = function (text, state) {
+    el.answer.textContent = text;
+    el.answer.dataset.state = state;
+  };
+
+  var setStat = function (valueNode, subNode, value, sub) {
+    valueNode.textContent = value;
+    subNode.textContent = sub || "";
+  };
+
+  var setHijriStats = function (value, sub) {
+    setStat(el.yearsHij, el.yearsHijSub, value, sub);
+    setStat(el.monthsHij, el.monthsHijSub, value, sub);
+    setStat(el.daysHij, el.daysHijSub, value, sub);
+    setStat(el.nextHij, el.nextHijSub, value, sub);
+  };
+
+  var OUT_OF_RANGE_TEXT = "خارج النطاق";
+
+  /* ---------- الحساب الرئيسي ---------- */
+
+  var update = function () {
+    setAlert("");
+
+    var today = todayDate();
+    var bornDate = dateFromIso(el.born.value);
+    var untilDate = dateFromIso(el.until.value) || today;
+
+    if (!bornDate) {
+      setAnswer("اكتب تاريخ ميلادك بالأعلى، وسيظهر عمرك بالتقويم الهجري في هذه المساحة مباشرة.", "muted");
+      el.bornNote.textContent = "";
+      setHijriStats("—", "");
+      setStat(el.gregAge, el.gregAgeSub, "—", "");
+      setStat(el.daysGreg, el.daysGregSub, "—", "");
+      return;
+    }
+
+    if (bornDate.getTime() > today.getTime()) {
+      setAlert("تاريخ الميلاد لا يمكن أن يكون في المستقبل.");
+      setAnswer("تحقّق من تاريخ الميلاد: هذا التاريخ لم يأتِ بعد.", "muted");
+      el.bornNote.textContent = "";
+      setHijriStats("—", "");
+      setStat(el.gregAge, el.gregAgeSub, "—", "");
+      setStat(el.daysGreg, el.daysGregSub, "—", "");
+      return;
+    }
+
+    if (untilDate.getTime() < bornDate.getTime()) {
+      setAlert("تاريخ «احسب العمر حتى تاريخ» يسبق تاريخ الميلاد؛ اختر تاريخاً لاحقاً ليوم ميلادك.");
+      setAnswer("لا يمكن حساب عمر قبل تاريخ الميلاد.", "muted");
+      el.bornNote.textContent = "";
+      setHijriStats("—", "");
+      setStat(el.gregAge, el.gregAgeSub, "—", "");
+      setStat(el.daysGreg, el.daysGregSub, "—", "");
+      return;
+    }
+
+    var bornNumber = dayNumberOf(bornDate);
+    var untilNumber = dayNumberOf(untilDate);
+    var totalDays = untilNumber - bornNumber;
+    var bornHijri = hijriOnDayNumber(bornNumber);
+    var untilHijri = hijriOnDayNumber(untilNumber);
+
+    el.bornNote.textContent = "تاريخ ميلادك هجرياً: " + hijriLong.format(bornDate) + " — والتاريخ الذي يُحسب إليه: " +
+      hijriLong.format(untilDate) + ".";
+
+    /* العمر الميلادي: مستقل عن التقويم الهجري، ويبقى صحيحاً في كل الحالات. */
+    var gAge = gregorianAgeBetween(bornDate, untilDate);
+    setStat(
+      el.gregAge,
+      el.gregAgeSub,
+      joinParts([
+        { count: gAge.years, unit: UNITS.year },
+        { count: gAge.months, unit: UNITS.month },
+        { count: gAge.days, unit: UNITS.day }
+      ]),
+      "محسوباً بالتقويم الميلادي من تاريخ الميلاد إلى تاريخ الحساب."
+    );
+
+    var weeks = Math.floor(totalDays / 7);
+    var restDays = totalDays % 7;
+    var weekText = "";
+    if (totalDays === 0) weekText = "لم يمضِ يوم كامل بعد.";
+    else if (weeks === 0) weekText = "أقل من أسبوع.";
+    else {
+      weekText = "ما يعادل " + unitPhrase(weeks, UNITS.week, arabicDigits) +
+        (restDays > 0 ? " و" + unitPhrase(restDays, UNITS.day, arabicDigits) : "") + ".";
+    }
+    setStat(el.daysGreg, el.daysGregSub, arabicDigits(totalDays) + " يوماً", weekText);
+
+    var hijriOk = inRange(bornHijri) && inRange(untilHijri);
+
+    if (!hijriOk) {
+      setAnswer("بيانات تقويم أم القرى في متصفحك لا تغطي هذا التاريخ، فلا نعرض عمراً هجرياً يمكن أن يكون مضلِّلاً.", "muted");
+      setHijriStats(OUT_OF_RANGE_TEXT, "خارج نطاق بيانات أم القرى (١٣٥٦–١٥٠٠ هـ).");
+      setStat(el.daysHij, el.daysHijSub, arabicDigits(totalDays) + " يوماً", "مجموع الأيام الفعلي بين التاريخين.");
+      setAlert(
+        "أحد التاريخين خارج نطاق تقويم أم القرى المدمج في متصفحك، وهو يغطي نحو ١٣٥٦–١٥٠٠ هـ (١٩٣٧–٢٠٧٧ م). " +
+        "قد يختلف الحساب الهجري خارج هذا النطاق بيوم أو أكثر، ولهذا نكتفي بالعمر الميلادي وإجمالي الأيام."
+      );
+      return;
+    }
+
+    var age = hijriAgeBetween(bornHijri, untilHijri);
+    var monthLen = monthLength(untilHijri.year, untilHijri.month);
+    var totalMonths = age.years * 12 + age.months;
+    var decimalYears = age.years + age.months / 12 + age.days / monthLen;
+    var breakdown = joinParts([
+      { count: age.years, unit: UNITS.year },
+      { count: age.months, unit: UNITS.month },
+      { count: age.days, unit: UNITS.day }
+    ]);
+
+    if (totalDays === 0) {
+      setAnswer("عمرك صفر بالتقويم الهجري؛ فتاريخ ميلادك هو نفسه التاريخ الذي يُحسب إليه.", "ok");
+    } else {
+      setAnswer("عمرك " + breakdown + " بالتقويم الهجري", "ok");
+    }
+
+    setStat(
+      el.yearsHij,
+      el.yearsHijSub,
+      age.years === 0 ? "أقل من سنة" : arabicDigits(decimalYears.toFixed(1).replace(".", "٫")) + " سنة",
+      breakdown + " بالتقويم الهجري."
+    );
+
+    setStat(
+      el.monthsHij,
+      el.monthsHijSub,
+      totalMonths === 0 ? "أقل من شهر" : unitPhrase(totalMonths, UNITS.month, arabicDigits),
+      age.days > 0 ? "و" + unitPhrase(age.days, UNITS.day, arabicDigits) + " فوقها." : "بالضبط."
+    );
+
+    setStat(
+      el.daysHij,
+      el.daysHijSub,
+      arabicDigits(totalDays) + " يوماً",
+      "مجموع الأيام الفعلي بين تاريخ الميلاد وتاريخ الحساب؛ واليوم مقياس واحد في التقويمين."
+    );
+
+    var next = nextHijriBirthday(bornHijri, untilHijri, untilNumber);
+    if (next === null) {
+      setStat(el.nextHij, el.nextHijSub, OUT_OF_RANGE_TEXT, "بيانات متصفحك لا تغطي السنة الهجرية القادمة.");
+    } else {
+      var nextDate = dateOfDayNumber(next.dayNumber);
+      var nextLabel = arabicDigits(next.day) + " " + hijriMonthName.format(nextDate) + " " +
+        arabicDigits(next.year) + " هـ";
+      var leftText = next.daysLeft === 0
+        ? "عيد ميلادك الهجري اليوم."
+        : "بقي " + unitPhrase(next.daysLeft, UNITS.day, arabicDigits);
+      setStat(
+        el.nextHij,
+        el.nextHijSub,
+        nextLabel,
+        "الموافق " + gregorianLong.format(nextDate) + " م — " + leftText
+      );
+    }
+  };
+
+  /* ---------- التهيئة ---------- */
+
+  var init = function () {
+    var today = todayDate();
+    var todayIso = isoOf(today);
+    el.until.value = todayIso;
+    el.born.max = todayIso;
+
+    el.born.addEventListener("input", update);
+    el.born.addEventListener("change", update);
+    el.until.addEventListener("input", update);
+    el.until.addEventListener("change", update);
+
+    el.today.addEventListener("click", function () {
+      var now = todayDate();
+      var nowIso = isoOf(now);
+      el.until.value = nowIso;
+      el.born.max = nowIso;
+      update();
+    });
+
+    update();
+  };
+
+  init();
+</script>

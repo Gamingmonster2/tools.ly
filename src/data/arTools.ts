@@ -61,17 +61,51 @@ export const arTools: ArTool[] = [
     publishedTime: "10:12",
   },
   {
+    // Intent: CONVERSION. The title, description and keywords all use the phrasing people
+    // actually type when they want one date turned into another.
     slug: "التقويم-الهجري",
-    title: "محوّل التقويم الهجري والميلادي",
-    nav: "التقويم الهجري",
+    title: "تحويل التاريخ الهجري إلى ميلادي والعكس",
+    nav: "تحويل التاريخ الهجري",
     description:
-      "حوّل أي تاريخ بين الهجري والميلادي، واحسب عمرك بالسنوات الهجرية، مع فروق التواريخ.",
+      "التاريخ الهجري اليوم يظهر فور فتح الصفحة. حوّل أي تاريخ بين الهجري والميلادي في ثانية، واعرف يوم الأسبوع وفروق التواريخ — محوّل يعمل داخل متصفحك بلا تسجيل.",
     category: "time",
     icon: "calendar",
     status: "live",
-    keywords: ["التقويم الهجري", "تحويل التاريخ", "التاريخ الهجري اليوم", "العمر بالهجري"],
+    keywords: [
+      "تحويل التاريخ الهجري الى ميلادي",
+      "التاريخ الهجري اليوم",
+      "محول التاريخ الهجري",
+      "التقويم الهجري والميلادي",
+      "كم تاريخ اليوم بالهجري",
+      "تحويل الميلادي الى هجري",
+    ],
     published: "2026-10-15",
     publishedTime: "15:38",
+  },
+  {
+    // Intent: AGE. A separate page on purpose. Someone typing "احسب عمري بالهجري" wants an
+    // answer to one question, not a date converter that happens to contain an age section.
+    // Google ranks the page whose PRIMARY topic matches the query, so a section inside
+    // another tool will always be weaker than a page about that one thing.
+    slug: "احسب-عمرك-بالهجري",
+    title: "احسب عمري بالهجري — حاسبة العمر بالتقويم الهجري والميلادي",
+    nav: "احسب عمري بالهجري",
+    description:
+      "كم عمري بالهجري الآن؟ اكتب تاريخ ميلادك واعرف عمرك فوراً بالسنوات والأشهر والأيام الهجرية، وعمرك الميلادي، وكم يوماً بقي حتى عيد ميلادك الهجري القادم.",
+    category: "time",
+    icon: "calendar",
+    status: "live",
+    keywords: [
+      "احسب عمري بالهجري",
+      "كم عمري بالهجري",
+      "كيف احسب عمري بالهجري",
+      "حاسبة العمر بالهجري",
+      "حساب العمر بالهجري والميلادي",
+      "احسب عمرك بالهجري",
+      "عمري بالتقويم الهجري",
+    ],
+    published: "2026-10-15",
+    publishedTime: "16:20",
   },
   {
     slug: "إزالة-التشكيل",
