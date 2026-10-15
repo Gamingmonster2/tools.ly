@@ -1,6 +1,7 @@
 ---
 import Icon from "./Icon.astro";
 import { localeMeta, strings, type Locale } from "../data/i18n";
+import { SITE } from "../data/site";
 import { legacyTools, urlOf } from "../data/tools";
 
 interface Props {
@@ -15,13 +16,14 @@ const year = new Date().getFullYear();
 const quick = legacyTools.slice(0, 5);
 
 /** Site links differ per edition: the Arabic side only has pages that really exist. */
-const siteLinks =
+const siteLinks: { href: string; label: string; external?: boolean }[] =
   locale === "ar"
     ? [
         { href: `${prefix}/`, label: "الرئيسية" },
         { href: `${prefix}/كل-الأدوات/`, label: "كل الأدوات" },
         { href: `${prefix}/عن-الموقع/`, label: "عن الموقع" },
         { href: `${prefix}/اتصل-بنا/`, label: "اتصل بنا" },
+        ...(SITE.telegram ? [{ href: SITE.telegram, label: t.telegramFooter, external: true }] : []),
       ]
     : [
         { href: "/all-tools/", label: "All tools" },
@@ -29,6 +31,7 @@ const siteLinks =
         { href: "/7b3c2-about/", label: "About" },
         { href: "/7b3c2-contact/", label: "Contact" },
         { href: "/privacy/", label: "Privacy" },
+        ...(SITE.telegram ? [{ href: SITE.telegram, label: t.telegramFooter, external: true }] : []),
       ];
 ---
 
@@ -71,7 +74,15 @@ const siteLinks =
         <ul>
           {
             siteLinks.map((link) => (
-              <li><a href={link.href}>{link.label}</a></li>
+              <li>
+                <a
+                  href={link.href}
+                  target={link.external ? "_blank" : undefined}
+                  rel={link.external ? "noopener noreferrer" : undefined}
+                >
+                  {link.label}
+                </a>
+              </li>
             ))
           }
         </ul>

@@ -90,6 +90,12 @@ interface Strings {
   faqTitle: string;
   sourcesTitle: string;
   home: string;
+  /** The soft Telegram bar. See the note in TelegramBar.astro for why it is a bar. */
+  telegramTitle: string;
+  telegramBody: string;
+  telegramCta: string;
+  telegramDismiss: string;
+  telegramFooter: string;
 }
 
 export const strings: Record<Locale, Strings> = {
@@ -124,6 +130,11 @@ export const strings: Record<Locale, Strings> = {
     faqTitle: "Frequently asked questions",
     sourcesTitle: "Sources & further reading",
     home: "Home",
+    telegramTitle: "Follow Tools.ly on Telegram",
+    telegramBody: "New tools and short tips, published in Arabic a few times a week.",
+    telegramCta: "Open the channel",
+    telegramDismiss: "Dismiss this",
+    telegramFooter: "Telegram channel",
   },
   ar: {
     nav: [
@@ -155,6 +166,11 @@ export const strings: Record<Locale, Strings> = {
     faqTitle: "أسئلة متكرّرة",
     sourcesTitle: "المصادر وقراءات إضافية",
     home: "الرئيسية",
+    telegramTitle: "تابع Tools.ly على تيليجرام",
+    telegramBody: "أدوات جديدة ونصائح قصيرة، مرّتين في الأسبوع. بلا إزعاج، ويمكنك المغادرة متى شئت.",
+    telegramCta: "افتح القناة",
+    telegramDismiss: "إخفاء هذا الشريط",
+    telegramFooter: "قناة تيليجرام",
   },
 };
 

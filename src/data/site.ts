@@ -16,6 +16,13 @@ export const SITE = {
   /** Longer formal name used where there is room for it, such as the About page. */
   teamFull: "Tools.ly Platform Development Team",
   tagline: "Free browser-based tools that never upload your data.",
+  /**
+   * The Telegram channel. Set this to an empty string to hide every mention of it across
+   * the site — the dismissible bar, the footer link and the structured data all read from
+   * here, so there is exactly one place to change.
+   */
+  telegram: "https://t.me/toolsly",
+  telegramHandle: "@toolsly",
 } as const;
 
 /** Renders an ISO date as "11 January 2026". */
