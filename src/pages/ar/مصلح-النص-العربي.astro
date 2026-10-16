@@ -1,0 +1,902 @@
+---
+import ArToolLayout from "../../layouts/ArToolLayout.astro";
+import { arTools } from "../../data/arTools";
+
+const tool = arTools.find((t) => t.slug === "مصلح-النص-العربي")!;
+
+const faqs = [
+  {
+    q: "كيف أصلح النص العربي المقلوب بعد النسخ من PDF؟",
+    a: "الصق النص في المربع الأول، ثم اختر من مجموعة «الترتيب»: «اقلب ترتيب الحروف» إن كان القلب داخل الكلمة نفسها، أو «اقلب ترتيب الكلمات» إن كانت الكلمات في غير مواضعها. الافتراضي «كما هو» لأن العكس ليس حالة واحدة: ملفات PDF تقلب الحروف كاملة، وأخرى تقلب الكلمات وحدها، وثالثة تقلب مقاطع من السطر؛ فلا يوجد اختيار صحيح دائماً. وإن رأت الأداة مؤشراً على القلب ظهرت لافتة اقتراح بجانب الخيارات، وهي مبنية على قائمة بالكلمات العربية الشائعة: نقيس عدد الكلمات المعروفة في النص وفي مقلوبه، ولا نقترح القلب إلا إذا كان الفرق واضحاً. ثم اضغط «انسخ الناتج» والصقه في مكانه.",
+  },
+  {
+    q: "لماذا يظهر النص العربي رموزاً غريبة؟",
+    a: "لأن البايتات قُرئت بترميز غير ترميزها. الحرف العربي يُخزَّن في UTF-8 ببايتين، فإذا قرأهما برنامج على أنهما حرفان في ترميز لاتيني ظهر النص بالشكل «\u00D8\u00A7\u00D9\u201E\u00D8\u00B3\u00D9\u201E\u00D8\u00A7\u00D9\u2026». والفكّ عكس العملية نفسها: يُعاد كل محرف إلى البايت الذي جاء منه، ثم تُفكّ البايتات بترميز UTF-8، وهو ما يفعله خيار «إصلاح الترميز». ولا يُطبَّق الإصلاح إلا إذا أنتج عدداً أكبر من الحروف العربية ولم يبقَ فيه محرف غير صالح (\uFFFD)؛ وإلا تُرك النص كما هو ونُبِّه عليه في سطر الفحص.",
+  },
+  {
+    q: "هل تُرفع نصوصي إلى خادم؟",
+    a: "لا. الأداة صفحة واحدة تعمل داخل متصفحك: لا رفع ولا إرسال ولا تحليل على خادم، ولا تُحمَّل أي مكتبة خارجية. ويمكنك التحقق بسهولة: افتح الصفحة ثم افصل الإنترنت، وستجدها تعمل كما هي لأن كل شيء يجري في جهازك. وهذا مقصود؛ فالنصوص التي تحتاج هذا الإصلاح غالباً عقود أو أوراق رسمية أو بحوث لا يصح إرسالها إلى جهة أخرى.",
+  },
+  {
+    q: "النص يبدو سليماً لكن البحث لا يجده، لماذا؟",
+    a: "لأن الحرف قد يكون سليماً والمشكلة في محارف لا تُرى. تدسّ ملفات PDF محارف خفية مثل المسافة الصفرية (U+200B) ومحارف الاتجاه (U+200E و U+200F) ومحارف عزل الاتجاه (U+2066–U+2069)، فتظهر الكلمة «محمد» سليمة بينما بين حروفها محارف لا تُرى، والبحث يقارن المحارف واحداً واحداً فيفشل. شغّل خيار «إزالة المحارف الخفية» وأعد البحث، وسيخبرك سطر الفحص بعدد ما أُزيل. وإن كان النص يحمل أشكال عرض أيضاً فشغّل الخيار الثاني معه.",
+  },
+];
+
+const sources = [
+  {
+    label: "Unicode — UAX #15: Unicode Normalization Forms",
+    href: "https://www.unicode.org/reports/tr15/",
+    note: "التوصية المعيارية التي تعرّف التحويل NFKC، وهو ما تستخدمه الأداة لإعادة أشكال العرض إلى حروفها الأساسية.",
+  },
+  {
+    label: "Unicode — Arabic Presentation Forms-B (U+FE70–U+FEFF)",
+    href: "https://www.unicode.org/charts/PDF/UFE70.pdf",
+    note: "جدول نطاق أشكال العرض الذي يفسّر كيف صار للحرف العربي الواحد أربعة أشكال بنقاط ترميز مختلفة، ويقابله نطاق أشكال العرض-أ (U+FB50–U+FDFF).",
+  },
+  {
+    label: "WHATWG — Encoding Standard (windows-1252 و ISO-8859-1)",
+    href: "https://encoding.spec.whatwg.org/",
+    note: "المرجع الذي يحدّد كيف تُقابل البايتات بالمحارف في الترميزات اللاتينية، وعليه بُني فكّ الرموز الغريبة وإعادة كل محرف إلى بايته.",
+  },
+];
+---
+
+<ArToolLayout
+  tool={tool}
+  intro="الصق نصاً عربياً أفسدته عملية النسخ من PDF — معكوساً أو متقطّعاً أو برموز غريبة — واحصل على نص سليم داخل متصفحك، مع خيارات تتحكم في كل إصلاح وسطر فحص يخبرك بما تغيّر."
+  faqs={faqs}
+  sources={sources}
+>
+  <Fragment slot="tool">
+    <div class="panel">
+      <div class="panel__body">
+        <div class="tool">
+          <div class="field">
+            <label for="src">النص المكسور — الصقه هنا</label>
+            <textarea
+              id="src"
+              rows="9"
+              dir="rtl"
+              lang="ar"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+              placeholder="الصق النص الذي نسخته من PDF… سيبدأ الفحص فوراً مع أول حرف."
+            ></textarea>
+            <p class="hint">
+              الإصلاح يجري أثناء الكتابة وداخل متصفحك: لا زرّ «أصلح»، ولا رفع، ولا اتصال بالشبكة.
+            </p>
+          </div>
+
+          <fieldset class="fieldset">
+            <legend>الإصلاحات</legend>
+            <div class="opts">
+              <label class="check" for="fix-encoding">
+                <input type="checkbox" id="fix-encoding" checked />
+                <span>إصلاح الترميز — الرموز الغريبة (&#xD9;&#xD8;&#xD9;&#xD8;&#xAF;)</span>
+              </label>
+              <label class="check" for="fix-forms">
+                <input type="checkbox" id="fix-forms" checked />
+                <span>تحويل أشكال العرض إلى حروفها</span>
+              </label>
+              <label class="check" for="fix-hidden">
+                <input type="checkbox" id="fix-hidden" checked />
+                <span>إزالة المحارف الخفية (مسافات صفرية ومحارف اتجاه)</span>
+              </label>
+              <label class="check" for="fix-spacing">
+                <input type="checkbox" id="fix-spacing" checked />
+                <span>إزالة المسافات بين الحروف المفردة (م ح م د ← محمد)</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>الترتيب</legend>
+            <p class="hint">
+              لا نُصلح الترتيب تلقائياً؛ فقد يقلب PDF الحروف كاملة، أو الكلمات وحدها، أو مقاطع من السطر.
+              القرار لك، والناتج يتغيّر فور اختيارك.
+            </p>
+            <div class="opts">
+              <label class="check" for="ord-none">
+                <input type="radio" name="order" id="ord-none" value="none" checked />
+                <span>كما هو</span>
+              </label>
+              <label class="check" for="ord-chars">
+                <input type="radio" name="order" id="ord-chars" value="chars" />
+                <span>اقلب ترتيب الحروف</span>
+              </label>
+              <label class="check" for="ord-words">
+                <input type="radio" name="order" id="ord-words" value="words" />
+                <span>اقلب ترتيب الكلمات</span>
+              </label>
+            </div>
+            <p class="hint suggest" id="ord-suggest" hidden>
+              <span class="badge badge--accent">قد يكون مقلوباً</span>
+              <span id="ord-suggest-text"></span>
+            </p>
+          </fieldset>
+
+          <section aria-labelledby="out-heading">
+            <h3 class="block-title" id="out-heading">الناتج</h3>
+            <p class="detect" id="detect" aria-live="polite">الصق نصاً في الأعلى ليبدأ الفحص.</p>
+
+            <div class="field">
+              <label for="out">النص بعد الإصلاح (للقراءة فقط)</label>
+              <textarea
+                id="out"
+                class="out"
+                rows="9"
+                dir="rtl"
+                lang="ar"
+                spellcheck="false"
+                readonly
+                placeholder="سيظهر النص المُصلَح هنا…"
+              ></textarea>
+            </div>
+
+            <div class="callout callout--warn" id="no-detect" hidden>
+              <p>
+                لم نكتشف أي مشكلة معروفة في هذا النص. فإن كان يبدو تالفاً رغم ذلك، فالسبب على الأرجح
+                <strong>جدول تحويل المحارف (ToUnicode)</strong> في ملف PDF الأصلي: عندها لا يحمل الملف
+                حروفاً صحيحة أصلاً، ولا تستطيع أي أداة استعادتها — لا هذه ولا غيرها. الحل الوحيد أن
+                تُقرأ الصفحة صورةً ويُشغَّل عليها التعرّف الضوئي (OCR)، أو أن تنسخ النص من مصدره الأصلي.
+              </p>
+            </div>
+          </section>
+
+          <section aria-labelledby="stats-heading">
+            <h3 class="block-title" id="stats-heading">الملخّص</h3>
+            <div class="stat-grid" aria-live="polite">
+              <div class="stat">
+                <div class="stat__label">الحروف العربية قبل</div>
+                <div class="stat__value" id="st-letters-before">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الحروف العربية بعد</div>
+                <div class="stat__value" id="st-letters-after">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الكلمات قبل</div>
+                <div class="stat__value" id="st-words-before">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الكلمات بعد</div>
+                <div class="stat__value" id="st-words-after">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">الأسطر</div>
+                <div class="stat__value" id="st-lines">٠</div>
+              </div>
+              <div class="stat">
+                <div class="stat__label">ما تم إصلاحه</div>
+                <div class="stat__value" id="st-fixed">لا شيء</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <button type="button" class="btn btn--primary" id="btn-copy">انسخ الناتج</button>
+            <button type="button" class="btn btn--ghost" id="btn-clear">تفريغ</button>
+            <span class="status" id="copy-status" role="status" aria-live="polite"></span>
+          </div>
+
+          <noscript>
+            <div class="callout callout--warn">
+              <p>
+                هذه الأداة تفحص النص وتُصلحه بجافاسكربت داخل متصفحك، وبدونه لا تستطيع أن تفعل شيئاً.
+                فعّل جافاسكربت ثم أعد تحميل الصفحة. وللمعلومة: نصك لن يُرسل إلى أي مكان في الحالتين.
+              </p>
+            </div>
+          </noscript>
+        </div>
+      </div>
+      <div class="panel__foot">
+        كل إصلاح يعمل على نسخة من نصك: ما لا تكون الأداة واثقة منه يبقى كما هو، ولا يُغيَّر الناتج
+        بالتخمين. ولأن ملف PDF قد يقلب الحروف، أو الكلمات، أو مقاطع فقط، فقرار الترتيب متروك لك.
+      </div>
+    </div>
+  </Fragment>
+
+  <h2>لماذا يظهر النص العربي معكوساً بعد النسخ من PDF؟</h2>
+  <p>
+    الملف الذي يصلك بصيغة PDF ليس نصاً بالمعنى المألوف، بل صفحة مرسومة: تعليمات تقول «ارسم هذا الشكل
+    عند هذا الإحداثي». أما ما تحدّده بالفأرة وتنسخه فهو طبقة نصية أُضيفت فوق الرسم، وقد رتّبها البرنامج
+    الذي أنشأ الملف بالترتيب الذي رسم به الأشكال. وفي العربية يُرسم النص من اليمين إلى اليسار، فيُكتب
+    الحرف الأخير في آخر الصفحة أولاً في ترتيب الرسم ثم يأتي ما قبله. وهنا أصل
+    <strong>مشكلة نسخ النص العربي من PDF</strong>: أنت تنسخ ترتيب الرسم، لا ترتيب القراءة.
+  </p>
+  <p>
+    وحين يستخرج القارئ — كروم أو أكروبات أو غيرهما — هذه الطبقة النصية، يقرأ الأشكال بترتيب ورودها في
+    الملف ثم يعرضها وفق قواعد الاتجاه الثنائي (Bidi). فإن كان الملف محفوظاً بترتيب العرض البصري خرج
+    <strong>النص العربي معكوساً</strong>: تُقلب الحروف داخل الكلمة، أو تُقلب الكلمات داخل السطر، أو يحدث
+    الأمران في مقاطع متفرقة من الصفحة؛ لأن كل سطر يُرسم على حدة، وقد يكون بعضها بترتيب منطقي سليم
+    وبعضها بترتيب بصري مقلوب. ولهذا لا يوجد «إصلاح واحد» لعكس النص العربي، ولهذا لا نقلب الترتيب هنا
+    تلقائياً، بل نعرض عليك ثلاثة خيارات، ونُظهر لافتة اقتراح إن رأينا مؤشراً على القلب.
+  </p>
+  <p>
+    ويبقى سؤال مهم: كيف يعرف القارئ أن هذا الشكل هو حرف الميم لا حرف الجيم؟ الجواب في جدول صغير داخل
+    الملف يُسمّى جدول التحويل إلى يونيكود (<code>ToUnicode CMap</code>)، وهو يقول مثلاً: «الشكل رقم ٢١٥
+    هو الحرف م». فإن كان الجدول سليماً خرج النص سليماً، وإن كان ناقصاً أو مُخمَّناً خرجت حروف في غير
+    مواضعها أو رموز غريبة — وهذه حالة أخرى غير القلب، وسنراها في الأسفل. أما الخلاصة العملية:
+    <strong>تصحيح النص العربي المقلوب</strong> يبدأ بمعرفة ما الذي قُلب؛ فإن كان القلب داخل الكلمات
+    فاختر «اقلب ترتيب الحروف»، وإن كانت الكلمات نفسها في غير مواضعها فاختر «اقلب ترتيب الكلمات»، ويصير
+    <strong>تحويل نص عربي مقلوب</strong> إلى نص سليم أمراً بضغطة واحدة.
+  </p>
+
+  <h2>الحروف العربية متقطعة: ما الذي حدث فعلاً؟</h2>
+  <p>
+    حين تقول «الحروف العربية متقطعة» فقد تصف مشكلتين مختلفتين تماماً، ولكل واحدة سبب وعلاج: مسافات
+    دُسّت بين الحروف، أو أشكال عرض حُفظت بدل الحروف نفسها.
+  </p>
+  <p>
+    المشكلة الأولى شكلية: مسافة بين كل حرفين، فتصير «محمد» هكذا «م ح م د». سببها أن مستخرج النص يتعامل
+    مع كل شكل مرسوم على أنه وحدة مستقلة، فيضع بينه وبين ما جاوره فاصلاً. والعلاج حذف هذه المسافات، لكن
+    بشرط ألّا يُفسد كلاماً سليماً: لا تُحذف مسافة إلا إذا كان الحرف قبلها والحرف بعدها حرفين عربيين
+    مفردين، أي غير ملتصقين بحرف آخر. ولذلك تبقى الواو في «و قال» على حالها، ولا تُدمج كلمتان حقيقيتان
+    أبداً، ولا تُمسّ مسافة إن كان على أحد الحرفين حركة أو كان جزءاً من كلمة. وهذا هو الإصلاح الأكثر
+    خطراً في القائمة، ولهذا أُفرد بخيار مستقل تستطيع إيقافه في أي لحظة.
+  </p>
+  <p>
+    أما المشكلة الثانية فأعمق: أن يحفظ الملف شكل الحرف المرسوم بدل الحرف نفسه. للحرف العربي أربعة أشكال
+    — منفصل، وأول، ووسط، وآخر — ولكل شكل نقطة ترميز خاصة في نطاقَي أشكال العرض
+    (U+FB50–U+FDFF و U+FE70–U+FEFF). فكلمة «محمد» بالحروف العادية هي النقاط
+    <code>U+0645 U+062D U+0645 U+062F</code>، وبأشكال العرض المنفصلة تصبح
+    <span class="sample">&#xFEE1;&#xFEA1;&#xFEE1;&#xFEA9;</span> أي
+    <code>U+FEE1 U+FEA1 U+FEE1 U+FEA9</code>. الحرف واحد، والنقاط مختلفة تماماً.
+  </p>
+  <p>
+    والنتيجة أن كل ما يعتمد على مطابقة الحروف يفشل: البحث عن «محمد» لا يجد
+    <span class="sample">&#xFEE1;&#xFEA1;&#xFEE1;&#xFEA9;</span>، والتدقيق الإملائي لا يعرف الكلمة،
+    وعدّاد الحروف يعدّها محارف غريبة، والفرز في الجداول يختلّ. والعلاج معياري لا اجتهادي: لكل شكل عرض
+    تحليل توافقي (compatibility decomposition) يعيده إلى حرفه الأساسي، وهو ما يفعله التحويل
+    <code>NFKC</code> في يونيكود. لذلك لا نبني جدولاً يدوياً ولا نخمّن، بل نستدعي
+    <code>normalize("NFKC")</code> عند وجود أي محرف في نطاق أشكال العرض. وفائدة جانبية مفيدة: العلامة
+    الواحدة «&#xFDFA;» تتحول إلى «صلى الله عليه وسلم».
+  </p>
+
+  <h2>الرموز الغريبة (&#xD9;&#xD8;&#xD9;&#xD8;&#xAF;) وسببها</h2>
+  <p>
+    إن رأيت نصاً مثل
+    <span class="sample">&#xD8;&#xA7;&#xD9;&#x201E;&#xD8;&#xB3;&#xD9;&#x201E;&#xD8;&#xA7;&#xD9;&#x2026;</span>
+    فأنت لا تنظر إلى عربية مشوّهة، بل إلى نص عربي سليم قُرئ بترميز خاطئ. والحكاية كلها في البايتات:
+    الحرف العربي يُخزَّن في UTF-8 ببايتين، فالألف «ا» هي <code>D8 A7</code>، والميم «م» هي
+    <code>D9 85</code>. فإن قرأ برنامج هذين البايتين على أنهما حرفان في ترميز لاتيني (Latin-1 أو
+    windows-1252) ظهرا «&#xD8;&#xA7;» و«&#xD9;&#x2026;» بدل «ا» و«م». والحرف لم يتغيّر في الملف، وإنما
+    تغيّرت القراءة. جرّبها بنفسك: «السلام» بايتاتها <code>D8 A7 D9 84 D8 B3 D9 84 D8 A7 D9 85</code>،
+    واقرأها بـ windows-1252 فتصير
+    <span class="sample">&#xD8;&#xA7;&#xD9;&#x201E;&#xD8;&#xB3;&#xD9;&#x201E;&#xD8;&#xA7;&#xD9;&#x2026;</span>.
+  </p>
+  <p>
+    وفكّها عكس العملية نفسها: يُعاد كل محرف إلى البايت الذي جاء منه، ثم تُفكّ البايتات بترميز UTF-8.
+    لكن الأداة لا تفعل ذلك على العموم، بل تتحقق أولاً وتقارن: لا تُطبّق الإصلاح إلا إذا أنتج الفكّ عدداً
+    أكبر من الحروف العربية مما كان، ولم يبقَ فيه محرف غير صالح (<code>U+FFFD</code>). فإن لم يتحقق
+    الشرطان تُركت الكلمة كما هي ونُبِّه عليها في سطر الفحص. وهذا مقصود: قد يكون النص عقداً أو رسالة
+    علمية، وإفساده أسوأ من تركه على حاله.
+  </p>
+  <p>
+    وثمة تفصيل يفسّر تفاوت الأشكال التي تراها: البايت الثاني في الحرف العربي يقع بين
+    <code>0x80</code> و<code>0xBF</code>، وفي windows-1252 بعض هذه البايتات محارف مطبعية ظاهرة مثل
+    «…» و«„» و«ˆ»، وبعضها محارف تحكم لا تُرى. ولهذا يظهر النص تارة بمنظر
+    «&#xD9;&#xD8;&#xD9;&#xD8;&#xAF;» وتارة بمنظر
+    «&#xD8;&#xA7;&#xD9;&#x201E;&#xD8;&#xB3;&#xD9;&#x201E;&#xD8;&#xA7;&#xD9;&#x2026;»، وهذا هو السبب
+    الأشهر وراء شكوى «النص العربي يظهر رموزاً غريبة». ولهذا تجرّب الأداة القراءتين معاً: اللاتينية
+    القياسية وwindows-1252. أما الأرقام وعلامات الترقيم والمسافات فلا تتأثر بهذا الإصلاح، لأن كل واحد
+    منها بايت واحد في UTF-8 يعود كما كان.
+  </p>
+
+  <h2>متى لا تستطيع أي أداة إصلاح النص؟</h2>
+  <p>
+    هناك حالة واحدة لا ينفع فيها أي إصلاح برمجي، ومن الأمانة قولها بصراحة: أن يكون جدول التحويل
+    (ToUnicode) في ملف PDF مفقوداً أو تالفاً من الأصل. في هذه الحالة لا يحمل الملف حروفاً على الإطلاق،
+    بل أرقام أشكال (glyph IDs) فقط، والمعلومة الحرفية ضائعة في المصدر نفسه. ولا تستطيع أي أداة — ولا
+    هذه — أن تخترع الحروف التي لم تُحفظ؛ وكل أداة تدّعي ذلك إنما تخمّن، وقد تخرج بنص عربي جميل المنظر
+    لا علاقة له بما في الصفحة.
+  </p>
+  <p>
+    وكذلك الحال إن كان الملف ممسوحاً ضوئياً بلا طبقة نصية أصلاً: لن ينسخ القارئ شيئاً لأنه لا يجد ما
+    ينسخه، وستكتشف ذلك سريعاً لأن التحديد بالفأرة لا يلتقط شيئاً.
+  </p>
+  <p>وحين يضيع النص، لا يبقى أمامك إلا استعادة الحروف من الصورة أو من المصدر:</p>
+  <ul>
+    <li>
+      <strong>التعرّف الضوئي على الحروف (OCR):</strong> تُحوَّل الصفحة إلى صورة ثم يُقرأ النص منها. هذه
+      هي الطريقة الوحيدة لاستعادة نص من صفحة لا تحمل نصاً، ودقّتها تعتمد على وضوح المسح ونوع الخط
+      وحجمه.
+    </li>
+    <li>
+      <strong>النسخ من المصدر الأصلي:</strong> ملف Word أو محرّر النصوص الذي صُدِّر منه PDF، أو صفحة
+      الويب، أو نص البريد الذي جاء بالملف. وهذا أدقّ الحلول دائماً إن كان متاحاً.
+    </li>
+    <li>
+      <strong>إعادة الكتابة إن كان النص قصيراً:</strong> عقد من صفحتين أو فاتورة قد تكون إعادة كتابتها
+      أسرع من أي إصلاح تقني، وأضمن للنتيجة.
+    </li>
+  </ul>
+  <p>
+    وإصلاح النص العربي في هذه الأداة لا يتجاوز هذا الحد: تعالج آثار الاستخراج — الترميز، وأشكال العرض،
+    والمحارف الخفية، والمسافات بين الحروف، والترتيب — ولا تقرأ الصور ولا تخترع حروفاً. وإن لم تجد شيئاً
+    تُصلحه فستقول لك ذلك صراحة، وتُظهر تنبيهاً يقول إن كان النص يبدو تالفاً رغم ذلك فالسبب على الأرجح
+    جدول تحويل تالف في الأصل. وكل ذلك يجري داخل متصفحك: لا رفع ولا اتصال بالشبكة ولا مكتبات خارجية،
+    فتصلح الأداة لنص قد يكون خاصاً أو محمياً.
+  </p>
+
+  <style>
+    .tool {
+      display: grid;
+      gap: clamp(1rem, 2.5vw, 1.5rem);
+    }
+    .tool textarea {
+      font-family: var(--font-arabic);
+      font-size: 1.05rem;
+      line-height: 1.95;
+      min-height: 12rem;
+    }
+    .out {
+      background: var(--bg-sunken);
+    }
+    .block-title {
+      font-size: 1.05rem;
+      margin-block: 0 0.6rem;
+    }
+    .hint {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .opts {
+      display: grid;
+      gap: 0.25rem 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    }
+    .detect {
+      margin-block: 0 0.75rem;
+      padding-block: 0.7rem;
+      padding-inline: 0.95rem;
+      border: 1px solid var(--accent-border);
+      background: var(--accent-soft);
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-weight: 650;
+      color: var(--text);
+    }
+    .detect--ok {
+      border-color: var(--border);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .suggest {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin-block-start: 0.65rem;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      padding-block-start: 0.25rem;
+      border-block-start: 1px solid var(--border);
+    }
+    .status {
+      font-size: 0.85rem;
+      color: var(--ok);
+    }
+    .stat__label {
+      text-transform: none;
+      font-size: 0.8rem;
+    }
+    .callout--warn {
+      margin-block-start: 0.9rem;
+    }
+    .prose .sample {
+      background: var(--bg-sunken);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding-block: 0.05rem;
+      padding-inline: 0.35rem;
+      white-space: nowrap;
+    }
+    [hidden] {
+      display: none !important;
+    }
+    @media (max-width: 420px) {
+      .stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .stat__value {
+        font-size: 1.25rem;
+      }
+      .actions .btn {
+        flex: 1 1 auto;
+      }
+    }
+  </style>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var $ = function (id) {
+        return document.getElementById(id);
+      };
+
+      var input = $("src");
+      var output = $("out");
+      var detect = $("detect");
+      var warnBox = $("no-detect");
+      var copyStatus = $("copy-status");
+      var suggestBox = $("ord-suggest");
+      var suggestText = $("ord-suggest-text");
+
+      var optEncoding = $("fix-encoding");
+      var optForms = $("fix-forms");
+      var optHidden = $("fix-hidden");
+      var optSpacing = $("fix-spacing");
+      var orderRadios = Array.prototype.slice.call(
+        document.querySelectorAll('input[name="order"]')
+      );
+
+      var NUM = new Intl.NumberFormat("ar-EG");
+      var FFFD = "\uFFFD";
+
+      /* ---------------- أصناف المحارف ---------------- */
+
+      // الحروف العربية: الكتلة الأساسية، والكتل الممتدة، ونطاقا أشكال العرض.
+      var AR_LETTER = /[\u0620-\u064A\u066E-\u06D3\u06FA-\u06FF\u0750-\u077F\u08A0-\u08C9\uFB50-\uFDFF\uFE70-\uFEFF]/;
+      // محارف لا تراها العين: مسافة صفرية، ومحارف اتجاه وعزل، وعلامة ترتيب البايتات.
+      var HIDDEN_ONE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/;
+      var HIDDEN_ALL = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+      // نطاقا أشكال العرض.
+      var PRESENTATION = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
+      // حدود الكلمات بمعيار يونيكود، لا بالمسافات وحدها.
+      var WORD_SPLIT = /[^\p{L}\p{M}\p{N}]+/u;
+      // مقطع يمكن أن يكون بايتات UTF-8 قُرئت بترميز لاتيني: كل ما هو في مدى البايت،
+      // زائد المحارف التي يحوّل إليها windows-1252 بايتاتِه العليا.
+      var BYTE_RUN = /[\u0000-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]+/g;
+      // خريطة windows-1252 العكسية: من المحرف المطبوع إلى البايت الذي جاء منه.
+      var CP1252 = {
+        "\u20AC": 0x80, "\u201A": 0x82, "\u0192": 0x83, "\u201E": 0x84, "\u2026": 0x85,
+        "\u2020": 0x86, "\u2021": 0x87, "\u02C6": 0x88, "\u2030": 0x89, "\u0160": 0x8a,
+        "\u2039": 0x8b, "\u0152": 0x8c, "\u017D": 0x8e, "\u2018": 0x91, "\u2019": 0x92,
+        "\u201C": 0x93, "\u201D": 0x94, "\u2022": 0x95, "\u2013": 0x96, "\u2014": 0x97,
+        "\u02DC": 0x98, "\u2122": 0x99, "\u0161": 0x9a, "\u203A": 0x9b, "\u0153": 0x9c,
+        "\u017E": 0x9e, "\u0178": 0x9f
+      };
+      var UTF8 =
+        typeof TextDecoder === "function"
+          ? new TextDecoder("utf-8", { fatal: false })
+          : null;
+
+      function countArabicLetters(text) {
+        var n = 0;
+        for (var i = 0; i < text.length; i += 1) {
+          if (AR_LETTER.test(text.charAt(i))) n += 1;
+        }
+        return n;
+      }
+
+      function countHidden(text) {
+        var n = 0;
+        for (var i = 0; i < text.length; i += 1) {
+          if (HIDDEN_ONE.test(text.charAt(i))) n += 1;
+        }
+        return n;
+      }
+
+      function measure(text) {
+        return {
+          letters: countArabicLetters(text),
+          words: text.split(WORD_SPLIT).filter(function (word) {
+            return word.length > 0;
+          }).length,
+          lines: text ? text.split(/\r\n|\r|\n/).length : 0
+        };
+      }
+
+      /* ---------------- ١) إصلاح الترميز (mojibake) ---------------- */
+
+      // إعادة كل محرف إلى بايته. المسار الأول هو القراءة اللاتينية القياسية
+      // (codeUnit & 0xff)، والمسار الثاني يعيد محارف windows-1252 المطبعية إلى
+      // بايتاتها الأصلية، لأن كثراً من البرامج تقرأ UTF-8 بها لا بـ Latin-1.
+      function decodeRun(run, useCp1252) {
+        var bytes = new Uint8Array(run.length);
+        for (var i = 0; i < run.length; i += 1) {
+          var ch = run.charAt(i);
+          var code = ch.charCodeAt(0);
+          var mapped = CP1252[ch];
+          bytes[i] =
+            useCp1252 && code > 0xff && typeof mapped === "number"
+              ? mapped
+              : code & 0xff;
+        }
+        return UTF8.decode(bytes);
+      }
+
+      // كل مقطع على حدة: فإصلاح جزء مكسور لا يمسّ ما كُتب سليماً في موضع آخر.
+      function repairEncoding(text) {
+        var result = { found: false, blocked: false, changed: false, text: text };
+        if (!UTF8) return result;
+
+        result.text = text.replace(BYTE_RUN, function (run) {
+          var before = countArabicLetters(run);
+          var needsCp1252 = /[^\u0000-\u00FF]/.test(run);
+          var decoded = decodeRun(run, needsCp1252);
+          if (decoded.indexOf(FFFD) !== -1) decoded = decodeRun(run, !needsCp1252);
+
+          var after = countArabicLetters(decoded);
+
+          // إن بقي محرف غير صالح فالفكّ غير آمن: لا نُطبّقه أبداً.
+          if (decoded.indexOf(FFFD) !== -1) {
+            if (after > before) result.blocked = true;
+            return run;
+          }
+          // الشرط الوحيد للقبول: حروف عربية أكثر مما كان.
+          if (after > before) {
+            result.found = true;
+            result.changed = true;
+            return decoded;
+          }
+          return run;
+        });
+
+        return result;
+      }
+
+      /* ---------------- ٤) المسافات بين الحروف المفردة ---------------- */
+
+      // تُحذف المسافة فقط إذا كان الحرف قبلها والحرف بعدها حرفين عربيين مفردين،
+      // أي غير ملتصقين بحرف آخر. فلا تُدمج كلمتان حقيقيتان أبداً.
+      function collapseLetterSpacing(text) {
+        var chars = Array.from(text);
+        var letterAt = function (i) {
+          return i >= 0 && i < chars.length && AR_LETTER.test(chars[i]) === true;
+        };
+        var out = [];
+        var joins = 0;
+        for (var i = 0; i < chars.length; i += 1) {
+          if (
+            chars[i] === " " &&
+            letterAt(i - 1) &&
+            !letterAt(i - 2) &&
+            letterAt(i + 1) &&
+            !letterAt(i + 2)
+          ) {
+            joins += 1;
+            continue;
+          }
+          out.push(chars[i]);
+        }
+        return { text: out.join(""), joins: joins };
+      }
+
+      /* ---------------- ٥) الترتيب ---------------- */
+
+      // كل سطر على حدة، حتى لا تنتقل الأسطر من مواضعها.
+      function mapLines(text, fn) {
+        return text
+          .split(/(\r\n|\r|\n)/)
+          .map(function (part, index) {
+            return index % 2 === 1 ? part : fn(part);
+          })
+          .join("");
+      }
+
+      function reverseCharacters(line) {
+        var core = line.trim();
+        if (!core) return line;
+        var lead = /^\s/.test(line) ? " " : "";
+        var tail = /\s$/.test(line) ? " " : "";
+        return lead + Array.from(core).reverse().join("") + tail;
+      }
+
+      function reverseWordOrder(line) {
+        var words = line.split(/\s+/).filter(function (word) {
+          return word.length > 0;
+        });
+        if (words.length < 2) return line;
+        var lead = /^\s/.test(line) ? " " : "";
+        var tail = /\s$/.test(line) ? " " : "";
+        return lead + words.reverse().join(" ") + tail;
+      }
+
+      /* ---------------- الخطّ الأنبوبي ---------------- */
+
+      function runPipeline(raw, opts) {
+        var report = {
+          encoding: false,
+          encodingBlocked: false,
+          forms: false,
+          hidden: 0,
+          spacing: 0
+        };
+        var applied = { hidden: false, encoding: false, forms: false, spacing: false };
+        var text = raw;
+
+        // ١) المحارف الخفية أولاً، لأنها تقطع مقاطع الترميز وتُفشل فكّه.
+        report.hidden = countHidden(text);
+        if (report.hidden > 0 && opts.hidden) {
+          var noHidden = text.replace(HIDDEN_ALL, "");
+          applied.hidden = noHidden !== text;
+          text = noHidden;
+        }
+
+        // ٢) الترميز: UTF-8 قُرئ بترميز لاتيني.
+        var encoding = repairEncoding(text);
+        report.encoding = encoding.found;
+        report.encodingBlocked = encoding.blocked;
+        if (encoding.changed && opts.encoding) {
+          text = encoding.text;
+          applied.encoding = true;
+        }
+
+        // ٣) أشكال العرض: NFKC يعيد كل شكل إلى حرفه الأساسي.
+        if (PRESENTATION.test(text)) {
+          report.forms = true;
+          if (opts.forms) {
+            var composed = text.normalize("NFKC");
+            applied.forms = composed !== text;
+            text = composed;
+          }
+        }
+
+        // ٤) المسافات بين الحروف المفردة.
+        var spacing = collapseLetterSpacing(text);
+        report.spacing = spacing.joins;
+        if (spacing.joins > 0 && opts.spacing) {
+          text = spacing.text;
+          applied.spacing = true;
+        }
+
+        // ٥) الترتيب: لا يحدث إلا بطلب صريح من المستخدم.
+        if (opts.order === "chars") text = mapLines(text, reverseCharacters);
+        else if (opts.order === "words") text = mapLines(text, reverseWordOrder);
+
+        return { text: text, report: report, applied: applied };
+      }
+
+      /* ---------------- الكلمات الشائعة (لاقتراح القلب فقط) ---------------- */
+
+      function normalizeWord(word) {
+        return word
+          .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+          .replace(/\u0640/g, "")
+          .replace(/[\u0622\u0623\u0625\u0627\u0671]/g, "\u0627")
+          .replace(/\u0649/g, "\u064A")
+          .replace(/\u0629/g, "\u0647")
+          .replace(/\u0624/g, "\u0648")
+          .replace(/\u0626/g, "\u064A");
+      }
+
+      // نحو مئتي كلمة من أكثر كلمات العربية تكراراً، ومعها ألفاظ العقود
+      // والمراسلات لأنها أكثر ما يُنسخ من PDF.
+      var COMMON = new Set(
+        (
+          "من في على إلى عن مع هذا هذه ذلك تلك هؤلاء الذي التي الذين اللاتي ما لا لم لن قد كل بعض غير سوى بين قبل بعد حتى إذا كما لكن بل أو ثم أن إن كان كانت يكون تكون ليس ليست هو هي هم هن نحن أنا أنت له لها لهم به بها بهم فيه فيها فيهم منه منها منهم عليه عليها عليهم إليه إليها إليهم عند عندنا لديه معه معها بينما حيث متى أين كيف لماذا ماذا هل نعم أيضا كذلك هكذا هنا هناك الآن اليوم أمس غدا سنة سنوات شهر أشهر يوم أيام ساعة وقت دقيقة لحظة صباح مساء ليل نهار أسبوع عام قرن ماء طعام بيت منزل مدينة قرية بلد دولة عالم أرض سماء شمس قمر نجم بحر نهر جبل شجرة طريق شارع باب غرفة كتاب كتب قلم ورق صفحة مدرسة جامعة طالب طلاب أستاذ معلم درس علم عمل وظيفة شركة مكتب اجتماع مشروع خطة هدف نتيجة سبب مشكلة حل سؤال جواب خبر كلام حديث لغة كلمة كلمات جملة نص معنى فكرة رأي حق واجب قانون حكم قرار حكومة رئيس ملك وزير شعب ناس رجل امرأة ولد بنت طفل أب أم أخ أخت جد جدة زوج زوجة ابن ابنة عائلة أسرة صديق أصدقاء جار ضيف إنسان شخص أحد أحدهم نفس ذاته شيء أشياء أمر حال وضع جزء نصف عدد مرة مرات أول آخر ثاني ثالث جديد قديم كبير صغير طويل قصير كثير قليل أفضل أحسن أهم جيد سيئ سهل صعب سريع بطيء جميل قوي ضعيف صحيح خطأ ممكن مستحيل ضروري مهم خاص يعني أي بسبب لذلك وفق حسب خلال ضمن دون بدون سوف أبدا دائما غالبا أحيانا ربما لعل كأن إلا جميع كلا كلاهما أكثر أقل أكبر أصغر نفسه نفسها مادة بند عقد اتفاق طرف يحق يجب يجوز مبلغ تاريخ رقم اسم عنوان توقيع ختم نسخة أصل أولا ثانيا ثالثا رابعا خامسا الله رسول صلى وسلم بسم الرحمن الرحيم الحمد رب سلام"
+        )
+          .split(" ")
+          .map(normalizeWord)
+          .filter(Boolean)
+      );
+
+      function isKnownWord(word) {
+        var key = normalizeWord(word);
+        if (!key) return false;
+        if (COMMON.has(key)) return true;
+        // «السلام» معروفة لأن «سلام» معروفة.
+        if (key.length > 3 && key.slice(0, 2) === "\u0627\u0644") {
+          return COMMON.has(key.slice(2));
+        }
+        return false;
+      }
+
+      function scoreRecognised(text) {
+        var score = 0;
+        var words = text.split(WORD_SPLIT);
+        for (var i = 0; i < words.length; i += 1) {
+          if (words[i] && isKnownWord(words[i])) score += 1;
+        }
+        return score;
+      }
+
+      // نقترح القلب فقط إذا كان مقلوب النص يحمل كلمات معروفة أكثر بوضوح،
+      // وإلا فالسكوت أصدق من التخمين.
+      function suggestReversal(raw) {
+        if (!raw.trim()) return null;
+        var base = scoreRecognised(raw);
+        var byChars = scoreRecognised(mapLines(raw, reverseCharacters));
+        var byWords = scoreRecognised(mapLines(raw, reverseWordOrder));
+        var clearlyMore = function (candidate) {
+          return candidate >= 3 && candidate >= base + 2 && candidate > base * 1.6;
+        };
+        if (clearlyMore(byChars) && byChars >= byWords) return "chars";
+        if (clearlyMore(byWords)) return "words";
+        return null;
+      }
+
+      /* ---------------- التقرير والملخّص ---------------- */
+
+      function fixCount(flags) {
+        var n = 0;
+        if (flags.hidden) n += 1;
+        if (flags.encoding) n += 1;
+        if (flags.forms) n += 1;
+        if (flags.spacing) n += 1;
+        return n;
+      }
+
+      function fixesLabel(n) {
+        if (n === 0) return "لا شيء";
+        if (n === 1) return "إصلاح واحد";
+        if (n === 2) return "إصلاحان";
+        if (n <= 10) return NUM.format(n) + " إصلاحات";
+        return NUM.format(n) + " إصلاحاً";
+      }
+
+      function describe(state) {
+        if (!state.raw) {
+          return { text: "الصق نصاً في الأعلى ليبدأ الفحص.", clean: false };
+        }
+
+        var report = state.report;
+        var found = [];
+        if (report.encoding) found.push("رموز غريبة من الترميز");
+        else if (report.encodingBlocked) found.push("رموز غريبة تعذّر فكّها بأمان");
+        if (report.forms) found.push("أشكال عرض");
+        if (report.hidden > 0) found.push("محارف مخفية (" + NUM.format(report.hidden) + ")");
+        if (report.spacing > 0) {
+          found.push("مسافات بين الحروف (" + NUM.format(report.spacing) + ")");
+        }
+        if (state.reversal) found.push("ترتيب يبدو مقلوباً");
+
+        if (!found.length && state.out === state.raw) {
+          return { text: "النص يبدو سليماً — لم يُغيَّر شيء.", clean: true };
+        }
+
+        var parts = [
+          found.length
+            ? "تم اكتشاف: " + found.join(" · ")
+            : "لم نكتشف مشكلة معروفة في الترميز ولا في العرض"
+        ];
+
+        if (state.out === state.raw) {
+          parts.push("ولم يتغيّر النص لأن الإصلاحات المقابلة موقوفة في الخيارات أدناه");
+        } else if (state.order !== "none") {
+          parts.push(
+            "وطُبِّق " +
+              (state.order === "chars" ? "قلب ترتيب الحروف" : "قلب ترتيب الكلمات") +
+              " بطلب منك"
+          );
+        }
+
+        return { text: parts.join("؛ ") + ".", clean: found.length === 0 };
+      }
+
+      function getOrder() {
+        for (var i = 0; i < orderRadios.length; i += 1) {
+          if (orderRadios[i].checked) return orderRadios[i].value;
+        }
+        return "none";
+      }
+
+      /* ---------------- التحديث الحيّ ---------------- */
+
+      function update() {
+        var raw = input.value;
+        var order = getOrder();
+        var opts = {
+          hidden: optHidden.checked,
+          encoding: optEncoding.checked,
+          forms: optForms.checked,
+          spacing: optSpacing.checked,
+          order: order
+        };
+
+        // مسار الفحص: كل الإصلاحات مفعّلة وبلا قلب، حتى يكون التقرير صادقاً
+        // حتى حين يُوقف أحد الخيارات.
+        var everyRepair = {
+          hidden: true,
+          encoding: true,
+          forms: true,
+          spacing: true,
+          order: "none"
+        };
+        var probe = runPipeline(raw, everyRepair);
+
+        var isDefault =
+          opts.hidden && opts.encoding && opts.forms && opts.spacing && order === "none";
+        var applied = isDefault ? probe : runPipeline(raw, opts);
+        var out = applied.text;
+
+        var reversal = suggestReversal(raw);
+        var info = describe({
+          raw: raw,
+          out: out,
+          report: applied.report,
+          reversal: reversal,
+          order: order
+        });
+
+        output.value = out;
+        detect.textContent = info.text;
+        detect.classList.toggle("detect--ok", info.clean);
+        warnBox.hidden = !(info.clean && raw.length > 0);
+
+        suggestBox.hidden = !reversal;
+        if (reversal) {
+          suggestText.textContent =
+            reversal === "chars"
+              ? "يبدو أن ترتيب الحروف مقلوب؛ جرّب «اقلب ترتيب الحروف» ثم راجع الناتج."
+              : "يبدو أن ترتيب الكلمات مقلوب؛ جرّب «اقلب ترتيب الكلمات» ثم راجع الناتج.";
+        }
+
+        var before = measure(raw);
+        var after = measure(out);
+        $("st-letters-before").textContent = NUM.format(before.letters);
+        $("st-letters-after").textContent = NUM.format(after.letters);
+        $("st-words-before").textContent = NUM.format(before.words);
+        $("st-words-after").textContent = NUM.format(after.words);
+        $("st-lines").textContent = NUM.format(after.lines);
+        $("st-fixed").textContent = fixesLabel(fixCount(applied.applied));
+      }
+
+      /* ---------------- الأزرار ---------------- */
+
+      $("btn-copy").addEventListener("click", function () {
+        var text = output.value;
+        if (!text) {
+          copyStatus.textContent = "لا يوجد ناتج لنسخه بعد.";
+          return;
+        }
+        var done = function () {
+          copyStatus.textContent = "تم نسخ الناتج إلى الحافظة.";
+        };
+        var fail = function () {
+          copyStatus.textContent = "تعذّر النسخ تلقائياً؛ حدّد النص في المربع وانسخه يدوياً.";
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, fail);
+          return;
+        }
+        // مسار بديل للمتصفحات التي لا تسمح بالوصول إلى الحافظة.
+        var helper = document.createElement("textarea");
+        helper.value = text;
+        helper.setAttribute("readonly", "readonly");
+        helper.setAttribute("aria-hidden", "true");
+        helper.style.position = "absolute";
+        helper.style.insetInlineStart = "-9999px";
+        document.body.appendChild(helper);
+        helper.select();
+        var ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch (err) {
+          ok = false;
+        }
+        document.body.removeChild(helper);
+        if (ok) done();
+        else fail();
+      });
+
+      $("btn-clear").addEventListener("click", function () {
+        input.value = "";
+        copyStatus.textContent = "تم تفريغ الحقل.";
+        update();
+        input.focus();
+      });
+
+      input.addEventListener("input", update);
+      [optHidden, optEncoding, optForms, optSpacing].forEach(function (box) {
+        box.addEventListener("change", update);
+      });
+      orderRadios.forEach(function (radio) {
+        radio.addEventListener("change", update);
+      });
+
+      update();
+    })();
+  </script>
+</ArToolLayout>

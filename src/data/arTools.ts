@@ -108,6 +108,34 @@ export const arTools: ArTool[] = [
     publishedTime: "16:20",
   },
   {
+    // Targets the phrases that Google autocomplete proves people actually type:
+    //   مشكلة نسخ النص العربي من pdf   ·   النص العربي معكوس   ·   إصلاح النص العربي
+    //   تحويل نص عربي مقلوب            ·   عكس النص العربي
+    // The title carries the umbrella query, the description carries the PDF phrasing
+    // verbatim, and the page's headings carry the rest. Never invent a phrasing again —
+    // run tools/demand-check.mjs first.
+    slug: "مصلح-النص-العربي",
+    title: "إصلاح النص العربي المكسور — معكوس، متقطّع، أو رموز غريبة",
+    nav: "مُصلح النص العربي",
+    description:
+      "هل تظهر مشكلة نسخ النص العربي من PDF كنص معكوس أو مشوّه؟ الصق النص واحصل على نص عربي سليم فوراً. يصلح الرموز الغريبة وأشكال العرض والترتيب المقلوب والمسافات بين الحروف — داخل متصفحك بلا رفع ملفات.",
+    category: "text",
+    icon: "sparkles",
+    status: "live",
+    keywords: [
+      "مشكلة نسخ النص العربي من pdf",
+      "النص العربي معكوس",
+      "تحويل نص عربي مقلوب",
+      "إصلاح النص العربي",
+      "عكس النص العربي",
+      "الحروف العربية متقطعة",
+      "النص العربي يظهر رموز غريبة",
+      "تصحيح النص العربي المقلوب",
+    ],
+    published: "2026-10-15",
+    publishedTime: "19:05",
+  },
+  {
     slug: "إزالة-التشكيل",
     title: "إزالة التشكيل من النص العربي",
     nav: "إزالة التشكيل",

@@ -18,6 +18,17 @@ const dist = join(root, "dist");
 /** Each page, with the queries it is supposed to own. */
 const targets = [
   {
+    page: "/ar/مصلح-النص-العربي/",
+    intent: "إصلاح النص المكسور",
+    keywords: [
+      "مشكلة نسخ النص العربي من pdf",
+      "النص العربي معكوس",
+      "تحويل نص عربي مقلوب",
+      "إصلاح النص العربي",
+      "عكس النص العربي",
+    ],
+  },
+  {
     page: "/ar/احسب-عمرك-بالهجري/",
     intent: "العمر بالهجري",
     keywords: [
@@ -108,3 +119,4 @@ console.log(`\n${"=".repeat(64)}`);
 console.log(`صفحات مفحوصة: ${pagesChecked} · كلمات لا تظهر في أي مكان: ${missing}`);
 console.log("القاعدة: الكلمة المهمّة يجب أن تظهر في **العنوان** أو **H1** على الأقل.");
 console.log("ظهورها في المتن وحده ضعيف — جوجل يعرف موضوع الصفحة من عنوانها.");
+console.log("وقبل كل ذلك: تأكد أن الناس تبحث عنها فعلاً — node tools/demand-check.mjs");
